@@ -238,6 +238,48 @@ class _AutoFetchPageState extends State<AutoFetchPage> {
                   Text('${_count.round()}'),
                 ],
               ),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Keep to similar years'),
+              subtitle: Text(
+                af.similarYears
+                    ? 'Each track within ${af.yearSpan} years of the one before it. '
+                        'Not used for pasted lists.'
+                    : 'Off: any year',
+                style: const TextStyle(fontSize: 12),
+              ),
+              value: af.similarYears,
+              onChanged: af.running
+                  ? null
+                  : (v) {
+                      af.similarYears = v;
+                      af.save();
+                      setState(() {});
+                    },
+            ),
+            if (af.similarYears)
+              Row(
+                children: [
+                  const Text('Within'),
+                  Expanded(
+                    child: Slider(
+                      value: af.yearSpan.toDouble(),
+                      min: 1,
+                      max: 15,
+                      divisions: 14,
+                      label: '${af.yearSpan} years',
+                      onChanged: af.running
+                          ? null
+                          : (v) {
+                              af.yearSpan = v.round();
+                              af.save();
+                              setState(() {});
+                            },
+                    ),
+                  ),
+                  Text('±${af.yearSpan} yrs'),
+                ],
+              ),
             Row(
               children: [
                 const Expanded(

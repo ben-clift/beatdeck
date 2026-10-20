@@ -4,7 +4,10 @@ import 'package:http/http.dart' as http;
 
 /// A track the network suggests. Names and tempo only, no audio.
 class Suggestion {
-  Suggestion(this.artist, this.title, this.bpm, this.reason);
+  Suggestion(this.artist, this.title, this.bpm, this.reason, [this.year = 0]);
+
+  /// Release year, 0 when unknown.
+  final int year;
 
   final String artist;
   final String title;
@@ -21,12 +24,14 @@ class SeedInfo {
   SeedInfo({
     this.genres = const [],
     this.deezerBpm = 0,
+    this.year = 0,
     this.artistId,
     this.error,
   });
 
   final List<String> genres;
   final double deezerBpm;
+  final int year;
   final int? artistId;
   final String? error;
 }
@@ -34,6 +39,13 @@ class SeedInfo {
 /// Looks things up on Deezer's public API and MusicBrainz. Neither needs a
 /// key. Both are only used for names, genres and tempo.
 class SuggestService {
+  /// Release year from a Deezer track, 0 when it has none.
+  static int yearOf(Map tr) {
+    final d = tr['release_date'];
+    if (d is String && d.length >= 4) return int.tryParse(d.substring(0, 4)) ?? 0;
+    return 0;
+  }
+
   static const _ua = {'User-Agent': 'BeatDeck/1.0 (personal DJ app)'};
 
   Future<dynamic> _get(String url) async {
@@ -47,6 +59,7 @@ class SuggestService {
   Future<SeedInfo> lookupSeed(String artist, String title) async {
     final genres = <String>{};
     double bpm = 0;
+    var year = 0;
     int? artistId;
     try {
       final q = Uri.encodeQueryComponent(
@@ -59,6 +72,7 @@ class SuggestService {
         artistId = (t['artist'] as Map?)?['id'] as int?;
         final tr = await _get('https://api.deezer.com/track/${t['id']}');
         bpm = ((tr['bpm'] as num?) ?? 0).toDouble();
+        year = yearOf(tr);
         final albumId = (tr['album'] as Map?)?['id'];
         if (albumId != null) {
           final al = await _get('https://api.deezer.com/album/$albumId');
@@ -90,6 +104,7 @@ class SuggestService {
     return SeedInfo(
       genres: genres.toList(),
       deezerBpm: bpm,
+      year: year,
       artistId: artistId,
       error: (artistId == null && genres.isEmpty)
           ? 'Could not find this track online'
@@ -133,11 +148,13 @@ class SuggestService {
     for (var i = 0; i < todo.length && out.length < want; i += 6) {
       final got = await Future.wait(todo.skip(i).take(6).map((r) async {
         double bpm = 0;
+        var year = 0;
         try {
           final tr = await _get('https://api.deezer.com/track/${r.$1}');
           bpm = ((tr['bpm'] as num?) ?? 0).toDouble();
+          year = yearOf(tr);
         } catch (_) {}
-        return Suggestion(r.$3, r.$2, bpm, genre);
+        return Suggestion(r.$3, r.$2, bpm, genre, year);
       }));
       for (final s in got) {
         if (s.bpm >= bpmMin && s.bpm <= bpmMax) out.add(s);
@@ -170,6 +187,7 @@ class SuggestService {
     double? bpmMax,
     Set<String> skip = const {},
     int want = 12,
+    bool needDetails = false,
   }) async {
     final raw = <(int, String, String)>[];
     try {
@@ -183,7 +201,7 @@ class SuggestService {
       }
     } catch (_) {}
     final out = <Suggestion>[];
-    if (bpmMin == null || bpmMax == null) {
+    if (!needDetails && (bpmMin == null || bpmMax == null)) {
       for (final r in raw.take(want)) {
         out.add(Suggestion(r.$3, r.$2, 0, '$genreName chart'));
       }
@@ -192,14 +210,16 @@ class SuggestService {
     for (var i = 0; i < raw.length && out.length < want; i += 6) {
       final got = await Future.wait(raw.skip(i).take(6).map((r) async {
         double bpm = 0;
+        var year = 0;
         try {
           final tr = await _get('https://api.deezer.com/track/${r.$1}');
           bpm = ((tr['bpm'] as num?) ?? 0).toDouble();
+          year = yearOf(tr);
         } catch (_) {}
-        return Suggestion(r.$3, r.$2, bpm, '$genreName chart');
+        return Suggestion(r.$3, r.$2, bpm, '$genreName chart', year);
       }));
       for (final s in got) {
-        if (s.bpm >= bpmMin && s.bpm <= bpmMax) out.add(s);
+        if (bpmMin == null || bpmMax == null || (s.bpm >= bpmMin && s.bpm <= bpmMax)) out.add(s);
       }
       await Future<void>.delayed(const Duration(milliseconds: 400));
     }
@@ -238,11 +258,13 @@ class SuggestService {
       final batch = raw.skip(i).take(6);
       final got = await Future.wait(batch.map((r) async {
         double bpm = 0;
+        var year = 0;
         try {
           final tr = await _get('https://api.deezer.com/track/${r.$1}');
           bpm = ((tr['bpm'] as num?) ?? 0).toDouble();
+          year = yearOf(tr);
         } catch (_) {}
-        return Suggestion(r.$3, r.$2, bpm, r.$4);
+        return Suggestion(r.$3, r.$2, bpm, r.$4, year);
       }));
       out.addAll(got);
       await Future<void>.delayed(const Duration(milliseconds: 400));

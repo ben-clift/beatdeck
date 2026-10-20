@@ -41,6 +41,8 @@ class AutoFetch extends ChangeNotifier {
       bpmMin = prefs.getDouble('af_bpm_min') ?? bpmMin;
       bpmMax = prefs.getDouble('af_bpm_max') ?? bpmMax;
       count = prefs.getInt('af_count') ?? count;
+      similarYears = prefs.getBool('af_years') ?? similarYears;
+      yearSpan = prefs.getInt('af_year_span') ?? yearSpan;
       buffer = prefs.getInt('af_buffer') ?? buffer;
       endless = prefs.getBool('af_endless') ?? endless;
       notifyListeners();
@@ -59,6 +61,8 @@ class AutoFetch extends ChangeNotifier {
       await prefs.setDouble('af_bpm_min', bpmMin);
       await prefs.setDouble('af_bpm_max', bpmMax);
       await prefs.setInt('af_count', count);
+      await prefs.setBool('af_years', similarYears);
+      await prefs.setInt('af_year_span', yearSpan);
       await prefs.setInt('af_buffer', buffer);
       await prefs.setBool('af_endless', endless);
     } catch (_) {}
@@ -147,11 +151,13 @@ class AutoFetch extends ChangeNotifier {
           break;
         }
         if (bpm <= 0) bpm = info.deezerBpm;
+        if (similarYears && info.year > 0) _refYear = info.year;
         final cands = await _service.candidates(info.artistId!, sArtist);
         final queue = cands
             .where((c) =>
                 !tried.contains(c.query.toLowerCase()) &&
                 !_inLibrary(library, c) &&
+                _yearOk(c) &&
                 (c.bpm == 0 || bpm <= 0 || bpmGapPercent(bpm, c.bpm).abs() <= tempoRange))
             .toList()
           ..sort((a, b) {
@@ -176,6 +182,7 @@ class AutoFetch extends ChangeNotifier {
             fetched++;
             lastSaved = saved;
             lastFor = s;
+            if (s.year > 0) _refYear = s.year;
             log.add('${s.artist} - ${s.title}');
             // Carry on from the track that just arrived.
             break;
@@ -206,6 +213,36 @@ class AutoFetch extends ChangeNotifier {
     }
   }
 
+  /// Keep downloads to similar release years: within [yearSpan] years of the
+  /// track before it (the first one is judged against what is on the decks).
+  bool similarYears = false;
+  int yearSpan = 5;
+  int _refYear = 0;
+
+  bool _yearOk(Suggestion s) {
+    if (!similarYears) return true;
+    if (s.year == 0) return false;
+    if (_refYear == 0) return true;
+    return (s.year - _refYear).abs() <= yearSpan;
+  }
+
+  /// Starting year: the year of the track playing (or loaded) on a deck.
+  Future<void> _initRefYear() async {
+    _refYear = 0;
+    final dj = SlskSetup.dj;
+    if (!similarYears || dj == null) return;
+    for (var i = 0; i < 2; i++) {
+      final d = dj.deck(i);
+      if (d.loaded && (d.playing || i == 1 || !dj.deck(1).loaded)) {
+        final info = await _service.lookupSeed(d.artist, d.title);
+        if (info.year > 0) {
+          _refYear = info.year;
+          return;
+        }
+      }
+    }
+  }
+
   // Where the AUTO switch gets its tracks: 'genre', 'chart' or 'list'.
   String source = 'genre';
   int chartId = 113;
@@ -222,6 +259,7 @@ class AutoFetch extends ChangeNotifier {
     required int count,
     required bool endless,
     bool once = false,
+    bool useYears = true,
   }) async {
     if (running) return;
     if (!soulseek.online) {
@@ -237,10 +275,13 @@ class AutoFetch extends ChangeNotifier {
     final tried = <String>{};
     var empties = 0;
     try {
+      if (useYears) await _initRefYear();
       while (!_stop && (endless || fetched < limit)) {
         _say('Getting $label');
         final found = await more(tried);
-        final queue = found.where((c) => !_inLibrary(library, c)).toList();
+        final queue = found
+            .where((c) => !_inLibrary(library, c) && (!useYears || _yearOk(c)))
+            .toList();
         for (final f in found) {
           tried.add(f.query.toLowerCase());
         }
@@ -258,6 +299,7 @@ class AutoFetch extends ChangeNotifier {
           if (saved != null) {
             fetched++;
             gotOne = true;
+            if (s.year > 0) _refYear = s.year;
             log.add('${s.artist} - ${s.title}');
           }
         }
@@ -298,6 +340,7 @@ class AutoFetch extends ChangeNotifier {
         bpmMin: matchTempo ? bpmMin : null,
         bpmMax: matchTempo ? bpmMax : null,
         skip: tried,
+        needDetails: similarYears,
       ),
       library: library,
       count: count,
@@ -329,6 +372,7 @@ class AutoFetch extends ChangeNotifier {
       count: list.length,
       endless: false,
       once: true,
+      useYears: false,
     );
   }
 
@@ -379,10 +423,11 @@ class AutoFetch extends ChangeNotifier {
     final tried = <String>{};
     var empties = 0;
     try {
+      await _initRefYear();
       while (!_stop && (endless || fetched < limit)) {
         _say('Looking for $genre at ${bpmMin.round()}-${bpmMax.round()} BPM');
         final found = await _service.byGenre(genre, bpmMin, bpmMax, skip: tried);
-        final queue = found.where((c) => !_inLibrary(library, c)).toList();
+        final queue = found.where((c) => !_inLibrary(library, c) && _yearOk(c)).toList();
         if (queue.isEmpty) {
           if (++empties >= 3) {
             _say('Could not find more $genre in that tempo range');
@@ -398,6 +443,7 @@ class AutoFetch extends ChangeNotifier {
           if (saved != null) {
             fetched++;
             gotOne = true;
+            if (s.year > 0) _refYear = s.year;
             log.add('${s.artist} - ${s.title}  (${s.bpm.round()} BPM)');
           }
         }
