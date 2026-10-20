@@ -43,6 +43,9 @@ void dj_set_rate(DjEngine engine, int deck, float rate);
 void dj_set_master_eq(DjEngine engine, int band, float db);
 // Master effect: type 0 off, 1 echo, 2 reverb, 3 flanger.
 void dj_set_fx(DjEngine engine, int type, float amount, float time_sec);
+// Effect pads on one deck: mask bits 0..7 = echo, reverb, flanger, phaser,
+// gate, crush, wobble, roll.
+void dj_set_deck_fx(DjEngine engine, int deck, int mask, float amount, float time_sec);
 // Fills out[0..n) with the level (linear amplitude) of 14 spectrum bands.
 void dj_get_spectrum(DjEngine engine, float* out, int n);
 // Sets the beat-grid tempo (the track's own BPM, before the rate is applied).

@@ -127,6 +127,9 @@ class NativeEngine {
   late final _setFx = _lib.lookupFunction<
       Void Function(Pointer<Void>, Int32, Float, Float),
       void Function(Pointer<Void>, int, double, double)>('dj_set_fx');
+  late final _setDeckFx = _lib.lookupFunction<
+      Void Function(Pointer<Void>, Int32, Int32, Float, Float),
+      void Function(Pointer<Void>, int, int, double, double)>('dj_set_deck_fx');
   late final _getSpectrum = _lib.lookupFunction<
       Void Function(Pointer<Void>, Pointer<Float>, Int32),
       void Function(Pointer<Void>, Pointer<Float>, int)>('dj_get_spectrum');
@@ -277,6 +280,10 @@ class NativeEngine {
   /// Master effect: [type] 0 off, 1 echo, 2 reverb, 3 flanger.
   void setFx(int type, double amount, double timeSec) =>
       _setFx(_handle, type, amount, timeSec);
+
+  /// Effect pads on one deck. [mask] bit 0..7 = effect on or off.
+  void setDeckFx(int deck, int mask, double amount, double timeSec) =>
+      _setDeckFx(_handle, deck, mask, amount, timeSec);
 
   static const int spectrumBands = 14;
 

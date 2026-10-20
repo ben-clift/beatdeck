@@ -127,6 +127,12 @@ struct Deck {
   float gate = 0.0f;
   bool pauseXf = false;
 
+  // Effect pads: bit mask of active effects, shared amount and beat length.
+  std::atomic<int> fxMask{0};
+  std::atomic<float> fxAmount{0.5f};
+  std::atomic<float> fxTime{0.5f};
+  fx::DeckFx fxRack;
+
   std::vector<float> waveMin;
   std::vector<float> waveMax;
 
@@ -743,6 +749,12 @@ struct Engine : public oboe::AudioStreamDataCallback,
       r = loR * d.eqLowG + midR * d.eqMidG + hiR * d.eqHighG;
       l = d.filtL.process(l);
       r = d.filtR.process(r);
+      const int fxM = d.fxMask.load(std::memory_order_relaxed);
+      if (fxM != 0 || d.fxRack.rollActive) {
+        d.fxRack.prepare(std::max(8000, engineSampleRate.load()));
+        d.fxRack.process(fxM, d.fxAmount.load(std::memory_order_relaxed),
+                         d.fxTime.load(std::memory_order_relaxed), l, r);
+      }
       const float g = d.gain * d.fader;
       l *= g;
       r *= g;
@@ -1317,6 +1329,16 @@ void dj_set_fx(DjEngine engine, int type, float amount, float timeSec) {
   e->fxAmount.store(std::max(0.0f, std::min(1.0f, amount)));
   e->fxTime.store(std::max(0.02f, std::min(2.5f, timeSec)));
   e->fxType.store(std::max(0, std::min(3, type)));
+}
+
+void dj_set_deck_fx(DjEngine engine, int deck, int mask, float amount, float time_sec) {
+  if (deck < 0 || deck >= kDecks) {
+    return;
+  }
+  Deck& d = asEngine(engine)->decks[deck];
+  d.fxAmount.store(std::max(0.0f, std::min(1.0f, amount)));
+  d.fxTime.store(std::max(0.1f, std::min(2.5f, time_sec)));
+  d.fxMask.store(mask & 0xFF);
 }
 
 void dj_get_spectrum(DjEngine engine, float* out, int n) {

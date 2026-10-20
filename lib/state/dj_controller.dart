@@ -104,11 +104,48 @@ class DjController extends ChangeNotifier {
     return 120;
   }
 
+  /// The eight effect pads. Each pad holds one effect; any pad can be given
+  /// any effect.
+  static const fxNames = [
+    'ECHO', 'REVERB', 'FLANGER', 'PHASER', 'GATE', 'CRUSH', 'WOBBLE', 'ROLL',
+  ];
+  final List<List<int>> padFx =
+      List.generate(4, (_) => List<int>.generate(8, (i) => i));
+  final List<Set<int>> deckFxOn = List.generate(4, (_) => <int>{});
+
+  void toggleDeckFx(int deckIndex, int pad) {
+    final e = padFx[deckIndex][pad];
+    final on = deckFxOn[deckIndex];
+    if (!on.add(e)) on.remove(e);
+    _applyDeckFx(deckIndex);
+    notifyListeners();
+  }
+
+  void assignPadFx(int deckIndex, int pad, int effect) {
+    deckFxOn[deckIndex].remove(padFx[deckIndex][pad]);
+    padFx[deckIndex][pad] = effect.clamp(0, 7);
+    _applyDeckFx(deckIndex);
+    notifyListeners();
+  }
+
+  void _applyDeckFx(int deckIndex) {
+    var mask = 0;
+    for (final e in deckFxOn[deckIndex]) {
+      mask |= 1 << e;
+    }
+    final d = deck(deckIndex);
+    final heard = d.bpm > 1 ? d.bpm * d.rate : 120.0;
+    _engine.setDeckFx(deckIndex, mask, fxAmount, fxBeats * 60 / heard);
+  }
+
   void setFx({int? type, double? amount, double? beats}) {
     if (type != null) fxType = type.clamp(0, 3);
     if (amount != null) fxAmount = amount.clamp(0.0, 1.0).toDouble();
     if (beats != null) fxBeats = beats;
     _applyFx();
+    for (var i = 0; i < deckCount; i++) {
+      if (deckFxOn[i].isNotEmpty) _applyDeckFx(i);
+    }
     notifyListeners();
   }
 
@@ -237,6 +274,9 @@ class DjController extends ChangeNotifier {
 
   void _tick() {
     if (fxType == 1) _applyFx(); // echo length follows the tempo
+    for (var i = 0; i < deckCount; i++) {
+      if (deckFxOn[i].isNotEmpty) _applyDeckFx(i);
+    }
     var dirty = false;
     if (spectrumOn || effectsOn || stripOn) {
       _updateSpectrum();

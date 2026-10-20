@@ -194,7 +194,7 @@ class _DeckPair extends StatelessWidget {
   }
 }
 
-enum _PadMode { hotCue, loop, jump }
+enum _PadMode { hotCue, loop, jump, fx }
 
 class _DeckPanel extends StatefulWidget {
   const _DeckPanel({
@@ -593,6 +593,7 @@ class _DeckPanelState extends State<_DeckPanel> {
         chip('HOT CUE', _PadMode.hotCue),
         chip('LOOP', _PadMode.loop),
         chip('JUMP', _PadMode.jump),
+        chip('FX', _PadMode.fx),
       ],
     );
   }
@@ -623,6 +624,14 @@ class _DeckPanelState extends State<_DeckPanel> {
           } else {
             pads.add(_pad('×2', false, () => widget.dj.doubleLoop(widget.index)));
           }
+        case _PadMode.fx:
+          final effect = widget.dj.padFx[widget.index][k];
+          pads.add(_pad(
+            DjController.fxNames[effect],
+            widget.dj.deckFxOn[widget.index].contains(effect),
+            () => widget.dj.toggleDeckFx(widget.index, k),
+            onLong: () => _assignFx(k),
+          ));
         case _PadMode.jump:
           final b = _jumpBeats[k];
           pads.add(_pad(
@@ -650,6 +659,38 @@ class _DeckPanelState extends State<_DeckPanel> {
     );
   }
 
+  /// Long press on an effect pad: pick which effect lives on it.
+  Future<void> _assignFx(int pad) async {
+    final picked = await showModalBottomSheet<int>(
+      context: context,
+      backgroundColor: SideDeckTheme.panel,
+      builder: (ctx) => SafeArea(
+        child: Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            const Padding(
+              padding: EdgeInsets.all(12),
+              child: Text(
+                'Put an effect on this pad',
+                style: TextStyle(fontWeight: FontWeight.w800),
+              ),
+            ),
+            for (var e = 0; e < DjController.fxNames.length; e++)
+              Padding(
+                padding: const EdgeInsets.all(4),
+                child: FilledButton.tonal(
+                  onPressed: () => Navigator.pop(ctx, e),
+                  child: Text(DjController.fxNames[e]),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+    if (picked != null) widget.dj.assignPadFx(widget.index, pad, picked);
+  }
+
   Widget _pad(String label, bool on, VoidCallback onTap, {VoidCallback? onLong}) {
     return GestureDetector(
       onTap: _d.loaded ? onTap : null,
@@ -667,12 +708,18 @@ class _DeckPanelState extends State<_DeckPanel> {
               ? [BoxShadow(color: _accent.withValues(alpha: 0.6), blurRadius: 10)]
               : null,
         ),
-        child: Text(
-          label,
-          style: TextStyle(
-            fontWeight: FontWeight.w800,
-            fontSize: 18,
-            color: on ? SideDeckTheme.bg : SideDeckTheme.text,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 2),
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(
+              label,
+              style: TextStyle(
+                fontWeight: FontWeight.w800,
+                fontSize: 18,
+                color: on ? SideDeckTheme.bg : SideDeckTheme.text,
+              ),
+            ),
           ),
         ),
       ),

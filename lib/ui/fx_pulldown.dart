@@ -96,7 +96,7 @@ class _FxPullDownState extends State<FxPullDown> {
   Widget _panel() {
     final dj = widget.dj;
     final look = LookController.instance;
-    final timed = dj.fxType == 1 || dj.fxType == 3;
+    const timed = true; // deck effect pads use the beat length too
     return GestureDetector(
       onVerticalDragEnd: (d) {
         if ((d.primaryVelocity ?? 0) < -120) setState(() => _open = false);
