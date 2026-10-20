@@ -23,6 +23,9 @@ class DeckState {
   double bpm = 0;
   int key = -1;
   double rate = 1;
+  // Key lock keeps the pitch fixed when tempo changes. The engine starts with
+  // it on, so the app starts with it on too.
+  bool keylock = true;
   bool synced = false;
   double beatOffset = 0;
   double gain = 1;
@@ -334,6 +337,16 @@ class DjController extends ChangeNotifier {
     _followMasterBpm(deckIndex);
     notifyListeners();
   }
+
+  void setKeylock(int deckIndex, bool enabled) {
+    final d = deck(deckIndex);
+    d.keylock = enabled;
+    _engine.setKeylock(deckIndex, enabled);
+    notifyListeners();
+  }
+
+  void toggleKeylock(int deckIndex) =>
+      setKeylock(deckIndex, !deck(deckIndex).keylock);
 
   final List<double> _nudgeBend = [0, 0]; // temporary pitch bend while held
   final List<Timer?> _nudgeHold = [null, null];

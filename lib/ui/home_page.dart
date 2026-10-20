@@ -315,7 +315,14 @@ class _HomePageState extends State<HomePage> {
                   Positioned(
                     right: 4,
                     top: overview + 2,
-                    child: _gridButton(i, accent),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        _keyLockButton(i, accent),
+                        const SizedBox(width: 6),
+                        _gridButton(i, accent),
+                      ],
+                    ),
                   ),
                 if (d.loaded && _gridEditDeck == i)
                   Positioned(
@@ -369,6 +376,36 @@ class _HomePageState extends State<HomePage> {
             playing ? Icons.pause : Icons.play_arrow,
             color: Colors.white.withValues(alpha: 0.9),
             size: size * 0.55,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _keyLockButton(int deck, Color accent) {
+    final on = _dj.deck(deck).keylock;
+    return Material(
+      color: on ? accent : const Color(0xCC111111),
+      borderRadius: BorderRadius.circular(6),
+      child: InkWell(
+        onTap: () => _dj.toggleKeylock(deck),
+        borderRadius: BorderRadius.circular(6),
+        child: Container(
+          height: 32,
+          padding: const EdgeInsets.symmetric(horizontal: 10),
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(6),
+            border: Border.all(color: accent.withValues(alpha: 0.85)),
+          ),
+          child: Text(
+            'KEY LOCK',
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 0.6,
+              color: on ? Colors.black : accent,
+            ),
           ),
         ),
       ),

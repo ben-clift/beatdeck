@@ -117,6 +117,10 @@ class NativeEngine {
       .lookupFunction<_SetFloatDeckC, void Function(Pointer<Void>, int, double)>(
         'dj_set_rate',
       );
+  late final _setKeylock = _lib
+      .lookupFunction<_PlayC, void Function(Pointer<Void>, int, int)>(
+        'dj_set_keylock',
+      );
   late final _getBpm = _lib
       .lookupFunction<_GetBpmC, double Function(Pointer<Void>, int)>('dj_get_bpm');
   late final _getKey = _lib
@@ -228,6 +232,8 @@ class NativeEngine {
   void setXfader(double x) => _setXfader(_handle, x);
   void setMaster(double v) => _setMaster(_handle, v);
   void setRate(int deck, double rate) => _setRate(_handle, deck, rate);
+  void setKeylock(int deck, bool enabled) =>
+      _setKeylock(_handle, deck, enabled ? 1 : 0);
   double bpm(int deck) => _getBpm(_handle, deck);
   int key(int deck) => _getKey(_handle, deck);
   double beatOffset(int deck) => _getBeatOffset(_handle, deck);
