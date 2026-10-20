@@ -148,6 +148,16 @@ class NativeEngine {
       .lookupFunction<_PlayC, void Function(Pointer<Void>, int, int)>(
         'dj_set_keylock',
       );
+  late final _samplerLoad = _lib.lookupFunction<
+      Int32 Function(Pointer<Void>, Int32, Pointer<Utf8>),
+      int Function(Pointer<Void>, int, Pointer<Utf8>)>('dj_sampler_load');
+  late final _samplerFire = _lib
+      .lookupFunction<_DeckC, void Function(Pointer<Void>, int)>('dj_sampler_fire');
+  late final _samplerStop = _lib
+      .lookupFunction<_DeckC, void Function(Pointer<Void>, int)>('dj_sampler_stop');
+  late final _samplerVolume = _lib.lookupFunction<
+      Void Function(Pointer<Void>, Float),
+      void Function(Pointer<Void>, double)>('dj_sampler_volume');
   late final _setCueDeck = _lib
       .lookupFunction<_PlayC, void Function(Pointer<Void>, int, int)>(
         'dj_set_cue_deck',
@@ -337,6 +347,21 @@ class NativeEngine {
   void jumpHotcue(int deck, int index) => _jumpHotcue(_handle, deck, index);
   double hotcue(int deck, int index) => _getHotcue(_handle, deck, index);
   void clearHotcue(int deck, int index) => _clearHotcue(_handle, deck, index);
+  bool samplerLoad(int slot, String path) {
+    final p = path.toNativeUtf8();
+    try {
+      return _samplerLoad(_handle, slot, p) == 1;
+    } finally {
+      malloc.free(p);
+    }
+  }
+
+  void samplerFire(int slot) => _samplerFire(_handle, slot);
+
+  void samplerStop(int slot) => _samplerStop(_handle, slot);
+
+  void samplerVolume(double v) => _samplerVolume(_handle, v);
+
   void setCueDeck(int deck, bool on) => _setCueDeck(_handle, deck, on ? 1 : 0);
 
   void setCueMode(int mode, double volume, double mix) =>

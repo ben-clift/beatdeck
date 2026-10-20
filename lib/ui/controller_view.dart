@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'dart:math' as math;
 
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:sidedeck/engine/music_utils.dart';
@@ -47,6 +48,96 @@ class _ControllerViewState extends State<ControllerView> {
     widget.dj.setStripOn(false);
     _pages.dispose();
     super.dispose();
+  }
+
+  void _samplerSheet() {
+    final dj = widget.dj;
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: SideDeckTheme.panel,
+      builder: (ctx) => ListenableBuilder(
+        listenable: dj,
+        builder: (ctx, _) => Padding(
+          padding: const EdgeInsets.all(14),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(children: [
+                const Text('Sampler',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+                const Spacer(),
+                const Text('Tap to fire. Hold to choose a sound.',
+                    style: TextStyle(fontSize: 12, color: SideDeckTheme.muted)),
+              ]),
+              const SizedBox(height: 10),
+              GridView.count(
+                crossAxisCount: 4,
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                mainAxisSpacing: 8,
+                crossAxisSpacing: 8,
+                childAspectRatio: 1.5,
+                children: [
+                  for (var i = 0; i < DjController.samplerSlots; i++)
+                    GestureDetector(
+                      onTapDown: (_) => dj.fireSample(i),
+                      onLongPress: () async {
+                        final r = await FilePicker.platform.pickFiles(
+                          type: FileType.custom,
+                          allowedExtensions: nativeAudioPickerExtensions(),
+                          withData: false,
+                        );
+                        final path = r?.files.single.path;
+                        if (path != null) await dj.loadSample(i, path);
+                      },
+                      onDoubleTap: () => dj.stopSample(i),
+                      child: Container(
+                        padding: const EdgeInsets.all(6),
+                        decoration: BoxDecoration(
+                          color: dj.samplePaths[i] == null
+                              ? Colors.transparent
+                              : const Color(0xFF1E1E1E),
+                          border: Border.all(
+                            color: dj.samplePaths[i] == null
+                                ? SideDeckTheme.muted
+                                : const Color(0xFFFF9F1C),
+                            width: 2,
+                          ),
+                        ),
+                        alignment: Alignment.center,
+                        child: Text(
+                          dj.samplePaths[i] == null
+                              ? 'EMPTY'
+                              : dj.sampleNames[i],
+                          maxLines: 2,
+                          textAlign: TextAlign.center,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                              fontSize: 12, fontWeight: FontWeight.w700),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+              Row(children: [
+                const SizedBox(width: 60, child: Text('Volume')),
+                Expanded(
+                  child: Slider(
+                    value: dj.samplerVolume,
+                    max: 1.5,
+                    onChanged: dj.setSamplerVolume,
+                  ),
+                ),
+              ]),
+              const Text('Double-tap a pad to stop its sound.',
+                  style: TextStyle(fontSize: 12, color: SideDeckTheme.muted)),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   void _cueSheet() {
@@ -172,14 +263,14 @@ class _ControllerViewState extends State<ControllerView> {
                   ),
                   child: Container(
                     padding:
-                        const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+                        const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                     color: _page == i ? SideDeckTheme.text : Colors.transparent,
                     child: Text(
                       _titles[i],
                       style: TextStyle(
                         fontSize: 11,
                         fontWeight: FontWeight.w800,
-                        letterSpacing: 1.5,
+                        letterSpacing: 1,
                         color: _page == i
                             ? SideDeckTheme.bg
                             : SideDeckTheme.muted,
@@ -188,11 +279,28 @@ class _ControllerViewState extends State<ControllerView> {
                   ),
                 ),
               GestureDetector(
+                onTap: _samplerSheet,
+                child: Container(
+                  margin: const EdgeInsets.only(left: 6),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  child: const Text(
+                    'SAMPLER',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 1,
+                      color: SideDeckTheme.muted,
+                    ),
+                  ),
+                ),
+              ),
+              GestureDetector(
                 onTap: _cueSheet,
                 child: Container(
                   margin: const EdgeInsets.only(left: 8),
                   padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   color: widget.dj.cueMode == 0
                       ? Colors.transparent
                       : const Color(0xFF2E9BFF),
@@ -201,7 +309,7 @@ class _ControllerViewState extends State<ControllerView> {
                     style: TextStyle(
                       fontSize: 11,
                       fontWeight: FontWeight.w800,
-                      letterSpacing: 1.5,
+                      letterSpacing: 1,
                       color: widget.dj.cueMode == 0
                           ? SideDeckTheme.muted
                           : Colors.black,
@@ -214,7 +322,7 @@ class _ControllerViewState extends State<ControllerView> {
                 child: Container(
                   margin: const EdgeInsets.only(left: 8),
                   padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   color: widget.dj.recording
                       ? const Color(0xFFE5392C)
                       : Colors.transparent,
@@ -225,7 +333,7 @@ class _ControllerViewState extends State<ControllerView> {
                     style: TextStyle(
                       fontSize: 11,
                       fontWeight: FontWeight.w800,
-                      letterSpacing: 1.5,
+                      letterSpacing: 1,
                       color: widget.dj.recording
                           ? Colors.white
                           : SideDeckTheme.muted,
@@ -241,14 +349,14 @@ class _ControllerViewState extends State<ControllerView> {
                 child: Container(
                   margin: const EdgeInsets.only(left: 8),
                   padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   color: _strip ? const Color(0xFF3DDC57) : Colors.transparent,
                   child: Text(
                     'LEVELS',
                     style: TextStyle(
                       fontSize: 11,
                       fontWeight: FontWeight.w800,
-                      letterSpacing: 1.5,
+                      letterSpacing: 1,
                       color: _strip ? SideDeckTheme.bg : SideDeckTheme.muted,
                     ),
                   ),

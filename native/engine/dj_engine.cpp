@@ -452,6 +452,56 @@ struct Engine : public oboe::AudioStreamDataCallback,
   std::atomic<float> master{1.0f};
   // Headphone cue: 0 off, 1 split (left master, right cue), 2 follows the
   // outputs a multichannel interface has beyond the first pair.
+  // Sampler: short sounds fired from pads, mixed into the master.
+  static constexpr int kSamplerSlots = 8;
+  struct SamplerSlot {
+    std::mutex m;
+    std::vector<float> data; // interleaved stereo
+    int sr = 48000;
+    double pos = 0.0;
+    bool playing = false;
+    std::atomic<int> cmd{0}; // 1 = fire, 2 = stop
+  };
+  SamplerSlot slots[kSamplerSlots];
+  std::atomic<float> samplerVol{0.9f};
+  std::vector<float> sampL, sampR;
+
+  void renderSampler(int n) {
+    std::fill(sampL.begin(), sampL.begin() + n, 0.0f);
+    std::fill(sampR.begin(), sampR.begin() + n, 0.0f);
+    const double engSr = (double)std::max(8000, engineSampleRate.load());
+    const float vol = samplerVol.load();
+    for (auto& s : slots) {
+      std::unique_lock<std::mutex> lk(s.m, std::try_to_lock);
+      if (!lk.owns_lock()) {
+        continue;
+      }
+      const int c = s.cmd.exchange(0);
+      if (c == 1 && !s.data.empty()) {
+        s.pos = 0.0;
+        s.playing = true;
+      } else if (c == 2) {
+        s.playing = false;
+      }
+      if (!s.playing) {
+        continue;
+      }
+      const double step = (double)s.sr / engSr;
+      const int64_t frames = (int64_t)(s.data.size() / 2);
+      for (int i = 0; i < n; ++i) {
+        const int64_t i0 = (int64_t)s.pos;
+        if (i0 >= frames - 1) {
+          s.playing = false;
+          break;
+        }
+        const float f = (float)(s.pos - (double)i0);
+        sampL[i] += (s.data[i0 * 2] * (1.0f - f) + s.data[i0 * 2 + 2] * f) * vol;
+        sampR[i] += (s.data[i0 * 2 + 1] * (1.0f - f) + s.data[i0 * 2 + 3] * f) * vol;
+        s.pos += step;
+      }
+    }
+  }
+
   std::atomic<int> cueMode{0};
   std::atomic<float> cueVol{0.8f};
   std::atomic<float> cueMix{0.0f};
@@ -523,6 +573,8 @@ struct Engine : public oboe::AudioStreamDataCallback,
     }
     scratchL.assign(kMaxCallbackFrames, 0.0f);
     scratchR.assign(kMaxCallbackFrames, 0.0f);
+    sampL.assign(kMaxCallbackFrames, 0.0f);
+    sampR.assign(kMaxCallbackFrames, 0.0f);
     cueAccL.assign(kMaxCallbackFrames, 0.0f);
     cueAccR.assign(kMaxCallbackFrames, 0.0f);
     mixAL.assign(kMaxCallbackFrames, 0.0f);
@@ -895,6 +947,7 @@ struct Engine : public oboe::AudioStreamDataCallback,
         }
       }
     }
+    renderSampler(n);
     const int cueM = cueMode.load();
     const float cueV = cueVol.load();
     const float cueX = cueMix.load();
@@ -930,8 +983,8 @@ struct Engine : public oboe::AudioStreamDataCallback,
       }
       float peak[kSpecBands] = {};
       for (int i = 0; i < n; ++i) {
-        float l = (mixAL[i] * gainA + mixBL[i] * gainB) * m;
-        float r = (mixAR[i] * gainA + mixBR[i] * gainB) * m;
+        float l = (mixAL[i] * gainA + mixBL[i] * gainB) * m + sampL[i];
+        float r = (mixAR[i] * gainA + mixBR[i] * gainB) * m + sampR[i];
         if (eqOn) {
           for (int b = 0; b < kMasterEqBands; ++b) {
             l = eqL[b].process(l);
@@ -1456,6 +1509,62 @@ void dj_set_keylock(DjEngine engine, int deck, int enabled) {
     d.flushStretcher();
   }
   d.keylock = next;
+}
+
+int dj_sampler_load(DjEngine engine, int slot, const char* path) {
+  if (slot < 0 || slot >= Engine::kSamplerSlots || path == nullptr) {
+    return 0;
+  }
+  auto* e = asEngine(engine);
+  StreamingDecoder dec;
+  if (!dec.open(path) || dec.sampleRate < 1) {
+    return 0;
+  }
+  uint64_t frames = dec.totalFrames;
+  const uint64_t lim = (uint64_t)dec.sampleRate * 60ull; // up to a minute
+  if (frames > lim) {
+    frames = lim;
+  }
+  if (frames < 2) {
+    return 0;
+  }
+  std::vector<float> buf((size_t)frames * 2);
+  dec.seek(0);
+  uint64_t got = 0;
+  while (got < frames) {
+    const uint64_t n = dec.readStereo(buf.data() + got * 2, frames - got);
+    if (n == 0) {
+      break;
+    }
+    got += n;
+  }
+  if (got < 2) {
+    return 0;
+  }
+  buf.resize((size_t)got * 2);
+  auto& s = e->slots[slot];
+  std::lock_guard<std::mutex> lk(s.m);
+  s.data.swap(buf);
+  s.sr = (int)dec.sampleRate;
+  s.playing = false;
+  s.pos = 0.0;
+  return 1;
+}
+
+void dj_sampler_fire(DjEngine engine, int slot) {
+  if (slot >= 0 && slot < Engine::kSamplerSlots) {
+    asEngine(engine)->slots[slot].cmd.store(1);
+  }
+}
+
+void dj_sampler_stop(DjEngine engine, int slot) {
+  if (slot >= 0 && slot < Engine::kSamplerSlots) {
+    asEngine(engine)->slots[slot].cmd.store(2);
+  }
+}
+
+void dj_sampler_volume(DjEngine engine, float v) {
+  asEngine(engine)->samplerVol.store(std::max(0.0f, std::min(1.5f, v)));
 }
 
 void dj_set_cue_deck(DjEngine engine, int deck, int on) {

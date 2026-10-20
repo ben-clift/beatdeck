@@ -3,6 +3,7 @@ import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sidedeck/engine/analysis_cache.dart';
 import 'package:sidedeck/engine/native_engine.dart';
 import 'package:sidedeck/engine/track_analyzer.dart';
@@ -60,6 +61,7 @@ class DjController extends ChangeNotifier {
     if (!_engine.started) {
       engineError = 'Audio engine failed to start.';
     }
+    restoreSamples();
     if (Platform.isAndroid) {
       _usbSub = UsbOutput.events().listen(_onUsbEvent);
     }
@@ -802,6 +804,59 @@ class DjController extends ChangeNotifier {
     d.keylock = enabled;
     _engine.setKeylock(deckIndex, enabled);
     notifyListeners();
+  }
+
+  // ---- Sampler: eight pads that fire short sounds into the master.
+  static const int samplerSlots = 8;
+  final List<String?> samplePaths = List<String?>.filled(samplerSlots, null);
+  final List<String> sampleNames = List<String>.filled(samplerSlots, '');
+  double samplerVolume = 0.9;
+
+  Future<bool> loadSample(int slot, String path) async {
+    final ok = _engine.samplerLoad(slot, path);
+    if (ok) {
+      samplePaths[slot] = path;
+      sampleNames[slot] = path.split(Platform.pathSeparator).last.replaceFirst(RegExp(r'\.[^.]+$'), '');
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('sample_$slot', path);
+      } catch (_) {}
+      notifyListeners();
+    }
+    return ok;
+  }
+
+  Future<void> clearSample(int slot) async {
+    samplePaths[slot] = null;
+    sampleNames[slot] = '';
+    _engine.samplerStop(slot);
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove('sample_$slot');
+    } catch (_) {}
+    notifyListeners();
+  }
+
+  void fireSample(int slot) {
+    if (samplePaths[slot] != null) _engine.samplerFire(slot);
+  }
+
+  void stopSample(int slot) => _engine.samplerStop(slot);
+
+  void setSamplerVolume(double v) {
+    samplerVolume = v;
+    _engine.samplerVolume(v);
+    notifyListeners();
+  }
+
+  Future<void> restoreSamples() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      for (var i = 0; i < samplerSlots; i++) {
+        final p = prefs.getString('sample_$i');
+        if (p != null && File(p).existsSync()) await loadSample(i, p);
+      }
+    } catch (_) {}
   }
 
   // ---- Headphone cue.
