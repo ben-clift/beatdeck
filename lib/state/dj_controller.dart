@@ -416,6 +416,7 @@ class DjController extends ChangeNotifier {
   /// the automix queue if automix is running.
   void automixAppend(String path) {
     if (!automixOn || _automixQueue.contains(path)) return;
+    if (_automixQueue.any((q) => _trackKey(q) == _trackKey(path))) return;
     _automixQueue.add(path);
     notifyListeners();
   }
@@ -442,6 +443,25 @@ class DjController extends ChangeNotifier {
   DateTime _automixFadeStart = DateTime.fromMillisecondsSinceEpoch(0);
   double _automixFadeFrom = 0;
 
+  // Tracks already played this run, by a name that ignores copies such as
+  // "Song (1)", so the same track is never mixed in twice.
+  final Set<String> _automixPlayed = {};
+
+  static String _trackKey(String path) {
+    var name = path.split(RegExp(r'[\\/]')).last;
+    name = name.replaceFirst(RegExp(r'\.[^.]+$'), '');
+    name = name.replaceFirst(RegExp(r'\s*\(\d+\)$'), '');
+    return name.toLowerCase().trim();
+  }
+
+  /// The next queue entry that has not been played yet, or null.
+  int? _nextUnplayed() {
+    for (var i = _automixIndex + 1; i < _automixQueue.length; i++) {
+      if (!_automixPlayed.contains(_trackKey(_automixQueue[i]))) return i;
+    }
+    return null;
+  }
+
   int get automixQueueLength => _automixQueue.length;
   int get automixIndex => _automixIndex;
 
@@ -452,7 +472,13 @@ class DjController extends ChangeNotifier {
   }) async {
     if (paths.isEmpty) return;
     stopAutomix();
-    _automixQueue = List<String>.of(paths);
+    // One copy of each track only.
+    final seen = <String>{};
+    _automixQueue = [
+      for (final p in paths)
+        if (seen.add(_trackKey(p))) p,
+    ];
+    _automixPlayed.clear();
     automixFadeSeconds = fadeSeconds.clamp(4.0, 60.0).toDouble();
     automixStartOffset = startOffsetSeconds.clamp(0.0, 90.0).toDouble();
     automixOn = true;
@@ -477,6 +503,7 @@ class DjController extends ChangeNotifier {
     deckA.playing = true;
     _automixDeck = 0;
     _automixIndex = 0;
+    _automixPlayed.add(_trackKey(_automixQueue.first));
     _automixPreloaded = false;
     _automixFading = false;
     automixStatus = null;
@@ -512,10 +539,7 @@ class DjController extends ChangeNotifier {
       duration: d.duration,
       rate: d.rate,
     );
-    final next = nextIndex(
-      current: _automixIndex,
-      length: _automixQueue.length,
-    );
+    final next = _nextUnplayed();
     if (next == null) {
       if (remaining <= 0.5) {
         automixOn = false;
@@ -606,6 +630,7 @@ class DjController extends ChangeNotifier {
       deck(cur).playing = false;
       _automixDeck = other;
       _automixIndex = _automixNextTarget;
+      _automixPlayed.add(_trackKey(_automixQueue[_automixIndex]));
       _automixPreloaded = false;
       _automixFading = false;
     }
