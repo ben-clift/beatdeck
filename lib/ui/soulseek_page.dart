@@ -42,6 +42,12 @@ class _SoulseekPageState extends State<SoulseekPage> {
     }
   }
 
+  void _openAuto() {
+    Navigator.of(context).push(MaterialPageRoute<void>(
+      builder: (_) => AutoFetchPage(library: widget.library),
+    ));
+  }
+
   String? _pendingSearch;
 
   void _trySearch() {
@@ -89,12 +95,18 @@ class _SoulseekPageState extends State<SoulseekPage> {
       appBar: AppBar(
         title: const Text('Soulseek'),
         actions: [
-          IconButton(
-            tooltip: 'Auto-fetch by genre and tempo',
-            icon: const Icon(Icons.auto_mode),
-            onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(
-              builder: (_) => AutoFetchPage(library: widget.library),
-            )),
+          Padding(
+            padding: const EdgeInsets.only(right: 6),
+            child: FilledButton.icon(
+              style: FilledButton.styleFrom(
+                backgroundColor: const Color(0xFFFF9F1C),
+                foregroundColor: Colors.black,
+                textStyle: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15),
+              ),
+              icon: const Icon(Icons.auto_mode, size: 22),
+              label: const Text('AUTO'),
+              onPressed: _openAuto,
+            ),
           ),
           ListenableBuilder(
             listenable: soulseek,
@@ -218,6 +230,24 @@ class _SoulseekPageState extends State<SoulseekPage> {
                 if (await SlskSetup.choose(widget.library)) setState(() {});
               },
               child: const Text('Change'),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 4, 12, 4),
+            child: SizedBox(
+              width: double.infinity,
+              height: 52,
+              child: FilledButton.icon(
+                style: FilledButton.styleFrom(
+                  backgroundColor: const Color(0xFFFF9F1C),
+                  foregroundColor: Colors.black,
+                  textStyle:
+                      const TextStyle(fontWeight: FontWeight.w800, fontSize: 16),
+                ),
+                icon: const Icon(Icons.auto_mode, size: 26),
+                label: const Text('AUTO-FETCH  ·  pick genre and tempo'),
+                onPressed: _openAuto,
+              ),
             ),
           ),
           TabBar(
