@@ -514,7 +514,15 @@ class _WaveformViewState extends State<WaveformView>
   double get loopEnd => widget.loopEnd;
   ValueChanged<double>? get onSeek => widget.onSeek;
   ValueChanged<double>? get onOverviewSeek => widget.onOverviewSeek;
-  static const zoom = WaveformView.zoom;
+  /// Heard seconds across the view. Eight beats are always on screen, so the
+  /// wave scrolls in time with the tempo and synced decks line up.
+  double get zoom {
+    final heard = widget.bpm * widget.rate;
+    if (heard < 30) return WaveformView.zoom;
+    return (_beatsOnScreen * 60 / heard).clamp(1.5, 8.0).toDouble();
+  }
+
+  static const _beatsOnScreen = 8;
 
   @override
   Widget build(BuildContext context) {
