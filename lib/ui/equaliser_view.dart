@@ -340,12 +340,21 @@ class _EqSlider extends StatelessWidget {
 }
 
 class _LedPainter extends CustomPainter {
-  _LedPainter({required this.levels, required this.peaks});
+  _LedPainter({
+    required this.levels,
+    required this.peaks,
+    this.segments = 20,
+    this.gapY = 3.0,
+    this.gapX = 5.0,
+  });
 
   final List<double> levels;
   final List<double> peaks;
+  final int segments;
+  final double gapY;
+  final double gapX;
 
-  static const _segments = 20;
+  int get _segments => segments;
   static const _green = Color(0xFF3DDC57);
   static const _yellow = Color(0xFFF2D230);
   static const _red = Color(0xFFF2483A);
@@ -361,8 +370,6 @@ class _LedPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final n = levels.length;
     if (n == 0) return;
-    const gapX = 5.0;
-    const gapY = 3.0;
     final colW = (size.width - gapX * (n - 1)) / n;
     final segH = (size.height - gapY * (_segments - 1)) / _segments;
     for (var i = 0; i < n; i++) {
@@ -389,4 +396,42 @@ class _LedPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_LedPainter old) => true;
+}
+
+
+/// Slim LED spectrum that sits across the top of the controller screen.
+class EqualiserStrip extends StatelessWidget {
+  const EqualiserStrip({super.key, required this.dj, this.height = 54});
+
+  final DjController dj;
+  final double height;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListenableBuilder(
+      listenable: dj,
+      builder: (context, _) {
+        return Container(
+          height: height,
+          margin: const EdgeInsets.fromLTRB(10, 0, 10, 4),
+          padding: const EdgeInsets.fromLTRB(8, 5, 8, 5),
+          decoration: BoxDecoration(
+            color: const Color(0xFF0B0B0C),
+            borderRadius: BorderRadius.circular(4),
+            border: Border.all(color: const Color(0xFF4A4C52)),
+          ),
+          child: CustomPaint(
+            painter: _LedPainter(
+              levels: List<double>.of(dj.spectrum),
+              peaks: List<double>.of(dj.spectrumPeak),
+              segments: 10,
+              gapY: 1.5,
+              gapX: 4,
+            ),
+            size: Size.infinite,
+          ),
+        );
+      },
+    );
+  }
 }

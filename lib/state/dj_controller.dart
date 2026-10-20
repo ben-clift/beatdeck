@@ -84,6 +84,7 @@ class DjController extends ChangeNotifier {
   final List<int> _peakHold = List<int>.filled(spectrumBandCount, 0);
   bool spectrumOn = false;
   bool effectsOn = false;
+  bool stripOn = false; // compact spectrum strip at the top of the controller
 
   /// The party effects need the levels too, even off the equaliser screen.
   void setEffectsOn(bool on) {
@@ -114,6 +115,11 @@ class DjController extends ChangeNotifier {
   void _applyFx() {
     final sec = fxType == 3 ? fxBeats * 4 : fxBeats * 60 / _heardBpm();
     _engine.setFx(fxType, fxAmount, sec);
+  }
+
+  void setStripOn(bool on) {
+    stripOn = on;
+    notifyListeners();
   }
 
   void setMasterEq(int band, double db) {
@@ -232,7 +238,7 @@ class DjController extends ChangeNotifier {
   void _tick() {
     if (fxType == 1) _applyFx(); // echo length follows the tempo
     var dirty = false;
-    if (spectrumOn || effectsOn) {
+    if (spectrumOn || effectsOn || stripOn) {
       _updateSpectrum();
       dirty = true;
     }

@@ -37,9 +37,11 @@ class ControllerView extends StatefulWidget {
 class _ControllerViewState extends State<ControllerView> {
   final _pages = PageController(initialPage: 1);
   int _page = 1;
+  bool _strip = false;
 
   @override
   void dispose() {
+    widget.dj.setStripOn(false);
     _pages.dispose();
     super.dispose();
   }
@@ -81,9 +83,31 @@ class _ControllerViewState extends State<ControllerView> {
                     ),
                   ),
                 ),
+              GestureDetector(
+                onTap: () {
+                  setState(() => _strip = !_strip);
+                  widget.dj.setStripOn(_strip);
+                },
+                child: Container(
+                  margin: const EdgeInsets.only(left: 8),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                  color: _strip ? const Color(0xFF3DDC57) : Colors.transparent,
+                  child: Text(
+                    'LEVELS',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 1.5,
+                      color: _strip ? SideDeckTheme.bg : SideDeckTheme.muted,
+                    ),
+                  ),
+                ),
+              ),
             ],
           ),
         ),
+        if (_strip) EqualiserStrip(dj: widget.dj),
         Expanded(
           child: PageView(
             controller: _pages,
@@ -124,22 +148,39 @@ class _DeckPair extends StatelessWidget {
     return ListenableBuilder(
       listenable: Listenable.merge([dj, LookController.instance]),
       builder: (context, _) {
-        return FittedBox(
-          fit: BoxFit.contain,
-          child: SizedBox(
-            width: 920,
-            height: 440,
-            child: Row(
-              children: [
-                SizedBox(width: 340, child: _DeckPanel(dj: dj, index: left)),
-                SizedBox(
-                  width: 240,
-                  child: _MixerPanel(dj: dj, left: left, right: right),
+        // The canvas takes the shape of the screen so the decks fill it top to
+        // bottom, then scales to fit.
+        return LayoutBuilder(
+          builder: (context, c) {
+            final ratio = c.maxWidth / math.max(1.0, c.maxHeight);
+            final h = ratio >= 920 / 520
+                ? 520.0
+                : math.min(760.0, 920 / ratio);
+            final w = h * ratio;
+            return FittedBox(
+              fit: BoxFit.contain,
+              child: SizedBox(
+                width: w,
+                height: h,
+                child: Row(
+                  children: [
+                    Expanded(
+                      flex: 340,
+                      child: _DeckPanel(dj: dj, index: left),
+                    ),
+                    SizedBox(
+                      width: 240,
+                      child: _MixerPanel(dj: dj, left: left, right: right),
+                    ),
+                    Expanded(
+                      flex: 340,
+                      child: _DeckPanel(dj: dj, index: right),
+                    ),
+                  ],
                 ),
-                SizedBox(width: 340, child: _DeckPanel(dj: dj, index: right)),
-              ],
-            ),
-          ),
+              ),
+            );
+          },
         );
       },
     );
@@ -280,7 +321,7 @@ class _DeckPanelState extends State<_DeckPanel> {
 
   Widget _wave(DeckState d) {
     return Container(
-      height: 60,
+      height: 76,
       color: look.well,
       child: d.loaded && d.duration > 0
           ? WaveformView(
@@ -349,7 +390,7 @@ class _DeckPanelState extends State<_DeckPanel> {
         const Text('+', style: TextStyle(fontSize: 10, color: SideDeckTheme.muted)),
         ControllerFader(
           value: v,
-          height: 116,
+          height: 150,
           accent: _accent,
           onChanged: (x) {
             final snapped = (x - 0.5).abs() < 0.01 ? 0.5 : x;
@@ -371,14 +412,14 @@ class _DeckPanelState extends State<_DeckPanel> {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 3),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
         decoration: BoxDecoration(
           color: on ? _accent : look.control,
         ),
         child: Text(
           label,
           style: TextStyle(
-            fontSize: 8,
+            fontSize: 10,
             fontWeight: FontWeight.w800,
             color: on ? SideDeckTheme.bg : SideDeckTheme.muted,
           ),
@@ -393,7 +434,7 @@ class _DeckPanelState extends State<_DeckPanel> {
         child: GestureDetector(
           onTap: d.loaded ? onTap : null,
           child: Container(
-            height: 38,
+            height: 56,
             alignment: Alignment.center,
             margin: const EdgeInsets.symmetric(horizontal: 3),
             color: on ? _accent : look.control,
@@ -401,7 +442,7 @@ class _DeckPanelState extends State<_DeckPanel> {
               label,
               style: TextStyle(
                 fontWeight: FontWeight.w800,
-                fontSize: 14,
+                fontSize: 17,
                 letterSpacing: 1,
                 color: on ? SideDeckTheme.bg : SideDeckTheme.text,
               ),
@@ -428,13 +469,13 @@ class _DeckPanelState extends State<_DeckPanel> {
         child: GestureDetector(
           onTap: () => setState(() => _mode = m),
           child: Container(
-            height: 20,
+            height: 32,
             alignment: Alignment.center,
             color: on ? SideDeckTheme.text : look.control,
             child: Text(
               label,
               style: TextStyle(
-                fontSize: 10,
+                fontSize: 12,
                 fontWeight: FontWeight.w800,
                 letterSpacing: 1,
                 color: on ? SideDeckTheme.bg : SideDeckTheme.muted,
@@ -490,10 +531,10 @@ class _DeckPanelState extends State<_DeckPanel> {
       }
     }
     return SizedBox(
-      height: 76,
+      height: 120,
       child: GridView.count(
         crossAxisCount: 4,
-        childAspectRatio: 2.1,
+        childAspectRatio: 1.35,
         mainAxisSpacing: 4,
         crossAxisSpacing: 4,
         physics: const NeverScrollableScrollPhysics(),
@@ -514,7 +555,7 @@ class _DeckPanelState extends State<_DeckPanel> {
           label,
           style: TextStyle(
             fontWeight: FontWeight.w800,
-            fontSize: 13,
+            fontSize: 18,
             color: on ? SideDeckTheme.bg : SideDeckTheme.text,
           ),
         ),
