@@ -7,6 +7,8 @@ import 'package:sidedeck/engine/music_utils.dart';
 import 'package:sidedeck/engine/track_analyzer.dart';
 import 'package:sidedeck/state/dj_controller.dart';
 import 'package:sidedeck/state/library_controller.dart';
+import 'package:sidedeck/state/playlist_controller.dart';
+import 'package:sidedeck/ui/playlists_panel.dart';
 import 'package:sidedeck/subsonic/subsonic_client.dart';
 import 'package:sidedeck/theme/sidedeck_theme.dart';
 
@@ -41,6 +43,7 @@ class _LibraryOverlayState extends State<LibraryOverlay> {
   final _cache = AnalysisCache.instance;
   final _search = TextEditingController();
   int _tab = 0;
+  final PlaylistController _localPlaylists = PlaylistController();
 
   @override
   void initState() {
@@ -66,6 +69,7 @@ class _LibraryOverlayState extends State<LibraryOverlay> {
     widget.library.removeListener(_onLib);
     widget.dj.removeListener(_onLib);
     _search.dispose();
+    _localPlaylists.dispose();
     super.dispose();
   }
 
@@ -301,6 +305,7 @@ class _LibraryOverlayState extends State<LibraryOverlay> {
                 children: [
                   _tabBtn('Local', 0),
                   _tabBtn('Remote', 1),
+                  _tabBtn('Playlists', 2),
                   const SizedBox(width: 8),
                   Expanded(
                     child: SizedBox(
@@ -309,7 +314,11 @@ class _LibraryOverlayState extends State<LibraryOverlay> {
                         controller: _search,
                         style: const TextStyle(fontSize: 13),
                         decoration: InputDecoration(
-                          hintText: _tab == 0 ? 'Filter…' : 'Search server, or browse playlists',
+                          hintText: _tab == 0
+                              ? 'Filter…'
+                              : _tab == 2
+                                  ? 'Playlists and automix'
+                                  : 'Search server, or browse playlists',
                           isDense: true,
                           contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
                           prefixIcon: const Icon(Icons.search, size: 18),
@@ -406,7 +415,15 @@ class _LibraryOverlayState extends State<LibraryOverlay> {
               ),
             if (_tab == 1 && _openPlaylist != null) _playlistHeader(),
             Expanded(
-              child: _tab == 0 ? _localList(tracks) : _remoteList(),
+              child: _tab == 0
+                  ? _localList(tracks)
+                  : _tab == 2
+                      ? PlaylistsPanel(
+                          dj: widget.dj,
+                          library: widget.library,
+                          playlists: _localPlaylists,
+                        )
+                      : _remoteList(),
             ),
           ],
         ),
