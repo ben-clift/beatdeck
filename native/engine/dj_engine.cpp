@@ -2,6 +2,7 @@
 
 #include "analyze.hpp"
 #include "biquad.hpp"
+#include "fx.hpp"
 #include "id3_meta.hpp"
 #include "last_error.hpp"
 
@@ -451,6 +452,12 @@ struct Engine : public oboe::AudioStreamDataCallback,
   int eqSeenSr = 0;
   bool eqActive = false;
 
+  // Master effect (echo / reverb / flanger).
+  std::atomic<int> fxType{0};
+  std::atomic<float> fxAmount{0.0f};
+  std::atomic<float> fxTime{0.5f};
+  fx::Unit fxUnit;
+
   // Audio thread only. Returns true when any band is boosted or cut.
   bool prepareMasterEq(int sr) {
     const int v = eqVersion.load();
@@ -848,6 +855,12 @@ struct Engine : public oboe::AudioStreamDataCallback,
     } else {
       const int srNow = std::max(8000, engineSampleRate.load());
       const bool eqOn = prepareMasterEq(srNow);
+      const int fxT = fxType.load();
+      const float fxA = fxAmount.load();
+      const float fxS = fxTime.load();
+      if (fxT > 0) {
+        fxUnit.prepare(srNow);
+      }
       float peak[kSpecBands] = {};
       for (int i = 0; i < n; ++i) {
         float l = (mixAL[i] * gainA + mixBL[i] * gainB) * m;
@@ -857,6 +870,9 @@ struct Engine : public oboe::AudioStreamDataCallback,
             l = eqL[b].process(l);
             r = eqR[b].process(r);
           }
+        }
+        if (fxT > 0) {
+          fxUnit.process(fxT, fxA, fxS, l, r);
         }
         l = std::max(-1.0f, std::min(1.0f, l));
         r = std::max(-1.0f, std::min(1.0f, r));
@@ -1294,6 +1310,13 @@ void dj_set_master_eq(DjEngine engine, int band, float db) {
   Engine* e = asEngine(engine);
   e->eqDb[band].store(std::max(-12.0f, std::min(12.0f, db)));
   e->eqVersion.fetch_add(1);
+}
+
+void dj_set_fx(DjEngine engine, int type, float amount, float timeSec) {
+  Engine* e = asEngine(engine);
+  e->fxAmount.store(std::max(0.0f, std::min(1.0f, amount)));
+  e->fxTime.store(std::max(0.02f, std::min(2.5f, timeSec)));
+  e->fxType.store(std::max(0, std::min(3, type)));
 }
 
 void dj_get_spectrum(DjEngine engine, float* out, int n) {

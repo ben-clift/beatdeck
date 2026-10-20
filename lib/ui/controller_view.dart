@@ -9,6 +9,7 @@ import 'package:sidedeck/theme/sidedeck_theme.dart';
 import 'package:sidedeck/ui/automix_pulldown.dart';
 import 'package:sidedeck/ui/controller_widgets.dart';
 import 'package:sidedeck/ui/equaliser_view.dart';
+import 'package:sidedeck/ui/fx_pulldown.dart';
 import 'package:sidedeck/ui/library_drawer.dart';
 import 'package:sidedeck/ui/waveform.dart';
 
@@ -103,6 +104,7 @@ class _ControllerViewState extends State<ControllerView> {
       ],
         ),
         AutomixPullDown(dj: widget.dj),
+        FxPullDown(dj: widget.dj),
       ],
     );
   }

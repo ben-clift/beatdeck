@@ -13,3 +13,7 @@ Forked from SideDeck 1.1.1 (https://github.com/manueljpy/SideDeck), 20 Oct 2026.
 
 ## Customisable look (20 Oct 2026)
 - Palette button on the controller screen opens "Customise look": 12 gentle background colours, 12 controller body colours, and 12 accent colours for each of the four decks. Saved on the phone, with a Reset button. Defaults are the matte graphite / amber / teal look.
+
+## Effects
+- Master FX unit in the engine (`native/engine/fx.hpp`): echo (ping-pong, tempo-synced), reverb, flanger.
+- FX pull-down on the controller screen (top right), next to the Automix pull-down.

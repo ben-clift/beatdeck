@@ -90,6 +90,32 @@ class DjController extends ChangeNotifier {
     effectsOn = on;
   }
 
+  // Master effect: 0 off, 1 echo, 2 reverb, 3 flanger.
+  int fxType = 0;
+  double fxAmount = 0.5;
+  double fxBeats = 0.5; // echo length / flanger speed
+
+  double _heardBpm() {
+    for (var i = 0; i < deckCount; i++) {
+      final d = deck(i);
+      if (d.playing && d.bpm > 1) return d.bpm * d.rate;
+    }
+    return 120;
+  }
+
+  void setFx({int? type, double? amount, double? beats}) {
+    if (type != null) fxType = type.clamp(0, 3);
+    if (amount != null) fxAmount = amount.clamp(0.0, 1.0).toDouble();
+    if (beats != null) fxBeats = beats;
+    _applyFx();
+    notifyListeners();
+  }
+
+  void _applyFx() {
+    final sec = fxType == 3 ? fxBeats * 4 : fxBeats * 60 / _heardBpm();
+    _engine.setFx(fxType, fxAmount, sec);
+  }
+
   void setMasterEq(int band, double db) {
     if (band < 0 || band >= eqBandCount) return;
     eqBands[band] = db.clamp(-12.0, 12.0).toDouble();
@@ -204,6 +230,7 @@ class DjController extends ChangeNotifier {
   }
 
   void _tick() {
+    if (fxType == 1) _applyFx(); // echo length follows the tempo
     var dirty = false;
     if (spectrumOn || effectsOn) {
       _updateSpectrum();

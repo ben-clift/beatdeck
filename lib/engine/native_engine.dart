@@ -124,6 +124,9 @@ class NativeEngine {
       .lookupFunction<_SetFloatDeckC, void Function(Pointer<Void>, int, double)>(
         'dj_set_master_eq',
       );
+  late final _setFx = _lib.lookupFunction<
+      Void Function(Pointer<Void>, Int32, Float, Float),
+      void Function(Pointer<Void>, int, double, double)>('dj_set_fx');
   late final _getSpectrum = _lib.lookupFunction<
       Void Function(Pointer<Void>, Pointer<Float>, Int32),
       void Function(Pointer<Void>, Pointer<Float>, int)>('dj_get_spectrum');
@@ -270,6 +273,10 @@ class NativeEngine {
 
   /// Master graphic equaliser: [band] 0..9, [db] -12..+12.
   void setMasterEq(int band, double db) => _setMasterEq(_handle, band, db);
+
+  /// Master effect: [type] 0 off, 1 echo, 2 reverb, 3 flanger.
+  void setFx(int type, double amount, double timeSec) =>
+      _setFx(_handle, type, amount, timeSec);
 
   static const int spectrumBands = 14;
 
