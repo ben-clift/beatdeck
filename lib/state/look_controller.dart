@@ -103,6 +103,10 @@ class LookController extends ChangeNotifier {
   bool smokeOn = true;
   bool streamersOn = true;
 
+  /// Soft coloured light flashes at random moments while the sound is in the
+  /// red. At most three per second.
+  bool flashOn = true;
+
   /// Bumped to fire the effects once, for trying them out.
   final ValueNotifier<int> testTrigger = ValueNotifier<int>(0);
   int backgroundIndex = 0;
@@ -193,6 +197,7 @@ class LookController extends ChangeNotifier {
       particleShape = LookShape.values[_clamp(prefs.getInt('look_shape') ?? 5, LookShape.values.length)];
       smokeOn = prefs.getBool('look_smoke') ?? true;
       streamersOn = prefs.getBool('look_streamers') ?? true;
+      flashOn = prefs.getBool('look_flash') ?? true;
       style = LookStyle.values[_clamp(prefs.getInt('look_style') ?? 0, LookStyle.values.length)];
       final saved = prefs.getStringList('look_decks');
       if (saved != null && saved.length == deckAccent.length) {
@@ -216,6 +221,7 @@ class LookController extends ChangeNotifier {
       await prefs.setInt('look_shape', particleShape.index);
       await prefs.setBool('look_smoke', smokeOn);
       await prefs.setBool('look_streamers', streamersOn);
+      await prefs.setBool('look_flash', flashOn);
       await prefs.setStringList('look_decks', [for (final a in deckAccent) '$a']);
     } catch (_) {}
   }
@@ -234,6 +240,12 @@ class LookController extends ChangeNotifier {
 
   void setStreamers(bool on) {
     streamersOn = on;
+    notifyListeners();
+    _save();
+  }
+
+  void setFlash(bool on) {
+    flashOn = on;
     notifyListeners();
     _save();
   }
@@ -269,6 +281,7 @@ class LookController extends ChangeNotifier {
     particleShape = LookShape.mixed;
     smokeOn = true;
     streamersOn = true;
+    flashOn = true;
     backgroundIndex = 0;
     bodyIndex = 0;
     for (var i = 0; i < deckAccent.length; i++) {

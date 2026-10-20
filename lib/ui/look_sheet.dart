@@ -62,6 +62,18 @@ class _LookSheet extends StatelessWidget {
                   value: look.streamersOn,
                   onChanged: look.setStreamers,
                 ),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  dense: true,
+                  title: const Text('Random light flashes in the red'),
+                  subtitle: const Text(
+                    'Soft coloured flashes, at most 3 a second. Turn off if '
+                    'flashing lights bother you.',
+                    style: TextStyle(fontSize: 11),
+                  ),
+                  value: look.flashOn,
+                  onChanged: look.setFlash,
+                ),
                 Align(
                   alignment: Alignment.centerLeft,
                   child: OutlinedButton(

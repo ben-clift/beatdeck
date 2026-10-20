@@ -56,12 +56,38 @@ class _Streamer {
   final List<Offset> trail = [];
 }
 
+class _Flash {
+  _Flash({
+    required this.kind,
+    required this.color,
+    required this.x,
+    required this.y,
+    required this.angle,
+    required this.size,
+    required this.life,
+  }) : maxLife = life;
+
+  final int kind; // 0 glow, 1 edge, 2 beams
+  final Color color;
+  final double x, y, angle, size;
+  double life;
+  final double maxLife;
+
+  /// Quick rise, smooth fade.
+  double get envelope {
+    final t = (1 - life / maxLife).clamp(0.0, 1.0);
+    return t < 0.12 ? t / 0.12 : (1 - t) / 0.88;
+  }
+}
+
 class _PartyEffectsState extends State<PartyEffects>
     with SingleTickerProviderStateMixin {
   final _look = LookController.instance;
   final _rnd = math.Random();
   final _puffs = <_Puff>[];
   final _streamers = <_Streamer>[];
+  final _flashes = <_Flash>[];
+  double _flashCool = 1;
   final _repaint = ValueNotifier<int>(0);
   late final Ticker _ticker;
   Duration _last = Duration.zero;
@@ -89,7 +115,7 @@ class _PartyEffectsState extends State<PartyEffects>
   }
 
   void _sync() {
-    widget.dj.setEffectsOn(_look.smokeOn || _look.streamersOn);
+    widget.dj.setEffectsOn(_look.smokeOn || _look.streamersOn || _look.flashOn);
   }
 
   void _burstNow() {
@@ -101,6 +127,9 @@ class _PartyEffectsState extends State<PartyEffects>
     }
     if (_look.streamersOn) {
       _spawnStreamers();
+    }
+    if (_look.flashOn) {
+      _spawnFlash();
     }
   }
 
@@ -143,6 +172,18 @@ class _PartyEffectsState extends State<PartyEffects>
       if (_puffs.length >= 36) _spawn = 0;
     }
 
+    // Random coloured light flashes, only while the sound is in the red.
+    // Never more than about three a second, at irregular moments.
+    _flashCool -= dt;
+    if (_look.flashOn && level > 0.85 && _flashCool <= 0) {
+      final heat = ((level - 0.85) / 0.15).clamp(0.0, 1.0);
+      if (_rnd.nextDouble() < dt * (1.2 + heat * 3.5)) {
+        _spawnFlash();
+        final r = _rnd.nextDouble();
+        _flashCool = 0.34 + r * r * 2.6;
+      }
+    }
+
     // Streamers on the hardest peaks, not too often.
     _cooldown -= dt;
     if (_look.streamersOn && level >= 0.95 && _cooldown <= 0) {
@@ -171,8 +212,12 @@ class _PartyEffectsState extends State<PartyEffects>
       if (s.trail.length > 26) s.trail.removeAt(0);
     }
     _streamers.removeWhere((s) => s.life <= 0 || s.y > _size.height + 60);
+    for (final f in _flashes) {
+      f.life -= dt;
+    }
+    _flashes.removeWhere((f) => f.life <= 0);
 
-    if (_puffs.isNotEmpty || _streamers.isNotEmpty) {
+    if (_puffs.isNotEmpty || _streamers.isNotEmpty || _flashes.isNotEmpty) {
       _repaint.value++;
     }
   }
@@ -216,6 +261,33 @@ class _PartyEffectsState extends State<PartyEffects>
       life: 5 + _rnd.nextDouble() * 4,
       tint: tint,
     ));
+  }
+
+  void _spawnFlash() {
+    if (_flashes.length >= 4) return;
+    final w = _size.width;
+    final h = _size.height;
+    final palette = [..._partyColors, _look.accent(0), _look.accent(1), _look.accent(2), _look.accent(3)];
+    final kind = _rnd.nextInt(3);
+    final count = kind == 2 ? 2 + _rnd.nextInt(3) : 1;
+    for (var i = 0; i < count; i++) {
+      final fromTop = _rnd.nextBool();
+      _flashes.add(_Flash(
+        kind: kind,
+        color: palette[_rnd.nextInt(palette.length)],
+        x: kind == 2 ? _rnd.nextDouble() * w : _rnd.nextDouble() * w,
+        y: kind == 2 ? (fromTop ? -10 : h + 10) : _rnd.nextDouble() * h,
+        // For beams: which way they point (down from the top or up from below)
+        // plus a random lean. For edges: which edge (0..3).
+        angle: kind == 1
+            ? _rnd.nextInt(4).toDouble()
+            : (fromTop ? math.pi / 2 : -math.pi / 2) + (_rnd.nextDouble() - 0.5) * 1.1,
+        size: kind == 0
+            ? 90 + _rnd.nextDouble() * 200
+            : (kind == 1 ? 70 + _rnd.nextDouble() * 120 : 280 + _rnd.nextDouble() * 200),
+        life: 0.25 + _rnd.nextDouble() * 0.45,
+      ));
+    }
   }
 
   void _spawnStreamers() {
@@ -269,7 +341,7 @@ class _PartyEffectsState extends State<PartyEffects>
           builder: (context, c) {
             _size = Size(c.maxWidth, c.maxHeight);
             return CustomPaint(
-              painter: _EffectsPainter(_puffs, _streamers, _repaint),
+              painter: _EffectsPainter(_puffs, _streamers, _flashes, _repaint),
               size: Size.infinite,
             );
           },
@@ -280,14 +352,81 @@ class _PartyEffectsState extends State<PartyEffects>
 }
 
 class _EffectsPainter extends CustomPainter {
-  _EffectsPainter(this.puffs, this.streamers, Listenable repaint)
+  _EffectsPainter(this.puffs, this.streamers, this.flashes, Listenable repaint)
       : super(repaint: repaint);
 
   final List<_Puff> puffs;
   final List<_Streamer> streamers;
+  final List<_Flash> flashes;
 
   @override
   void paint(Canvas canvas, Size size) {
+    // Light flashes first, soft and see-through (never full-screen white).
+    for (final f in flashes) {
+      final a = 0.34 * f.envelope;
+      if (a <= 0.01) continue;
+      switch (f.kind) {
+        case 0:
+          final c = Offset(f.x, f.y);
+          canvas.drawCircle(
+            c,
+            f.size,
+            Paint()
+              ..shader = RadialGradient(
+                colors: [f.color.withValues(alpha: a), f.color.withValues(alpha: 0)],
+              ).createShader(Rect.fromCircle(center: c, radius: f.size)),
+          );
+        case 1:
+          final edge = f.angle.round();
+          final rect = switch (edge) {
+            0 => Rect.fromLTWH(0, 0, size.width, f.size),
+            1 => Rect.fromLTWH(0, size.height - f.size, size.width, f.size),
+            2 => Rect.fromLTWH(0, 0, f.size, size.height),
+            _ => Rect.fromLTWH(size.width - f.size, 0, f.size, size.height),
+          };
+          final begin = switch (edge) {
+            0 => Alignment.topCenter,
+            1 => Alignment.bottomCenter,
+            2 => Alignment.centerLeft,
+            _ => Alignment.centerRight,
+          };
+          final end = switch (edge) {
+            0 => Alignment.bottomCenter,
+            1 => Alignment.topCenter,
+            2 => Alignment.centerRight,
+            _ => Alignment.centerLeft,
+          };
+          canvas.drawRect(
+            rect,
+            Paint()
+              ..shader = LinearGradient(
+                begin: begin,
+                end: end,
+                colors: [f.color.withValues(alpha: a), f.color.withValues(alpha: 0)],
+              ).createShader(rect),
+          );
+        default:
+          final origin = Offset(f.x, f.y);
+          final spread = 0.16;
+          final tip1 = origin + Offset(math.cos(f.angle - spread), math.sin(f.angle - spread)) * f.size * 1.6;
+          final tip2 = origin + Offset(math.cos(f.angle + spread), math.sin(f.angle + spread)) * f.size * 1.6;
+          final path = Path()
+            ..moveTo(origin.dx, origin.dy)
+            ..lineTo(tip1.dx, tip1.dy)
+            ..lineTo(tip2.dx, tip2.dy)
+            ..close();
+          canvas.drawPath(
+            path,
+            Paint()
+              ..shader = LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [f.color.withValues(alpha: a * 0.8), f.color.withValues(alpha: 0)],
+              ).createShader(Rect.fromPoints(origin, (tip1 + tip2) / 2)),
+          );
+      }
+    }
+
     // Smoke: soft, low opacity so the controller stays visible underneath.
     for (final p in puffs) {
       final age = 1 - p.life / p.maxLife;
