@@ -107,6 +107,10 @@ struct Deck {
   float fader = 1.0f;
   float rate = 1.0f;
   bool keylock = true;
+  std::atomic<bool> cueOn{false}; // headphone cue (pre-fader)
+  float preL = 0.0f, preR = 0.0f;
+  std::vector<float> cueL, cueR;
+  int cueFrames = 0;
   std::atomic<float> transpose{1.0f}; // pitch ratio, used while keylock is on
   float filter = 0.0f; // -1 HPF .. 0 flat .. +1 LPF
   float eqLow = 0, eqMid = 0, eqHigh = 0;
@@ -446,6 +450,12 @@ struct Engine : public oboe::AudioStreamDataCallback,
   Deck decks[kDecks];
   std::atomic<float> xfader{0.5f};
   std::atomic<float> master{1.0f};
+  // Headphone cue: 0 off, 1 split (left master, right cue), 2 follows the
+  // outputs a multichannel interface has beyond the first pair.
+  std::atomic<int> cueMode{0};
+  std::atomic<float> cueVol{0.8f};
+  std::atomic<float> cueMix{0.0f};
+  std::vector<float> cueAccL, cueAccR;
 
   // Master graphic equaliser state. Gains are set from the UI thread; the
   // audio thread rebuilds its filters when eqVersion changes.
@@ -513,6 +523,8 @@ struct Engine : public oboe::AudioStreamDataCallback,
     }
     scratchL.assign(kMaxCallbackFrames, 0.0f);
     scratchR.assign(kMaxCallbackFrames, 0.0f);
+    cueAccL.assign(kMaxCallbackFrames, 0.0f);
+    cueAccR.assign(kMaxCallbackFrames, 0.0f);
     mixAL.assign(kMaxCallbackFrames, 0.0f);
     mixAR.assign(kMaxCallbackFrames, 0.0f);
     mixBL.assign(kMaxCallbackFrames, 0.0f);
@@ -522,6 +534,8 @@ struct Engine : public oboe::AudioStreamDataCallback,
       d.stretchInR.assign((size_t)kMaxStretchInFrames, 0.0f);
       d.stretchOutL.assign((size_t)kMaxCallbackFrames, 0.0f);
       d.stretchOutR.assign((size_t)kMaxCallbackFrames, 0.0f);
+      d.cueL.assign((size_t)kMaxCallbackFrames, 0.0f);
+      d.cueR.assign((size_t)kMaxCallbackFrames, 0.0f);
       d.jumpXfL.assign((size_t)kMaxCallbackFrames, 0.0f);
       d.jumpXfR.assign((size_t)kMaxCallbackFrames, 0.0f);
       d.loopXfL.assign((size_t)kMaxStretchInFrames, 0.0f);
@@ -669,6 +683,7 @@ struct Engine : public oboe::AudioStreamDataCallback,
       std::fill(right, right + frames, 0.0f);
       return;
     }
+    d.cueFrames = 0;
     if (!d.loaded || d.totalFrames < 2) {
       std::fill(left, left + frames, 0.0f);
       std::fill(right, right + frames, 0.0f);
@@ -741,6 +756,7 @@ struct Engine : public oboe::AudioStreamDataCallback,
     // to prime on the audio thread (thousands of frames under the cache lock),
     // which underruns the whole mix even when this deck is xfaded out.
     const bool useKeylock = d.keylock;
+    const bool cueWanted = d.cueOn.load(std::memory_order_relaxed) && (int)d.cueL.size() >= frames;
 
     auto applyFx = [&](float& l, float& r) {
       const float loL = d.eqLoL.process(l);
@@ -759,6 +775,8 @@ struct Engine : public oboe::AudioStreamDataCallback,
         d.fxRack.process(fxM, d.fxAmount.load(std::memory_order_relaxed),
                          d.fxTime.load(std::memory_order_relaxed), l, r);
       }
+      d.preL = l;
+      d.preR = r;
       const float g = d.gain * d.fader;
       l *= g;
       r *= g;
@@ -794,8 +812,15 @@ struct Engine : public oboe::AudioStreamDataCallback,
         float l = d.stretchOutL[i];
         float r = d.stretchOutR[i];
         applyFx(l, r);
+        if (cueWanted) {
+          d.cueL[i] = d.preL;
+          d.cueR[i] = d.preR;
+        }
         left[i] = l;
         right[i] = r;
+      }
+      if (cueWanted) {
+        d.cueFrames = frames;
       }
       d.playhead += (double)frames * (double)rate;
       if (allowLoopWrap && d.loopEnabled) {
@@ -825,6 +850,13 @@ struct Engine : public oboe::AudioStreamDataCallback,
     d.playhead = d.readLooped(d.playhead, (double)rate, left, right, frames, allowLoopWrap);
     for (int i = 0; i < frames; ++i) {
       applyFx(left[i], right[i]);
+      if (cueWanted) {
+        d.cueL[i] = d.preL;
+        d.cueR[i] = d.preR;
+      }
+    }
+    if (cueWanted) {
+      d.cueFrames = frames;
     }
     if (!d.loopEnabled && d.playhead >= totalFrames - 1) {
       d.playing = false;
@@ -850,6 +882,22 @@ struct Engine : public oboe::AudioStreamDataCallback,
         dr[i] += scratchR[i];
       }
     }
+
+    // Cue bus: every deck with CUE on, taken before its fader.
+    std::fill(cueAccL.begin(), cueAccL.begin() + n, 0.0f);
+    std::fill(cueAccR.begin(), cueAccR.begin() + n, 0.0f);
+    for (int k = 0; k < kDecks; ++k) {
+      Deck& cd = decks[k];
+      if (cd.cueOn.load(std::memory_order_relaxed) && cd.cueFrames >= n) {
+        for (int i = 0; i < n; ++i) {
+          cueAccL[i] += cd.cueL[i];
+          cueAccR[i] += cd.cueR[i];
+        }
+      }
+    }
+    const int cueM = cueMode.load();
+    const float cueV = cueVol.load();
+    const float cueX = cueMix.load();
 
     const float x = xfader.load();
     float gainA = 1.0f;
@@ -896,10 +944,18 @@ struct Engine : public oboe::AudioStreamDataCallback,
         l = std::max(-1.0f, std::min(1.0f, l));
         r = std::max(-1.0f, std::min(1.0f, r));
         recorder.push(l, r);
-        out[i * channels + 0] = l;
-        out[i * channels + 1] = r;
+        const float cl = std::max(-1.0f, std::min(1.0f, (cueAccL[i] * (1.0f - cueX) + l * cueX) * cueV));
+        const float cr = std::max(-1.0f, std::min(1.0f, (cueAccR[i] * (1.0f - cueX) + r * cueX) * cueV));
+        if (cueM == 1) {
+          // Splitter cable: master on the left side, cue on the right.
+          out[i * channels + 0] = 0.5f * (l + r);
+          out[i * channels + 1] = 0.5f * (cl + cr);
+        } else {
+          out[i * channels + 0] = l;
+          out[i * channels + 1] = r;
+        }
         for (int c = 2; c < channels; ++c) {
-          out[i * channels + c] = 0.0f;
+          out[i * channels + c] = (cueM == 2 && c == 2) ? cl : (cueM == 2 && c == 3) ? cr : 0.0f;
         }
         const float mono = 0.5f * (l + r);
         for (int b = 0; b < kSpecBands; ++b) {
@@ -1400,6 +1456,20 @@ void dj_set_keylock(DjEngine engine, int deck, int enabled) {
     d.flushStretcher();
   }
   d.keylock = next;
+}
+
+void dj_set_cue_deck(DjEngine engine, int deck, int on) {
+  if (deck < 0 || deck >= kDecks) {
+    return;
+  }
+  asEngine(engine)->decks[deck].cueOn.store(on != 0);
+}
+
+void dj_set_cue_mode(DjEngine engine, int mode, float volume, float mix) {
+  auto* e = asEngine(engine);
+  e->cueMode.store(mode < 0 ? 0 : (mode > 2 ? 2 : mode));
+  e->cueVol.store(std::max(0.0f, std::min(1.5f, volume)));
+  e->cueMix.store(std::max(0.0f, std::min(1.0f, mix)));
 }
 
 void dj_set_key_shift(DjEngine engine, int deck, float semitones) {

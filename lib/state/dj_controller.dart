@@ -29,6 +29,8 @@ class DeckState {
   bool keylock = true;
   /// Whole semitones the key is moved up or down (needs key lock on).
   int keyShift = 0;
+  /// Deck is sent to the headphone cue bus.
+  bool cue = false;
 
   /// The key as it sounds now: the detected key moved by [keyShift].
   int get soundingKey {
@@ -799,6 +801,29 @@ class DjController extends ChangeNotifier {
     final d = deck(deckIndex);
     d.keylock = enabled;
     _engine.setKeylock(deckIndex, enabled);
+    notifyListeners();
+  }
+
+  // ---- Headphone cue.
+  /// 0 off, 1 splitter cable (master left, cue right), 2 multichannel interface.
+  int cueMode = 0;
+  double cueVolume = 0.8;
+  /// 0 = cue only, 1 = master only in the headphones.
+  double cueMix = 0.0;
+
+  void setCueMode(int mode, {double? volume, double? mix}) {
+    cueMode = mode;
+    if (volume != null) cueVolume = volume;
+    if (mix != null) cueMix = mix;
+    _engine.setCueMode(cueMode, cueVolume, cueMix);
+    notifyListeners();
+  }
+
+  void toggleDeckCue(int deckIndex) {
+    final d = deck(deckIndex);
+    d.cue = !d.cue;
+    _engine.setCueDeck(deckIndex, d.cue);
+    if (d.cue && cueMode == 0) setCueMode(1);
     notifyListeners();
   }
 

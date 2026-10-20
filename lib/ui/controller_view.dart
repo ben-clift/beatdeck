@@ -49,6 +49,74 @@ class _ControllerViewState extends State<ControllerView> {
     super.dispose();
   }
 
+  void _cueSheet() {
+    final dj = widget.dj;
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: SideDeckTheme.panel,
+      builder: (ctx) => ListenableBuilder(
+        listenable: dj,
+        builder: (ctx, _) => Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('Headphone cue',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                children: [
+                  for (final (i, label) in [
+                    (0, 'Off'),
+                    (1, 'Splitter cable'),
+                    (2, 'Multichannel interface'),
+                  ])
+                    ChoiceChip(
+                      label: Text(label),
+                      selected: dj.cueMode == i,
+                      onSelected: (_) => dj.setCueMode(i),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 6),
+              Text(
+                dj.cueMode == 1
+                    ? 'Use a headphone splitter. Master plays in one ear and the '
+                        'cue in the other, as mono. Then switch the splitter side '
+                        'that feeds your speakers.'
+                    : dj.cueMode == 2
+                        ? 'Cue goes out on outputs 3 and 4 of a USB audio interface.'
+                        : 'Tap the headphone button on a deck to send it to the cue.',
+                style: const TextStyle(fontSize: 12, color: SideDeckTheme.muted),
+              ),
+              Row(children: [
+                const SizedBox(width: 70, child: Text('Volume')),
+                Expanded(
+                  child: Slider(
+                    value: dj.cueVolume,
+                    max: 1.5,
+                    onChanged: (v) => dj.setCueMode(dj.cueMode, volume: v),
+                  ),
+                ),
+              ]),
+              Row(children: [
+                const SizedBox(width: 70, child: Text('Cue / Master')),
+                Expanded(
+                  child: Slider(
+                    value: dj.cueMix,
+                    onChanged: (v) => dj.setCueMode(dj.cueMode, mix: v),
+                  ),
+                ),
+              ]),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   String _mmss(double s) {
     final m = (s ~/ 60).toString().padLeft(2, '0');
     final sec = (s.floor() % 60).toString().padLeft(2, '0');
@@ -119,6 +187,28 @@ class _ControllerViewState extends State<ControllerView> {
                     ),
                   ),
                 ),
+              GestureDetector(
+                onTap: _cueSheet,
+                child: Container(
+                  margin: const EdgeInsets.only(left: 8),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                  color: widget.dj.cueMode == 0
+                      ? Colors.transparent
+                      : const Color(0xFF2E9BFF),
+                  child: Text(
+                    'HEADPHONES',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 1.5,
+                      color: widget.dj.cueMode == 0
+                          ? SideDeckTheme.muted
+                          : Colors.black,
+                    ),
+                  ),
+                ),
+              ),
               GestureDetector(
                 onTap: _toggleRecord,
                 child: Container(
@@ -376,6 +466,17 @@ class _DeckPanelState extends State<_DeckPanel> {
               d.key >= 0 ? formatKey(d.soundingKey) : '',
               style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
             ),
+            if (d.loaded)
+              GestureDetector(
+                onTap: () => widget.dj.toggleDeckCue(widget.index),
+                child: Container(
+                  margin: const EdgeInsets.only(left: 8),
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                  color: d.cue ? const Color(0xFF2E9BFF) : Colors.transparent,
+                  child: Icon(Icons.headphones,
+                      size: 16, color: d.cue ? Colors.black : SideDeckTheme.muted),
+                ),
+              ),
             if (d.loaded) ...[
               const SizedBox(width: 8),
               GestureDetector(

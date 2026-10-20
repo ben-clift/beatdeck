@@ -148,6 +148,13 @@ class NativeEngine {
       .lookupFunction<_PlayC, void Function(Pointer<Void>, int, int)>(
         'dj_set_keylock',
       );
+  late final _setCueDeck = _lib
+      .lookupFunction<_PlayC, void Function(Pointer<Void>, int, int)>(
+        'dj_set_cue_deck',
+      );
+  late final _setCueMode = _lib.lookupFunction<
+      Void Function(Pointer<Void>, Int32, Float, Float),
+      void Function(Pointer<Void>, int, double, double)>('dj_set_cue_mode');
   late final _setKeyShift = _lib
       .lookupFunction<_SetFloatDeckC, void Function(Pointer<Void>, int, double)>(
         'dj_set_key_shift',
@@ -330,6 +337,11 @@ class NativeEngine {
   void jumpHotcue(int deck, int index) => _jumpHotcue(_handle, deck, index);
   double hotcue(int deck, int index) => _getHotcue(_handle, deck, index);
   void clearHotcue(int deck, int index) => _clearHotcue(_handle, deck, index);
+  void setCueDeck(int deck, bool on) => _setCueDeck(_handle, deck, on ? 1 : 0);
+
+  void setCueMode(int mode, double volume, double mix) =>
+      _setCueMode(_handle, mode, volume, mix);
+
   void setKeyShift(int deck, double semitones) =>
       _setKeyShift(_handle, deck, semitones);
 

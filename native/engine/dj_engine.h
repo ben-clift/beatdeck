@@ -55,6 +55,8 @@ void dj_get_spectrum(DjEngine engine, float* out, int n);
 // Sets the beat-grid tempo (the track's own BPM, before the rate is applied).
 void dj_set_bpm(DjEngine engine, int deck, float bpm);
 void dj_set_keylock(DjEngine engine, int deck, int enabled);
+void dj_set_cue_deck(DjEngine engine, int deck, int on);
+void dj_set_cue_mode(DjEngine engine, int mode, float volume, float mix);
 void dj_set_key_shift(DjEngine engine, int deck, float semitones);
 
 float dj_get_bpm(DjEngine engine, int deck);
