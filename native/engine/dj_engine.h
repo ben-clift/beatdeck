@@ -39,6 +39,8 @@ void dj_set_fader(DjEngine engine, int deck, float linear);
 void dj_set_xfader(DjEngine engine, float x);
 void dj_set_master(DjEngine engine, float linear);
 void dj_set_rate(DjEngine engine, int deck, float rate);
+// Sets the beat-grid tempo (the track's own BPM, before the rate is applied).
+void dj_set_bpm(DjEngine engine, int deck, float bpm);
 void dj_set_keylock(DjEngine engine, int deck, int enabled);
 
 float dj_get_bpm(DjEngine engine, int deck);

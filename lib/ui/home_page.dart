@@ -538,6 +538,26 @@ class _HomePageState extends State<HomePage> {
       );
     }
 
+    Widget textStep(String label, VoidCallback onTap) {
+      return GestureDetector(
+        onTap: onTap,
+        child: Container(
+          height: 40,
+          padding: const EdgeInsets.symmetric(horizontal: 10),
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: SideDeckTheme.panelAlt,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: accent.withValues(alpha: 0.8)),
+          ),
+          child: Text(
+            label,
+            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w800),
+          ),
+        ),
+      );
+    }
+
     Widget pair(String caption, Widget left, Widget right) {
       return Row(
         mainAxisSize: MainAxisSize.min,
@@ -558,7 +578,8 @@ class _HomePageState extends State<HomePage> {
     return Material(
       color: const Color(0xE0111111),
       borderRadius: BorderRadius.circular(8),
-      child: Padding(
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
         child: Row(
           children: [
@@ -573,6 +594,12 @@ class _HomePageState extends State<HomePage> {
               step('‹', () => _dj.shiftGridMs(deck, -5)),
               step('›', () => _dj.shiftGridMs(deck, 5)),
             ),
+            const SizedBox(width: 16),
+            textStep('½ BPM', () => _dj.halveGridBpm(deck)),
+            const SizedBox(width: 6),
+            textStep('2× BPM', () => _dj.doubleGridBpm(deck)),
+            const SizedBox(width: 6),
+            textStep('BEAT HERE', () => _dj.setBeatHere(deck)),
           ],
         ),
       ),

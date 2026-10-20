@@ -582,8 +582,11 @@ class DjController extends ChangeNotifier {
   void toggleKeylock(int deckIndex) =>
       setKeylock(deckIndex, !deck(deckIndex).keylock);
 
-  final List<double> _nudgeBend = [0, 0]; // temporary pitch bend while held
-  final List<Timer?> _nudgeHold = [null, null];
+  final List<double> _nudgeBend = [0, 0, 0, 0]; // temporary pitch bend while held
+  final List<Timer?> _nudgeHold = [null, null, null, null];
+
+  /// Deck that SYNC follows: 1<->2 and 3<->4.
+  int _partner(int i) => i ^ 1;
 
   void _applyRate(int deckIndex) {
     final d = deck(deckIndex);
@@ -700,7 +703,7 @@ class DjController extends ChangeNotifier {
   /// Match [slave] tempo to the other deck and keep following its BPM.
   /// Does not move the playhead. Press SYNC on the deck you want to change.
   void sync(int slave) {
-    final masterIdx = 1 - slave;
+    final masterIdx = _partner(slave);
     if (!deck(slave).loaded || !deck(masterIdx).loaded) return;
     _nudgeBend[slave] = 0;
     deck(slave).synced = true;
@@ -716,7 +719,7 @@ class DjController extends ChangeNotifier {
 
   void _applySlaveTempo(int slave) {
     final d = deck(slave);
-    final master = deck(1 - slave);
+    final master = deck(_partner(slave));
     if (!d.loaded || !master.loaded) return;
     d.rate = _tempoMatchRate(d, master);
     _applyRate(slave);
@@ -724,9 +727,46 @@ class DjController extends ChangeNotifier {
 
   /// If [deckIndex] is the master of a synced slave, keep that slave matched.
   void _followMasterBpm(int deckIndex) {
-    final slave = 1 - deckIndex;
+    final slave = _partner(deckIndex);
     if (!deck(slave).synced) return;
     _applySlaveTempo(slave);
+  }
+
+  /// Change the beat-grid tempo only. The audio keeps its speed.
+  void setGridBpm(int deckIndex, double bpm) {
+    final d = deck(deckIndex);
+    if (!d.loaded) return;
+    final next = bpm.clamp(20.0, 400.0).toDouble();
+    d.bpm = next;
+    _engine.setBpm(deckIndex, next);
+    if (d.synced) _applySlaveTempo(deckIndex);
+    _followMasterBpm(deckIndex);
+    notifyListeners();
+    _persistAnalysis(d);
+  }
+
+  /// Fix a detected tempo that is twice too fast.
+  void halveGridBpm(int deckIndex) {
+    final d = deck(deckIndex);
+    if (d.bpm > 1) setGridBpm(deckIndex, d.bpm / 2);
+  }
+
+  /// Fix a detected tempo that is half the real one.
+  void doubleGridBpm(int deckIndex) {
+    final d = deck(deckIndex);
+    if (d.bpm > 1) setGridBpm(deckIndex, d.bpm * 2);
+  }
+
+  /// Move the grid so a beat falls exactly at the playhead. Pause on a kick
+  /// drum, then tap this.
+  void setBeatHere(int deckIndex) {
+    final d = deck(deckIndex);
+    if (!d.loaded || d.bpm <= 1) return;
+    final beat = 60.0 / d.bpm;
+    var phase = (d.position - d.beatOffset) % beat;
+    if (phase < 0) phase += beat;
+    if (phase > beat / 2) phase -= beat;
+    nudgeGrid(deckIndex, phase);
   }
 
   void nudgeGrid(int deckIndex, double seconds) {

@@ -1218,6 +1218,15 @@ void dj_set_rate(DjEngine engine, int deck, float rate) {
   d.rate = std::max(0.5f, std::min(2.0f, rate));
 }
 
+void dj_set_bpm(DjEngine engine, int deck, float bpm) {
+  if (deck < 0 || deck >= kDecks) {
+    return;
+  }
+  Deck& d = asEngine(engine)->decks[deck];
+  std::lock_guard<std::mutex> lock(d.mutex);
+  d.bpm = std::max(20.0f, std::min(400.0f, bpm));
+}
+
 void dj_set_keylock(DjEngine engine, int deck, int enabled) {
   if (deck < 0 || deck >= kDecks) {
     return;

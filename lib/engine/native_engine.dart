@@ -120,6 +120,10 @@ class NativeEngine {
       .lookupFunction<_SetFloatDeckC, void Function(Pointer<Void>, int, double)>(
         'dj_set_rate',
       );
+  late final _setBpm = _lib
+      .lookupFunction<_SetFloatDeckC, void Function(Pointer<Void>, int, double)>(
+        'dj_set_bpm',
+      );
   late final _setKeylock = _lib
       .lookupFunction<_PlayC, void Function(Pointer<Void>, int, int)>(
         'dj_set_keylock',
@@ -255,6 +259,7 @@ class NativeEngine {
   void setXfader(double x) => _setXfader(_handle, x);
   void setMaster(double v) => _setMaster(_handle, v);
   void setRate(int deck, double rate) => _setRate(_handle, deck, rate);
+  void setBpm(int deck, double bpm) => _setBpm(_handle, deck, bpm);
   void setCue(int deck) => _setCue(_handle, deck);
   void jumpCue(int deck) => _jumpCue(_handle, deck);
   /// Sets hot cue [index] at [seconds], or at the playhead if negative.
