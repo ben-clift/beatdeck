@@ -1,0 +1,87 @@
+/// A genre with the tempo range it usually plays at.
+class GenreInfo {
+  const GenreInfo(this.name, this.min, this.max);
+
+  final String name;
+  final double min;
+  final double max;
+}
+
+/// Current dance and electronic genres, grouped by speed. Tempo ranges are
+/// typical, not strict; the Auto-fetch page lets you change them.
+const List<(String, List<GenreInfo>)> genreGroups = [
+  ('Under 125', [
+    GenreInfo('amapiano', 108, 115),
+    GenreInfo('afro house', 118, 124),
+    GenreInfo('deep house', 118, 124),
+    GenreInfo('house', 120, 126),
+    GenreInfo('soulful house', 118, 124),
+    GenreInfo('jazz house', 116, 124),
+    GenreInfo('lo-fi house', 108, 122),
+    GenreInfo('nu disco', 110, 124),
+    GenreInfo('disco', 108, 124),
+    GenreInfo('funk', 95, 120),
+    GenreInfo('hip hop', 80, 100),
+  ]),
+  ('125 to 135', [
+    GenreInfo('tech house', 124, 130),
+    GenreInfo('progressive house', 122, 130),
+    GenreInfo('melodic house and techno', 120, 128),
+    GenreInfo('melodic techno', 120, 130),
+    GenreInfo('bass house', 125, 132),
+    GenreInfo('big room', 126, 132),
+    GenreInfo('uk garage', 128, 135),
+    GenreInfo('2-step garage', 128, 134),
+    GenreInfo('speed garage', 130, 136),
+    GenreInfo('techno', 125, 138),
+    GenreInfo('peak time techno', 128, 138),
+    GenreInfo('baltimore club', 125, 135),
+    GenreInfo('gqom', 120, 135),
+    GenreInfo('trance', 128, 140),
+    GenreInfo('electro house', 126, 132),
+  ]),
+  ('135 and faster', [
+    GenreInfo('bassline', 132, 142),
+    GenreInfo('uk bounce', 138, 150),
+    GenreInfo('jersey club', 130, 145),
+    GenreInfo('baile funk', 130, 150),
+    GenreInfo('drift phonk', 130, 150),
+    GenreInfo('brazilian phonk', 130, 150),
+    GenreInfo('dubstep', 138, 150),
+    GenreInfo('riddim', 140, 150),
+    GenreInfo('trap edm', 140, 150),
+    GenreInfo('hard groove techno', 140, 150),
+    GenreInfo('hard trance', 140, 152),
+    GenreInfo('psytrance', 140, 150),
+    GenreInfo('goa trance', 140, 150),
+    GenreInfo('industrial techno', 135, 150),
+    GenreInfo('hard techno', 145, 160),
+    GenreInfo('schranz', 150, 165),
+    GenreInfo('hard house', 145, 158),
+    GenreInfo('hardstyle', 150, 160),
+    GenreInfo('rawstyle', 150, 160),
+    GenreInfo('euphoric hardstyle', 150, 160),
+    GenreInfo('hard dance', 145, 160),
+    GenreInfo('hyperpop', 140, 170),
+    GenreInfo('makina', 150, 170),
+    GenreInfo('jungle', 160, 170),
+    GenreInfo('drum and bass', 170, 178),
+    GenreInfo('liquid drum and bass', 170, 176),
+    GenreInfo('neurofunk', 172, 176),
+    GenreInfo('jump up', 172, 178),
+    GenreInfo('footwork', 155, 165),
+    GenreInfo('juke', 155, 165),
+    GenreInfo('happy hardcore', 165, 180),
+    GenreInfo('uk hardcore', 160, 180),
+    GenreInfo('hardcore', 160, 200),
+    GenreInfo('gabber', 160, 200),
+    GenreInfo('tekno', 150, 180),
+    GenreInfo('breakcore', 160, 220),
+    GenreInfo('nightcore', 150, 180),
+    GenreInfo('sped up', 140, 180),
+    GenreInfo('uptempo hardcore', 180, 220),
+    GenreInfo('frenchcore', 190, 220),
+    GenreInfo('terrorcore', 200, 250),
+    GenreInfo('speedcore', 220, 300),
+  ]),
+];

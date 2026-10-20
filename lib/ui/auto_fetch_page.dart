@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:sidedeck/soulseek/soulseek_client.dart';
 import 'package:sidedeck/state/library_controller.dart';
 import 'package:sidedeck/suggest/auto_fetch.dart';
+import 'package:sidedeck/suggest/genres.dart';
 import 'package:sidedeck/theme/sidedeck_theme.dart';
 
 /// Pick a genre and tempo, press start, and tracks keep arriving from
@@ -32,10 +33,7 @@ class _AutoFetchPageState extends State<AutoFetchPage> {
     af.save();
   }
 
-  static const _quick = [
-    'house', 'deep house', 'tech house', 'techno', 'trance', 'drum and bass',
-    'disco', 'funk', 'hip hop', 'garage', 'dub', 'reggae', 'afrobeat', 'pop',
-  ];
+  int _group = 2;
 
   @override
   void dispose() {
@@ -69,16 +67,40 @@ class _AutoFetchPageState extends State<AutoFetchPage> {
             ),
             const SizedBox(height: 8),
             Wrap(
-              spacing: 6,
-              runSpacing: 4,
+              spacing: 8,
               children: [
-                for (final g in _quick)
-                  ActionChip(
-                    label: Text(g),
-                    visualDensity: VisualDensity.compact,
-                    onPressed: af.running ? null : () => setState(() => _genre.text = g),
+                for (var i = 0; i < genreGroups.length; i++)
+                  ChoiceChip(
+                    label: Text(genreGroups[i].$1),
+                    selected: _group == i,
+                    onSelected: (_) => setState(() => _group = i),
                   ),
               ],
+            ),
+            const SizedBox(height: 6),
+            Wrap(
+              spacing: 6,
+              runSpacing: 2,
+              children: [
+                for (final g in genreGroups[_group].$2)
+                  ActionChip(
+                    label: Text('${g.name}  ${g.min.round()}-${g.max.round()}'),
+                    visualDensity: VisualDensity.compact,
+                    onPressed: af.running
+                        ? null
+                        : () => setState(() {
+                              _genre.text = g.name;
+                              _bpm = RangeValues(g.min, g.max.clamp(g.min + 1, 250).toDouble());
+                            }),
+                  ),
+              ],
+            ),
+            const Padding(
+              padding: EdgeInsets.only(top: 6),
+              child: Text(
+                'Tap a genre to fill in its usual tempo, then adjust the slider if you like.',
+                style: TextStyle(fontSize: 11, color: SideDeckTheme.muted),
+              ),
             ),
             const SizedBox(height: 14),
             Text('Tempo  ${_bpm.start.round()} to ${_bpm.end.round()} BPM',
@@ -86,8 +108,8 @@ class _AutoFetchPageState extends State<AutoFetchPage> {
             RangeSlider(
               values: _bpm,
               min: 60,
-              max: 200,
-              divisions: 140,
+              max: 250,
+              divisions: 190,
               labels: RangeLabels('${_bpm.start.round()}', '${_bpm.end.round()}'),
               onChanged: af.running ? null : (v) => setState(() => _bpm = v),
             ),
