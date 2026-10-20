@@ -1,15 +1,15 @@
 import 'package:flutter/material.dart';
 
 class SideDeckTheme {
-  static const bg = Color(0xFF0E1116);
-  static const panel = Color(0xFF171B22);
-  static const panelAlt = Color(0xFF1E2430);
-  static const accentA = Color(0xFF4CC9F0);
-  static const accentB = Color(0xFFF72585);
-  static const accentC = Color(0xFFFFB703);
-  static const accentD = Color(0xFF80ED99);
-  static const text = Color(0xFFE8ECF1);
-  static const muted = Color(0xFF8B93A7);
+  static const bg = Color(0xFF1C1B19);
+  static const panel = Color(0xFF262522);
+  static const panelAlt = Color(0xFF34322E);
+  static const accentA = Color(0xFFF2A33A);
+  static const accentB = Color(0xFF3FB6A8);
+  static const accentC = Color(0xFF8FA8E8);
+  static const accentD = Color(0xFFE07A8C);
+  static const text = Color(0xFFECE8E1);
+  static const muted = Color(0xFF9A958B);
 
   static ThemeData dark() {
     final base = ThemeData(

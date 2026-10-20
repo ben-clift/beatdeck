@@ -68,45 +68,16 @@ class _KnobPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final c = size.center(Offset.zero);
     final r = size.width / 2;
-    canvas.drawCircle(c, r, Paint()..color = const Color(0xFF1B1B1F));
-    canvas.drawCircle(
-      c,
-      r - 3,
-      Paint()
-        ..shader = const RadialGradient(
-          colors: [Color(0xFF3A3A42), Color(0xFF17171B)],
-        ).createShader(Rect.fromCircle(center: c, radius: r)),
-    );
-    final arc = Rect.fromCircle(center: c, radius: r - 1.5);
-    canvas.drawArc(
-      arc,
-      _start,
-      _sweep,
-      false,
-      Paint()
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 2
-        ..color = Colors.white12,
-    );
-    canvas.drawArc(
-      arc,
-      _start,
-      _sweep * value,
-      false,
-      Paint()
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 2
-        ..strokeCap = StrokeCap.round
-        ..color = accent,
-    );
+    canvas.drawCircle(c, r, Paint()..color = const Color(0xFF34322E));
+    canvas.drawCircle(c, r * 0.65, Paint()..color = const Color(0xFF4A4742));
     final angle = _start + _sweep * value;
     canvas.drawLine(
-      c + Offset(math.cos(angle), math.sin(angle)) * (r * 0.25),
-      c + Offset(math.cos(angle), math.sin(angle)) * (r * 0.72),
+      c + Offset(math.cos(angle), math.sin(angle)) * (r * 0.2),
+      c + Offset(math.cos(angle), math.sin(angle)) * (r * 0.92),
       Paint()
-        ..color = Colors.white
-        ..strokeWidth = 2.5
-        ..strokeCap = StrokeCap.round,
+        ..color = accent
+        ..strokeWidth = 3
+        ..strokeCap = StrokeCap.butt,
     );
   }
 
@@ -150,18 +121,14 @@ class ControllerFader extends StatelessWidget {
             Positioned(
               top: capHeight / 2,
               bottom: capHeight / 2,
-              child: Container(width: 4, color: Colors.white12),
+              child: Container(width: 6, color: const Color(0xFF141311)),
             ),
             Positioned(
               top: (1 - value) * travel,
               child: Container(
                 width: 30,
                 height: capHeight,
-                decoration: BoxDecoration(
-                  color: const Color(0xFF2A2A30),
-                  borderRadius: BorderRadius.circular(3),
-                  border: Border.all(color: Colors.white24),
-                ),
+                decoration: const BoxDecoration(color: Color(0xFFD9D4CA)),
                 child: Center(
                   child: Container(height: 2, width: 22, color: accent),
                 ),

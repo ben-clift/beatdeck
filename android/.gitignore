@@ -12,3 +12,6 @@ GeneratedPluginRegistrant.java
 key.properties
 **/*.keystore
 **/*.jks
+
+# BeatDeck fixed debug key (private repo, debug builds only)
+!app/beatdeck-debug.keystore

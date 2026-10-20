@@ -63,16 +63,18 @@ class _ControllerViewState extends State<ControllerView> {
                     duration: const Duration(milliseconds: 250),
                     curve: Curves.easeOut,
                   ),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 14),
+                  child: Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+                    color: _page == i ? SideDeckTheme.text : Colors.transparent,
                     child: Text(
                       _titles[i],
                       style: TextStyle(
                         fontSize: 11,
                         fontWeight: FontWeight.w800,
-                        letterSpacing: 1,
+                        letterSpacing: 1.5,
                         color: _page == i
-                            ? SideDeckTheme.text
+                            ? SideDeckTheme.bg
                             : SideDeckTheme.muted,
                       ),
                     ),
@@ -168,13 +170,27 @@ class _DeckPanelState extends State<_DeckPanel> {
     final heard = d.bpm > 1 ? d.bpm * d.rate : 0.0;
     return Container(
       margin: const EdgeInsets.all(6),
-      padding: const EdgeInsets.all(8),
       decoration: BoxDecoration(
-        color: const Color(0xFF14171D),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: _accent.withValues(alpha: 0.35)),
+        color: SideDeckTheme.panel,
+        borderRadius: BorderRadius.circular(4),
       ),
+      clipBehavior: Clip.antiAlias,
       child: Column(
+        children: [
+          Container(height: 4, color: _accent),
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.all(8),
+              child: _deckBody(d, i, remaining, heard),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _deckBody(DeckState d, int i, double remaining, double heard) {
+    return Column(
         children: [
           Row(
             children: [
@@ -182,14 +198,11 @@ class _DeckPanelState extends State<_DeckPanel> {
                 width: 22,
                 height: 22,
                 alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: _accent,
-                  borderRadius: BorderRadius.circular(4),
-                ),
+                color: _accent,
                 child: Text(
                   '${i + 1}',
                   style: const TextStyle(
-                    color: Colors.black,
+                    color: SideDeckTheme.bg,
                     fontWeight: FontWeight.w900,
                     fontSize: 13,
                   ),
@@ -251,7 +264,6 @@ class _DeckPanelState extends State<_DeckPanel> {
           const SizedBox(height: 4),
           _pads(d),
         ],
-      ),
     );
   }
 
@@ -269,9 +281,9 @@ class _DeckPanelState extends State<_DeckPanel> {
             );
           },
           child: Container(
-            height: 10,
+            height: 8,
             alignment: Alignment.centerLeft,
-            color: Colors.white10,
+            color: const Color(0xFF3A3834),
             child: FractionallySizedBox(
               widthFactor: frac.toDouble(),
               child: Container(color: _accent),
@@ -337,15 +349,14 @@ class _DeckPanelState extends State<_DeckPanel> {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 3),
         decoration: BoxDecoration(
-          color: on ? _accent : Colors.white10,
-          borderRadius: BorderRadius.circular(3),
+          color: on ? _accent : const Color(0xFF3A3834),
         ),
         child: Text(
           label,
           style: TextStyle(
             fontSize: 8,
             fontWeight: FontWeight.w800,
-            color: on ? Colors.black : SideDeckTheme.muted,
+            color: on ? SideDeckTheme.bg : SideDeckTheme.muted,
           ),
         ),
       ),
@@ -361,16 +372,14 @@ class _DeckPanelState extends State<_DeckPanel> {
             height: 38,
             alignment: Alignment.center,
             margin: const EdgeInsets.symmetric(horizontal: 3),
-            decoration: BoxDecoration(
-              color: on ? _accent : const Color(0xFF262B36),
-              borderRadius: BorderRadius.circular(6),
-            ),
+            color: on ? _accent : const Color(0xFF3A3834),
             child: Text(
               label,
               style: TextStyle(
-                fontWeight: FontWeight.w900,
-                fontSize: 13,
-                color: on ? Colors.black : SideDeckTheme.text,
+                fontWeight: FontWeight.w800,
+                fontSize: 14,
+                letterSpacing: 1,
+                color: on ? SideDeckTheme.bg : SideDeckTheme.text,
               ),
             ),
           ),
@@ -397,15 +406,15 @@ class _DeckPanelState extends State<_DeckPanel> {
           child: Container(
             height: 20,
             alignment: Alignment.center,
-            margin: const EdgeInsets.symmetric(horizontal: 2),
-            decoration: BoxDecoration(
-              color: on ? _accent.withValues(alpha: 0.3) : Colors.white10,
-              borderRadius: BorderRadius.circular(3),
-              border: Border.all(color: on ? _accent : Colors.transparent),
-            ),
+            color: on ? SideDeckTheme.text : const Color(0xFF34322E),
             child: Text(
               label,
-              style: const TextStyle(fontSize: 9, fontWeight: FontWeight.w800),
+              style: TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 1,
+                color: on ? SideDeckTheme.bg : SideDeckTheme.muted,
+              ),
             ),
           ),
         ),
@@ -476,16 +485,13 @@ class _DeckPanelState extends State<_DeckPanel> {
       onLongPress: onLong,
       child: Container(
         alignment: Alignment.center,
-        decoration: BoxDecoration(
-          color: on ? _accent : const Color(0xFF232833),
-          borderRadius: BorderRadius.circular(5),
-        ),
+        color: on ? _accent : const Color(0xFF3A3834),
         child: Text(
           label,
           style: TextStyle(
             fontWeight: FontWeight.w800,
-            fontSize: 12,
-            color: on ? Colors.black : SideDeckTheme.text,
+            fontSize: 13,
+            color: on ? SideDeckTheme.bg : SideDeckTheme.text,
           ),
         ),
       ),
@@ -504,39 +510,29 @@ class _JogPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final c = size.center(Offset.zero);
     final r = size.width / 2;
-    canvas.drawCircle(c, r, Paint()..color = const Color(0xFF0B0D11));
+    canvas.drawCircle(c, r, Paint()..color = const Color(0xFF141311));
+    canvas.drawCircle(c, r - 8, Paint()..color = const Color(0xFF34322E));
     canvas.drawCircle(
       c,
-      r,
+      r - 8,
       Paint()
         ..style = PaintingStyle.stroke
-        ..strokeWidth = 3
-        ..color = playing ? accent : Colors.white24,
+        ..strokeWidth = 2
+        ..color = playing ? accent : const Color(0xFF4A4742),
     );
-    canvas.drawCircle(c, r - 12, Paint()..color = const Color(0xFF1B1F27));
+    canvas.drawCircle(c, r * 0.5, Paint()..color = const Color(0xFF2A2926));
     canvas.save();
     canvas.translate(c.dx, c.dy);
     canvas.rotate(angle);
-    for (var k = 0; k < 24; k++) {
-      canvas.rotate(2 * math.pi / 24);
-      canvas.drawLine(
-        Offset(0, -(r - 16)),
-        Offset(0, -(r - 24)),
-        Paint()
-          ..color = Colors.white12
-          ..strokeWidth = 2,
-      );
-    }
     canvas.drawLine(
       Offset.zero,
-      Offset(0, -(r - 14)),
+      Offset(0, -(r - 12)),
       Paint()
         ..color = accent
-        ..strokeWidth = 4
-        ..strokeCap = StrokeCap.round,
+        ..strokeWidth = 5,
     );
     canvas.restore();
-    canvas.drawCircle(c, 8, Paint()..color = const Color(0xFF0B0D11));
+    canvas.drawCircle(c, 6, Paint()..color = const Color(0xFF141311));
   }
 
   @override
@@ -557,8 +553,8 @@ class _MixerPanel extends StatelessWidget {
       margin: const EdgeInsets.symmetric(vertical: 6),
       padding: const EdgeInsets.all(6),
       decoration: BoxDecoration(
-        color: const Color(0xFF101318),
-        borderRadius: BorderRadius.circular(10),
+        color: const Color(0xFF141311),
+        borderRadius: BorderRadius.circular(4),
       ),
       child: Column(
         children: [
