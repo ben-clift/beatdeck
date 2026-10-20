@@ -52,6 +52,7 @@ class _LookBackgroundState extends State<LookBackground>
           style: _look.style,
           bg: _look.bg,
           accents: [for (var i = 0; i < 4; i++) _look.accent(i)],
+          shape: _look.particleShape,
         ),
         size: Size.infinite,
       ),
@@ -60,7 +61,15 @@ class _LookBackgroundState extends State<LookBackground>
 }
 
 class _Star {
-  const _Star(this.x, this.y, this.phase, this.size, this.speed, this.tint);
+  const _Star(
+    this.x,
+    this.y,
+    this.phase,
+    this.size,
+    this.speed,
+    this.tint,
+    this.mix,
+  );
 
   final double x;
   final double y;
@@ -68,6 +77,7 @@ class _Star {
   final double size;
   final double speed;
   final int tint; // -1 = white, otherwise a deck accent index
+  final int mix; // shape used when the shape is Mixed
 }
 
 final List<_Star> _stars = () {
@@ -81,6 +91,7 @@ final List<_Star> _stars = () {
         0.8 + r.nextDouble() * 2.4,
         3 + r.nextInt(9).toDouble(),
         r.nextInt(3) == 0 ? r.nextInt(4) : -1,
+        r.nextInt(5),
       ),
   ];
 }();
@@ -91,6 +102,7 @@ class _BackdropPainter extends CustomPainter {
     required this.style,
     required this.bg,
     required this.accents,
+    required this.shape,
   })  : _t = repaint,
         super(repaint: repaint);
 
@@ -98,6 +110,7 @@ class _BackdropPainter extends CustomPainter {
   final LookStyle style;
   final Color bg;
   final List<Color> accents;
+  final LookShape shape;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -108,10 +121,12 @@ class _BackdropPainter extends CustomPainter {
       case LookStyle.matte:
         break;
       case LookStyle.neon:
-        _glow(canvas, size, Offset(size.width * 0.2, size.height * 1.05),
-            size.width * 0.5, accents[0], 0.22);
-        _glow(canvas, size, Offset(size.width * 0.8, size.height * 1.05),
-            size.width * 0.5, accents[1], 0.22);
+        canvas.drawRect(rect, Paint()..color = Colors.black.withValues(alpha: 0.55));
+        _glow(canvas, size, Offset(size.width * 0.25, size.height * 1.0),
+            size.width * 0.55, accents[0], 0.40);
+        _glow(canvas, size, Offset(size.width * 0.75, size.height * 1.0),
+            size.width * 0.55, accents[1], 0.40);
+        _gridFloor(canvas, size, t);
       case LookStyle.chrome:
         canvas.drawRect(
           rect,
@@ -120,9 +135,9 @@ class _BackdropPainter extends CustomPainter {
               begin: Alignment.topCenter,
               end: Alignment.bottomCenter,
               colors: [
-                Color.lerp(bg, Colors.white, 0.10)!,
+                Color.lerp(bg, Colors.white, 0.30)!,
                 bg,
-                Color.lerp(bg, Colors.black, 0.35)!,
+                Color.lerp(bg, Colors.black, 0.6)!,
               ],
             ).createShader(rect),
         );
@@ -133,23 +148,127 @@ class _BackdropPainter extends CustomPainter {
             size.width * (0.5 + 0.42 * math.sin(a * 1.0 + i)),
             size.height * (0.5 + 0.38 * math.cos(a * 0.8 + i * 2)),
           );
-          _glow(canvas, size, c, size.width * 0.38, accents[i], 0.30);
+          _glow(canvas, size, c, size.width * 0.45, accents[i], 0.55);
         }
       case LookStyle.sparkle:
-        final paint = Paint()..strokeCap = StrokeCap.round;
+        canvas.drawRect(
+          rect,
+          Paint()
+            ..shader = LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                Color.lerp(bg, accents[0], 0.22)!,
+                bg,
+                Color.lerp(bg, accents[1], 0.22)!,
+              ],
+            ).createShader(rect),
+        );
         for (final s in _stars) {
           final tw = 0.5 + 0.5 * math.sin(t * s.speed + s.phase);
-          final alpha = 0.12 + 0.88 * tw * tw;
+          final alpha = 0.15 + 0.85 * tw * tw;
           final base = s.tint < 0 ? Colors.white : accents[s.tint];
           final p = Offset(s.x * size.width, s.y * size.height);
-          final len = s.size * (1.2 + 2.2 * tw);
-          paint
-            ..color = base.withValues(alpha: alpha)
-            ..strokeWidth = math.max(0.8, s.size * 0.35);
-          canvas.drawLine(p - Offset(len, 0), p + Offset(len, 0), paint);
-          canvas.drawLine(p - Offset(0, len), p + Offset(0, len), paint);
-          canvas.drawCircle(p, s.size * 0.45, Paint()..color = base.withValues(alpha: alpha));
+          final radius = s.size * (1.6 + 1.6 * tw);
+          final which = shape == LookShape.mixed
+              ? LookShape.values[s.mix]
+              : shape;
+          canvas.save();
+          canvas.translate(p.dx, p.dy);
+          canvas.rotate(math.sin(t * 3 + s.phase) * 0.35);
+          canvas.drawCircle(
+            Offset.zero,
+            radius * 1.9,
+            Paint()..color = base.withValues(alpha: alpha * 0.12),
+          );
+          _drawShape(canvas, which, radius, base.withValues(alpha: alpha));
+          canvas.restore();
         }
+    }
+  }
+
+  void _drawShape(Canvas canvas, LookShape which, double r, Color color) {
+    final fill = Paint()..color = color;
+    switch (which) {
+      case LookShape.star:
+        final path = Path();
+        for (var i = 0; i < 10; i++) {
+          final rad = i.isEven ? r : r * 0.42;
+          final a = -math.pi / 2 + i * math.pi / 5;
+          final pt = Offset(math.cos(a) * rad, math.sin(a) * rad);
+          if (i == 0) {
+            path.moveTo(pt.dx, pt.dy);
+          } else {
+            path.lineTo(pt.dx, pt.dy);
+          }
+        }
+        path.close();
+        canvas.drawPath(path, fill);
+      case LookShape.heart:
+        final path = Path()
+          ..moveTo(0, r * 0.9)
+          ..cubicTo(-r * 1.3, 0, -r * 0.8, -r, 0, -r * 0.35)
+          ..cubicTo(r * 0.8, -r, r * 1.3, 0, 0, r * 0.9)
+          ..close();
+        canvas.drawPath(path, fill);
+      case LookShape.diamond:
+        final path = Path()
+          ..moveTo(0, -r * 1.2)
+          ..lineTo(r * 0.7, 0)
+          ..lineTo(0, r * 1.2)
+          ..lineTo(-r * 0.7, 0)
+          ..close();
+        canvas.drawPath(path, fill);
+      case LookShape.bubble:
+        canvas.drawCircle(
+          Offset.zero,
+          r,
+          Paint()
+            ..color = color.withValues(alpha: color.a * 0.25),
+        );
+        canvas.drawCircle(
+          Offset.zero,
+          r,
+          Paint()
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 1.2
+            ..color = color,
+        );
+        canvas.drawCircle(Offset(-r * 0.35, -r * 0.35), r * 0.2, fill);
+      case LookShape.twinkle:
+        final k = r * 1.4;
+        final path = Path()
+          ..moveTo(0, -k)
+          ..quadraticBezierTo(0, 0, k, 0)
+          ..quadraticBezierTo(0, 0, 0, k)
+          ..quadraticBezierTo(0, 0, -k, 0)
+          ..quadraticBezierTo(0, 0, 0, -k)
+          ..close();
+        canvas.drawPath(path, fill);
+      case LookShape.mixed:
+        canvas.drawCircle(Offset.zero, r * 0.6, fill);
+    }
+  }
+
+  /// Retro grid floor in the lower half, sliding towards the viewer.
+  void _gridFloor(Canvas canvas, Size size, double t) {
+    final horizon = size.height * 0.55;
+    final line = Paint()
+      ..strokeWidth = 1
+      ..color = accents[0].withValues(alpha: 0.35);
+    final cx = size.width / 2;
+    for (var i = -12; i <= 12; i++) {
+      canvas.drawLine(
+        Offset(cx + i * 8, horizon),
+        Offset(cx + i * size.width * 0.12, size.height),
+        line,
+      );
+    }
+    final slide = (t / (math.pi * 2) * 60) % 1;
+    for (var i = 0; i < 8; i++) {
+      final f = ((i + slide) / 8);
+      final y = horizon + (size.height - horizon) * f * f;
+      canvas.drawLine(Offset(0, y), Offset(size.width, y), line);
     }
   }
 
@@ -167,5 +286,8 @@ class _BackdropPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_BackdropPainter old) =>
-      old.style != style || old.bg != bg || old.accents != accents;
+      old.style != style ||
+      old.bg != bg ||
+      old.accents != accents ||
+      old.shape != shape;
 }

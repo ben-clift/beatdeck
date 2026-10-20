@@ -15,7 +15,21 @@ enum LookStyle {
   final String label;
   final String blurb;
 
-  bool get animated => this == sparkle || this == aurora;
+  bool get animated => this == sparkle || this == aurora || this == neon;
+}
+
+/// Shape of the drifting particles in the Sparkle style.
+enum LookShape {
+  star('Stars'),
+  heart('Hearts'),
+  diamond('Diamonds'),
+  bubble('Bubbles'),
+  twinkle('Twinkles'),
+  mixed('Mixed');
+
+  const LookShape(this.label);
+
+  final String label;
 }
 
 class LookOption {
@@ -83,6 +97,7 @@ class LookController extends ChangeNotifier {
   static const _defaultAccents = [0, 1, 2, 3];
 
   LookStyle style = LookStyle.matte;
+  LookShape particleShape = LookShape.mixed;
   int backgroundIndex = 0;
   int bodyIndex = 0;
   final List<int> deckAccent = List<int>.of(_defaultAccents);
@@ -168,6 +183,7 @@ class LookController extends ChangeNotifier {
       backgroundIndex =
           _clamp(prefs.getInt('look_bg') ?? 0, backgrounds.length);
       bodyIndex = _clamp(prefs.getInt('look_body') ?? 0, bodies.length);
+      particleShape = LookShape.values[_clamp(prefs.getInt('look_shape') ?? 5, LookShape.values.length)];
       style = LookStyle.values[_clamp(prefs.getInt('look_style') ?? 0, LookStyle.values.length)];
       final saved = prefs.getStringList('look_decks');
       if (saved != null && saved.length == deckAccent.length) {
@@ -188,8 +204,15 @@ class LookController extends ChangeNotifier {
       await prefs.setInt('look_bg', backgroundIndex);
       await prefs.setInt('look_body', bodyIndex);
       await prefs.setInt('look_style', style.index);
+      await prefs.setInt('look_shape', particleShape.index);
       await prefs.setStringList('look_decks', [for (final a in deckAccent) '$a']);
     } catch (_) {}
+  }
+
+  void setParticleShape(LookShape value) {
+    particleShape = value;
+    notifyListeners();
+    _save();
   }
 
   void setStyle(LookStyle value) {
@@ -218,6 +241,7 @@ class LookController extends ChangeNotifier {
 
   void reset() {
     style = LookStyle.matte;
+    particleShape = LookShape.mixed;
     backgroundIndex = 0;
     bodyIndex = 0;
     for (var i = 0; i < deckAccent.length; i++) {

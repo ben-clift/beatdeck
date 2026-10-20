@@ -70,6 +70,21 @@ class _LookSheet extends StatelessWidget {
                     ),
                   ),
                 ),
+                if (look.style == LookStyle.sparkle) ...[
+                  _section('Sparkle shape'),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      for (final sh in LookShape.values)
+                        ChoiceChip(
+                          label: Text(sh.label),
+                          selected: look.particleShape == sh,
+                          onSelected: (_) => look.setParticleShape(sh),
+                        ),
+                    ],
+                  ),
+                ],
                 _section('Background'),
                 _swatches(
                   LookController.backgrounds,
