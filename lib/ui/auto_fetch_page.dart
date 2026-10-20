@@ -20,8 +20,10 @@ class AutoFetchPage extends StatefulWidget {
 
 class _AutoFetchPageState extends State<AutoFetchPage> {
   final _genre = TextEditingController(text: AutoFetch.instance.genre);
-  late RangeValues _bpm =
-      RangeValues(AutoFetch.instance.bpmMin, AutoFetch.instance.bpmMax);
+  late RangeValues _bpm = RangeValues(
+    AutoFetch.instance.bpmMin.clamp(70.0, 179.0).toDouble(),
+    AutoFetch.instance.bpmMax.clamp(71.0, 180.0).toDouble(),
+  );
   late double _count = AutoFetch.instance.count.toDouble();
   late bool _endless = AutoFetch.instance.endless;
 
@@ -108,7 +110,8 @@ class _AutoFetchPageState extends State<AutoFetchPage> {
                         ? null
                         : (_) => setState(() {
                               _genre.text = g.name;
-                              _bpm = RangeValues(g.min, g.max.clamp(g.min + 1, 250).toDouble());
+                              final lo = g.min.clamp(70.0, 179.0).toDouble();
+                              _bpm = RangeValues(lo, g.max.clamp(lo + 1, 180.0).toDouble());
                             }),
                   ),
               ],
@@ -118,9 +121,9 @@ class _AutoFetchPageState extends State<AutoFetchPage> {
                 style: const TextStyle(fontWeight: FontWeight.w700)),
             RangeSlider(
               values: _bpm,
-              min: 60,
-              max: 250,
-              divisions: 190,
+              min: 70,
+              max: 180,
+              divisions: 110,
               labels: RangeLabels('${_bpm.start.round()}', '${_bpm.end.round()}'),
               onChanged: af.running ? null : (v) => setState(() => _bpm = v),
             ),
