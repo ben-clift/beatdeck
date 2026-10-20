@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:sidedeck/midi/midi_controller.dart';
 import 'package:flutter/services.dart';
 import 'package:sidedeck/engine/music_utils.dart';
 import 'package:sidedeck/engine/usb_output.dart';
@@ -43,7 +42,6 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     WidgetsBinding.instance.addObserver(this);
     LookController.instance.load();
     _dj = DjController();
-    midiFor(_dj); // listens for a controller from the start
     _library = LibraryController();
     _dj.addListener(_onDjChanged);
   }
