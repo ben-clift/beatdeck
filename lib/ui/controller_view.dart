@@ -228,7 +228,14 @@ class _DeckPanelState extends State<_DeckPanel> {
           Expanded(
             child: Padding(
               padding: const EdgeInsets.all(8),
-              child: _deckBody(d, i, remaining, heard),
+              child: Row(
+                children: [
+                  Expanded(child: _deckBody(d, i, remaining, heard)),
+                  const SizedBox(width: 8),
+                  // Pitch fader runs the full height of the deck.
+                  SizedBox(width: 56, child: _tempo(d)),
+                ],
+              ),
             ),
           ),
         ],
@@ -307,7 +314,6 @@ class _DeckPanelState extends State<_DeckPanel> {
                     },
                   ),
                 ),
-                _tempo(d),
               ],
             ),
           ),
