@@ -8,6 +8,7 @@ import 'package:sidedeck/state/look_controller.dart';
 import 'package:sidedeck/theme/sidedeck_theme.dart';
 import 'package:sidedeck/ui/controller_widgets.dart';
 import 'package:sidedeck/ui/library_drawer.dart';
+import 'package:sidedeck/ui/waveform.dart';
 
 
 /// Hardware-style layout: two decks with a mixer between them.
@@ -117,7 +118,7 @@ class _DeckPair extends StatelessWidget {
           fit: BoxFit.contain,
           child: SizedBox(
             width: 920,
-            height: 400,
+            height: 440,
             child: Row(
               children: [
                 SizedBox(width: 340, child: _DeckPanel(dj: dj, index: left)),
@@ -243,12 +244,19 @@ class _DeckPanelState extends State<_DeckPanel> {
             ],
           ),
           const SizedBox(height: 4),
-          _progress(d),
+          _wave(d),
           const SizedBox(height: 6),
           Expanded(
             child: Row(
               children: [
-                Expanded(child: Center(child: _jog(d))),
+                Expanded(
+                  child: LayoutBuilder(
+                    builder: (context, c) {
+                      final size = math.min(150.0, math.min(c.maxHeight, c.maxWidth));
+                      return Center(child: _jog(d, size < 80 ? 80 : size));
+                    },
+                  ),
+                ),
                 _tempo(d),
               ],
             ),
@@ -263,41 +271,46 @@ class _DeckPanelState extends State<_DeckPanel> {
     );
   }
 
-  Widget _progress(DeckState d) {
-    final frac = d.duration > 0 ? (d.position / d.duration).clamp(0.0, 1.0) : 0.0;
-    return LayoutBuilder(
-      builder: (context, c) {
-        return GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onTapDown: (t) {
-            if (d.duration <= 0) return;
-            widget.dj.seekTo(
-              widget.index,
-              t.localPosition.dx / c.maxWidth * d.duration,
-            );
-          },
-          child: Container(
-            height: 8,
-            alignment: Alignment.centerLeft,
-            color: look.control,
-            child: FractionallySizedBox(
-              widthFactor: frac.toDouble(),
-              child: Container(color: _accent),
+  Widget _wave(DeckState d) {
+    return Container(
+      height: 60,
+      color: look.well,
+      child: d.loaded && d.duration > 0
+          ? WaveformView(
+              min: d.waveMin,
+              max: d.waveMax,
+              position: d.position,
+              duration: d.duration,
+              beatOffset: d.beatOffset,
+              bpm: d.bpm,
+              rate: d.rate,
+              color: _accent,
+              loopEnabled: d.loopEnabled,
+              loopStart: d.loopStart,
+              loopEnd: d.loopEnd,
+              onOverviewSeek: (t) => widget.dj.seekTo(widget.index, t),
+            )
+          : Center(
+              child: Text(
+                'LOAD A TRACK',
+                style: TextStyle(
+                  fontSize: 9,
+                  letterSpacing: 1.5,
+                  fontWeight: FontWeight.w700,
+                  color: look.controlHigh,
+                ),
+              ),
             ),
-          ),
-        );
-      },
     );
   }
 
-  Widget _jog(DeckState d) {
-    const size = 150.0;
+  Widget _jog(DeckState d, double size) {
     // 33 1/3 rpm look: one turn every 1.8 seconds of track.
     final angle = d.position / 1.8 * 2 * math.pi;
     return GestureDetector(
       onPanUpdate: (u) {
         if (!d.loaded) return;
-        final c = const Offset(size / 2, size / 2);
+        final c = Offset(size / 2, size / 2);
         final p = u.localPosition - c;
         final prev = p - u.delta;
         var da = math.atan2(p.dy, p.dx) - math.atan2(prev.dy, prev.dx);
@@ -307,7 +320,7 @@ class _DeckPanelState extends State<_DeckPanel> {
         widget.dj.seekTo(widget.index, d.position + da / (2 * math.pi) * 1.8);
       },
       child: CustomPaint(
-        size: const Size.square(size),
+        size: Size.square(size),
         painter: _JogPainter(
           angle: angle,
           accent: _accent,
