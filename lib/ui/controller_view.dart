@@ -11,6 +11,7 @@ import 'package:sidedeck/ui/controller_widgets.dart';
 import 'package:sidedeck/ui/equaliser_view.dart';
 import 'package:sidedeck/ui/fx_pulldown.dart';
 import 'package:sidedeck/ui/library_drawer.dart';
+import 'package:sidedeck/ui/track_picker.dart';
 import 'package:sidedeck/ui/waveform.dart';
 
 
@@ -119,8 +120,8 @@ class _ControllerViewState extends State<ControllerView> {
                 onOpenSettings: widget.onOpenSettings,
                 embedded: true,
               ),
-              _DeckPair(dj: widget.dj, left: 0, right: 1),
-              _DeckPair(dj: widget.dj, left: 2, right: 3),
+              _DeckPair(dj: widget.dj, library: widget.library, left: 0, right: 1),
+              _DeckPair(dj: widget.dj, library: widget.library, left: 2, right: 3),
               EqualiserView(dj: widget.dj),
             ],
           ),
@@ -137,9 +138,15 @@ class _ControllerViewState extends State<ControllerView> {
 /// Two decks and the mixer between them, drawn on a fixed canvas that scales
 /// to the screen.
 class _DeckPair extends StatelessWidget {
-  const _DeckPair({required this.dj, required this.left, required this.right});
+  const _DeckPair({
+    required this.dj,
+    required this.library,
+    required this.left,
+    required this.right,
+  });
 
   final DjController dj;
+  final LibraryController library;
   final int left;
   final int right;
 
@@ -165,16 +172,16 @@ class _DeckPair extends StatelessWidget {
                 child: Row(
                   children: [
                     Expanded(
-                      flex: 340,
-                      child: _DeckPanel(dj: dj, index: left),
+                      flex: 460,
+                      child: _DeckPanel(dj: dj, library: library, index: left),
                     ),
                     SizedBox(
-                      width: 240,
+                      width: 200,
                       child: _MixerPanel(dj: dj, left: left, right: right),
                     ),
                     Expanded(
-                      flex: 340,
-                      child: _DeckPanel(dj: dj, index: right),
+                      flex: 460,
+                      child: _DeckPanel(dj: dj, library: library, index: right),
                     ),
                   ],
                 ),
@@ -190,9 +197,14 @@ class _DeckPair extends StatelessWidget {
 enum _PadMode { hotCue, loop, jump }
 
 class _DeckPanel extends StatefulWidget {
-  const _DeckPanel({required this.dj, required this.index});
+  const _DeckPanel({
+    required this.dj,
+    required this.library,
+    required this.index,
+  });
 
   final DjController dj;
+  final LibraryController library;
   final int index;
 
   @override
@@ -243,14 +255,24 @@ class _DeckPanelState extends State<_DeckPanel> {
     );
   }
 
+  void _openPicker() => showTrackPicker(
+        context,
+        dj: widget.dj,
+        library: widget.library,
+        deck: widget.index,
+      );
+
   Widget _deckBody(DeckState d, int i, double remaining, double heard) {
     return Column(
-        children: [
-          Row(
+      children: [
+        GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: _openPicker,
+          child: Row(
             children: [
               Container(
-                width: 22,
-                height: 22,
+                width: 24,
+                height: 24,
                 alignment: Alignment.center,
                 color: _accent,
                 child: Text(
@@ -258,78 +280,81 @@ class _DeckPanelState extends State<_DeckPanel> {
                   style: const TextStyle(
                     color: SideDeckTheme.bg,
                     fontWeight: FontWeight.w900,
-                    fontSize: 13,
+                    fontSize: 14,
                   ),
                 ),
               ),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  d.loaded ? d.title : 'Empty',
+                  d.loaded ? d.title : 'Tap to load a track',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
-                    fontSize: 13,
+                    fontSize: 14,
                     fontWeight: FontWeight.w700,
                   ),
                 ),
               ),
+              const Icon(Icons.library_music, size: 18),
             ],
           ),
-          const SizedBox(height: 4),
-          Row(
-            children: [
-              Text(
-                heard > 0 ? heard.toStringAsFixed(1) : '--',
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.w800,
-                  color: _accent,
-                ),
+        ),
+        const SizedBox(height: 4),
+        Row(
+          children: [
+            Text(
+              heard > 0 ? heard.toStringAsFixed(1) : '--',
+              style: TextStyle(
+                fontSize: 22,
+                fontWeight: FontWeight.w800,
+                color: _accent,
               ),
-              const Text(' BPM  ',
-                  style: TextStyle(fontSize: 10, color: SideDeckTheme.muted)),
-              Text(
-                d.key >= 0 ? formatKey(d.key) : '',
-                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
-              ),
-              const Spacer(),
-              Text(
-                d.loaded ? '-${formatDuration(remaining)}' : '',
-                style: const TextStyle(fontSize: 13),
-              ),
-            ],
-          ),
-          const SizedBox(height: 4),
-          _wave(d),
-          const SizedBox(height: 6),
-          Expanded(
-            child: Row(
-              children: [
-                Expanded(
-                  child: LayoutBuilder(
-                    builder: (context, c) {
-                      final size = math.min(150.0, math.min(c.maxHeight, c.maxWidth));
-                      return Center(child: _jog(d, size < 80 ? 80 : size));
-                    },
-                  ),
-                ),
-              ],
             ),
+            const Text(' BPM  ',
+                style: TextStyle(fontSize: 10, color: SideDeckTheme.muted)),
+            Text(
+              d.key >= 0 ? formatKey(d.key) : '',
+              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
+            ),
+            const Spacer(),
+            Text(
+              d.loaded ? '-${formatDuration(remaining)}' : '',
+              style: const TextStyle(fontSize: 14),
+            ),
+          ],
+        ),
+        const SizedBox(height: 4),
+        _wave(d),
+        const SizedBox(height: 4),
+        _transport(d),
+        const SizedBox(height: 4),
+        _modeRow(),
+        const SizedBox(height: 4),
+        // A big jog wheel with the pads in a column beside it.
+        Expanded(
+          child: Row(
+            children: [
+              Expanded(
+                child: LayoutBuilder(
+                  builder: (context, c) {
+                    final size = math.min(c.maxWidth, c.maxHeight);
+                    return Center(child: _jog(d, size < 80 ? 80 : size));
+                  },
+                ),
+              ),
+              const SizedBox(width: 6),
+              SizedBox(width: 124, child: _pads(d)),
+            ],
           ),
-          const SizedBox(height: 4),
-          _transport(d),
-          const SizedBox(height: 6),
-          _modeRow(),
-          const SizedBox(height: 4),
-          _pads(d),
-        ],
+        ),
+      ],
     );
   }
 
   Widget _wave(DeckState d) {
     return Container(
-      height: 76,
+      height: 104,
       color: look.well,
       child: d.loaded && d.duration > 0
           ? WaveformView(
@@ -347,16 +372,20 @@ class _DeckPanelState extends State<_DeckPanel> {
               loopEnd: d.loopEnd,
               onOverviewSeek: (t) => widget.dj.seekTo(widget.index, t),
             )
-          : Center(
+          : GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: _openPicker,
+              child: Center(
               child: Text(
-                'LOAD A TRACK',
+                'TAP TO LOAD A TRACK',
                 style: TextStyle(
-                  fontSize: 9,
+                  fontSize: 13,
                   letterSpacing: 1.5,
                   fontWeight: FontWeight.w700,
                   color: look.controlHigh,
                 ),
               ),
+            ),
             ),
     );
   }
@@ -459,7 +488,7 @@ class _DeckPanelState extends State<_DeckPanel> {
         child: GestureDetector(
           onTap: d.loaded ? onTap : null,
           child: Container(
-            height: 56,
+            height: 46,
             alignment: Alignment.center,
             margin: const EdgeInsets.symmetric(horizontal: 3),
             color: on ? _accent : look.control,
@@ -494,7 +523,7 @@ class _DeckPanelState extends State<_DeckPanel> {
         child: GestureDetector(
           onTap: () => setState(() => _mode = m),
           child: Container(
-            height: 32,
+            height: 30,
             alignment: Alignment.center,
             color: on ? SideDeckTheme.text : look.control,
             child: Text(
@@ -555,17 +584,21 @@ class _DeckPanelState extends State<_DeckPanel> {
           ));
       }
     }
-    return SizedBox(
-      height: 120,
-      child: GridView.count(
-        crossAxisCount: 4,
-        childAspectRatio: 1.35,
-        mainAxisSpacing: 4,
-        crossAxisSpacing: 4,
-        physics: const NeverScrollableScrollPhysics(),
-        padding: EdgeInsets.zero,
-        children: pads,
-      ),
+    return LayoutBuilder(
+      builder: (context, c) {
+        const gap = 4.0;
+        final cellW = (c.maxWidth - gap) / 2;
+        final cellH = (c.maxHeight - gap * 3) / 4;
+        return GridView.count(
+          crossAxisCount: 2,
+          childAspectRatio: cellW / math.max(1.0, cellH),
+          mainAxisSpacing: gap,
+          crossAxisSpacing: gap,
+          physics: const NeverScrollableScrollPhysics(),
+          padding: EdgeInsets.zero,
+          children: pads,
+        );
+      },
     );
   }
 
@@ -722,6 +755,7 @@ class _MixerPanel extends StatelessWidget {
             children: [
               ControllerKnob(
                 label: 'MASTER',
+                size: 56,
                 value: (dj.master / 1.5).clamp(0.0, 1.0).toDouble(),
                 center: 1.0 / 1.5,
                 accent: Colors.white70,
@@ -743,8 +777,8 @@ class _MixerPanel extends StatelessWidget {
               style: TextStyle(fontSize: 8, color: SideDeckTheme.muted)),
           SliderTheme(
             data: SliderTheme.of(context).copyWith(
-              trackHeight: 3,
-              thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 9),
+              trackHeight: 5,
+              thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 13),
             ),
             child: Slider(
               value: dj.xfader.clamp(0.0, 1.0).toDouble(),
@@ -762,56 +796,65 @@ class _MixerPanel extends StatelessWidget {
     // EQ knobs run -12 to +12 dB with the middle at 0.
     double eqIn(double db) => ((db + 12) / 24).clamp(0.0, 1.0).toDouble();
     double eqOut(double v) => v * 24 - 12;
-    return Column(
-      children: [
-        ControllerKnob(
-          label: 'TRIM',
-          size: 34,
-          accent: c,
-          value: (d.gain / 2).clamp(0.0, 1.0).toDouble(),
-          center: 0.5,
-          onChanged: (v) => dj.setGain(i, v * 2),
-        ),
-        ControllerKnob(
-          label: 'HI',
-          size: 34,
-          accent: c,
-          value: eqIn(d.eqHigh),
-          onChanged: (v) => dj.setEq(i, high: eqOut(v)),
-        ),
-        ControllerKnob(
-          label: 'MID',
-          size: 34,
-          accent: c,
-          value: eqIn(d.eqMid),
-          onChanged: (v) => dj.setEq(i, mid: eqOut(v)),
-        ),
-        ControllerKnob(
-          label: 'LOW',
-          size: 34,
-          accent: c,
-          value: eqIn(d.eqLow),
-          onChanged: (v) => dj.setEq(i, low: eqOut(v)),
-        ),
-        ControllerKnob(
-          label: 'FILTER',
-          size: 34,
-          accent: c,
-          value: ((d.filter + 1) / 2).clamp(0.0, 1.0).toDouble(),
-          onChanged: (v) => dj.setFilter(i, v * 2 - 1),
-        ),
-        const SizedBox(height: 2),
-        Expanded(
-          child: Center(
-            child: ControllerFader(
+    return LayoutBuilder(
+      builder: (context, box) {
+        final k = (box.maxHeight / 5 - 16).clamp(32.0, 56.0).toDouble();
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Expanded(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  ControllerKnob(
+                    label: 'TRIM',
+                    size: k,
+                    accent: c,
+                    value: (d.gain / 2).clamp(0.0, 1.0).toDouble(),
+                    center: 0.5,
+                    onChanged: (v) => dj.setGain(i, v * 2),
+                  ),
+                  ControllerKnob(
+                    label: 'HI',
+                    size: k,
+                    accent: c,
+                    value: eqIn(d.eqHigh),
+                    onChanged: (v) => dj.setEq(i, high: eqOut(v)),
+                  ),
+                  ControllerKnob(
+                    label: 'MID',
+                    size: k,
+                    accent: c,
+                    value: eqIn(d.eqMid),
+                    onChanged: (v) => dj.setEq(i, mid: eqOut(v)),
+                  ),
+                  ControllerKnob(
+                    label: 'LOW',
+                    size: k,
+                    accent: c,
+                    value: eqIn(d.eqLow),
+                    onChanged: (v) => dj.setEq(i, low: eqOut(v)),
+                  ),
+                  ControllerKnob(
+                    label: 'FILTER',
+                    size: k,
+                    accent: c,
+                    value: ((d.filter + 1) / 2).clamp(0.0, 1.0).toDouble(),
+                    onChanged: (v) => dj.setFilter(i, v * 2 - 1),
+                  ),
+                ],
+              ),
+            ),
+            ControllerFader(
               value: d.fader.clamp(0.0, 1.0).toDouble(),
-              height: 90,
+              height: box.maxHeight - 8,
               accent: c,
+              ticks: true,
               onChanged: (v) => dj.setFader(i, v),
             ),
-          ),
-        ),
-      ],
+          ],
+        );
+      },
     );
   }
 }

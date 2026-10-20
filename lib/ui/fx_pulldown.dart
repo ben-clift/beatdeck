@@ -61,7 +61,7 @@ class _FxPullDownState extends State<FxPullDown> {
         },
         child: Container(
           height: _tabH,
-          margin: const EdgeInsets.only(right: 10),
+          margin: const EdgeInsets.only(right: 84),
           padding: const EdgeInsets.symmetric(horizontal: 12),
           decoration: BoxDecoration(
             color: on ? accent : const Color(0xFF3A3834),

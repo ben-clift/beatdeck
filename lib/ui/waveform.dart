@@ -250,7 +250,7 @@ class WaveformPainter extends CustomPainter {
     );
   }
 
-  static const overviewH = 16.0;
+  static const overviewH = 34.0;
   static const _playhead = Color(0xFFF4F7FB);
 
   void _drawPlayhead(
