@@ -11,6 +11,7 @@ import 'package:sidedeck/state/library_controller.dart';
 import 'package:sidedeck/state/playlist_controller.dart';
 import 'package:sidedeck/ui/playlists_panel.dart';
 import 'package:sidedeck/ui/free_music_page.dart';
+import 'package:sidedeck/ui/midi_page.dart';
 import 'package:sidedeck/ui/soulseek_page.dart';
 import 'package:sidedeck/ui/suggest_page.dart';
 import 'package:sidedeck/ui/wishlist_page.dart';
@@ -422,6 +423,16 @@ class _LibraryOverlayState extends State<LibraryOverlay> {
                         ),
                       ),
                       icon: const Icon(Icons.playlist_add_check, size: 22),
+                    ),
+                    IconButton(
+                      tooltip: 'MIDI controller',
+                      visualDensity: VisualDensity.compact,
+                      onPressed: () => Navigator.of(context).push(
+                        MaterialPageRoute<void>(
+                          builder: (_) => MidiPage(dj: widget.dj),
+                        ),
+                      ),
+                      icon: const Icon(Icons.piano, size: 22),
                     ),
                     IconButton(
                       tooltip: 'Suggest what mixes with the playing track',
