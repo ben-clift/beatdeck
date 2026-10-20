@@ -12,6 +12,7 @@ import 'package:sidedeck/state/playlist_controller.dart';
 import 'package:sidedeck/ui/playlists_panel.dart';
 import 'package:sidedeck/ui/free_music_page.dart';
 import 'package:sidedeck/ui/soulseek_page.dart';
+import 'package:sidedeck/ui/suggest_page.dart';
 import 'package:sidedeck/ui/wishlist_page.dart';
 import 'package:sidedeck/subsonic/subsonic_client.dart';
 import 'package:sidedeck/theme/sidedeck_theme.dart';
@@ -421,6 +422,17 @@ class _LibraryOverlayState extends State<LibraryOverlay> {
                         ),
                       ),
                       icon: const Icon(Icons.playlist_add_check, size: 22),
+                    ),
+                    IconButton(
+                      tooltip: 'Suggest what mixes with the playing track',
+                      visualDensity: VisualDensity.compact,
+                      onPressed: () => Navigator.of(context).push(
+                        MaterialPageRoute<void>(
+                          builder: (_) =>
+                              SuggestPage(dj: widget.dj, library: lib),
+                        ),
+                      ),
+                      icon: const Icon(Icons.auto_awesome, size: 22),
                     ),
                     IconButton(
                       tooltip: 'Free music (Jamendo, Internet Archive)',

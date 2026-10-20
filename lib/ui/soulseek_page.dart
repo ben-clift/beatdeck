@@ -5,7 +5,9 @@ import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sidedeck/soulseek/soulseek_client.dart';
 import 'package:sidedeck/state/library_controller.dart';
+import 'package:sidedeck/suggest/harmony.dart';
 import 'package:sidedeck/theme/sidedeck_theme.dart';
+import 'package:sidedeck/ui/suggest_page.dart';
 
 /// Search the Soulseek network and download straight into the library folder.
 class SoulseekPage extends StatefulWidget {
@@ -240,8 +242,26 @@ class _SoulseekPageState extends State<SoulseekPage> {
           '$mb MB',
           r.freeSlot ? 'free slot' : 'queue ${r.queue}',
         ].join('  ·  ');
+        final hint = parseNameHints('${r.folder} ${r.fileName}');
+        final seedKey = SuggestSeed.key;
+        String? fit;
+        if (seedKey != null && hint.key != null) {
+          final m = keyMatch(seedKey, hint.key!);
+          if (m.score > 0) fit = '${hint.key!.code} fits';
+        }
+        if (fit != null && hint.bpm != null && SuggestSeed.bpm > 0) {
+          if (bpmGapPercent(SuggestSeed.bpm, hint.bpm!).abs() > 8) fit = null;
+        }
         return ListTile(
           dense: true,
+          leading: fit == null
+              ? null
+              : Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                  color: const Color(0xFF2E7D32),
+                  child: Text(fit,
+                      style: const TextStyle(fontSize: 11, color: Colors.white)),
+                ),
           title: Text(r.fileName, maxLines: 2, overflow: TextOverflow.ellipsis),
           subtitle: Text(
             '${r.folder}  ·  ${r.user}\n$info',
