@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:sidedeck/state/dj_controller.dart';
+import 'package:sidedeck/state/library_controller.dart';
 import 'package:sidedeck/state/look_controller.dart';
 import 'package:sidedeck/state/playlist_controller.dart';
 import 'package:sidedeck/state/playlist_store.dart';
@@ -9,9 +10,10 @@ import 'package:sidedeck/theme/sidedeck_theme.dart';
 /// Drag the AUTOMIX tab down (or tap it) to open; drag up or tap to close.
 /// Must be a child of a [Stack].
 class AutomixPullDown extends StatefulWidget {
-  const AutomixPullDown({super.key, required this.dj});
+  const AutomixPullDown({super.key, required this.dj, required this.library});
 
   final DjController dj;
+  final LibraryController library;
 
   @override
   State<AutomixPullDown> createState() => _AutomixPullDownState();
@@ -34,11 +36,39 @@ class _AutomixPullDownState extends State<AutomixPullDown> {
 
   void _toggle() => setState(() => _open = !_open);
 
-  Playlist? _selected(List<Playlist> lists) {
-    for (final p in lists) {
-      if (p.id == _selectedId) return p;
+  static const _libShuffle = 'lib:shuffle';
+  static const _libTempo = 'lib:tempo';
+  static const _libAz = 'lib:az';
+
+  /// What automix will play: the chosen option, else the first playlist,
+  /// else the whole library.
+  String _choice(List<Playlist> lists) {
+    final id = _selectedId;
+    if (id != null &&
+        (id.startsWith('lib:') || lists.any((p) => p.id == id))) {
+      return id;
     }
-    return lists.isEmpty ? null : lists.first;
+    return lists.isEmpty ? _libShuffle : lists.first.id;
+  }
+
+  List<String> _pathsFor(String id, List<Playlist> lists) {
+    final tracks = List<LibraryTrack>.of(widget.library.tracks);
+    switch (id) {
+      case _libShuffle:
+        tracks.shuffle();
+        return [for (final t in tracks) t.path];
+      case _libTempo:
+        final analysed = tracks.where((t) => t.hasAnalysis).toList()
+          ..sort((a, b) => a.bpm!.compareTo(b.bpm!));
+        return [for (final t in analysed) t.path];
+      case _libAz:
+        tracks.sort((a, b) => a.title.toLowerCase().compareTo(b.title.toLowerCase()));
+        return [for (final t in tracks) t.path];
+    }
+    for (final p in lists) {
+      if (p.id == id) return List<String>.of(p.paths);
+    }
+    return const [];
   }
 
   @override
@@ -54,6 +84,7 @@ class _AutomixPullDownState extends State<AutomixPullDown> {
         listenable: Listenable.merge([
           widget.dj,
           _playlists,
+          widget.library,
           LookController.instance,
         ]),
         builder: (context, _) {
@@ -121,7 +152,8 @@ class _AutomixPullDownState extends State<AutomixPullDown> {
     final dj = widget.dj;
     final look = LookController.instance;
     final lists = _playlists.playlists.where((p) => p.paths.isNotEmpty).toList();
-    final selected = _selected(lists);
+    final choice = _choice(lists);
+    final paths = _pathsFor(choice, lists);
     final on = dj.automixOn;
     return GestureDetector(
       onVerticalDragEnd: (d) {
@@ -168,10 +200,10 @@ class _AutomixPullDownState extends State<AutomixPullDown> {
                   )
                 else
                   FilledButton.icon(
-                    onPressed: selected == null
+                    onPressed: paths.isEmpty
                         ? null
                         : () {
-                            dj.startAutomix(selected.paths, fadeSeconds: _fade);
+                            dj.startAutomix(paths, fadeSeconds: _fade);
                             setState(() => _open = false);
                           },
                     icon: const Icon(Icons.auto_mode, size: 18),
@@ -180,34 +212,45 @@ class _AutomixPullDownState extends State<AutomixPullDown> {
               ],
             ),
             const SizedBox(height: 6),
-            if (lists.isEmpty)
+            if (paths.isEmpty)
               const Padding(
-                padding: EdgeInsets.symmetric(vertical: 12),
+                padding: EdgeInsets.symmetric(vertical: 6),
                 child: Text(
-                  'No playlists yet. Make one in Library, Playlists tab.',
+                  'Nothing to play yet. Add music to the library, or for tempo '
+                  'order analyse it first.',
                   style: TextStyle(color: SideDeckTheme.muted),
                 ),
-              )
-            else
-              SizedBox(
-                height: 40,
-                child: ListView(
-                  scrollDirection: Axis.horizontal,
-                  children: [
-                    for (final pl in lists)
-                      Padding(
-                        padding: const EdgeInsets.only(right: 8),
-                        child: ChoiceChip(
-                          label: Text('${pl.name} · ${pl.paths.length}'),
-                          selected: selected?.id == pl.id,
-                          onSelected: on
-                              ? null
-                              : (_) => setState(() => _selectedId = pl.id),
-                        ),
-                      ),
-                  ],
-                ),
               ),
+            SizedBox(
+              height: 40,
+              child: ListView(
+                scrollDirection: Axis.horizontal,
+                children: [
+                  for (final (id, label) in [
+                    (_libShuffle, 'Library · shuffle'),
+                    (_libTempo, 'Library · slow to fast'),
+                    (_libAz, 'Library · A to Z'),
+                  ])
+                    Padding(
+                      padding: const EdgeInsets.only(right: 8),
+                      child: ChoiceChip(
+                        label: Text(label),
+                        selected: choice == id,
+                        onSelected: on ? null : (_) => setState(() => _selectedId = id),
+                      ),
+                    ),
+                  for (final pl in lists)
+                    Padding(
+                      padding: const EdgeInsets.only(right: 8),
+                      child: ChoiceChip(
+                        label: Text('${pl.name} · ${pl.paths.length}'),
+                        selected: choice == pl.id,
+                        onSelected: on ? null : (_) => setState(() => _selectedId = pl.id),
+                      ),
+                    ),
+                ],
+              ),
+            ),
             Row(
               children: [
                 const Text('Fade', style: TextStyle(fontSize: 12)),

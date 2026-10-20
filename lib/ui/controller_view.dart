@@ -391,7 +391,7 @@ class _ControllerViewState extends State<ControllerView> {
         ),
       ],
         ),
-        AutomixPullDown(dj: widget.dj),
+        AutomixPullDown(dj: widget.dj, library: widget.library),
         FxPullDown(dj: widget.dj),
       ],
     );
