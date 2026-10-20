@@ -27,6 +27,16 @@ class DeckState {
   // Key lock keeps the pitch fixed when tempo changes. The engine starts with
   // it on, so the app starts with it on too.
   bool keylock = true;
+  /// Whole semitones the key is moved up or down (needs key lock on).
+  int keyShift = 0;
+
+  /// The key as it sounds now: the detected key moved by [keyShift].
+  int get soundingKey {
+    if (key < 0 || key > 23) return key;
+    final minor = key >= 12;
+    final root = ((key % 12 + keyShift) % 12 + 12) % 12;
+    return root + (minor ? 12 : 0);
+  }
   /// Hot cue times in seconds, -1 when not set. Eight pads per deck.
   final List<double> hotcues = List<double>.filled(8, -1);
   bool synced = false;
@@ -594,6 +604,8 @@ class DjController extends ChangeNotifier {
     d.duration = _engine.duration(deckIndex);
     d.bpm = _engine.bpm(deckIndex);
     d.key = _engine.key(deckIndex);
+    d.keyShift = 0;
+    _engine.setKeyShift(deckIndex, 0);
     d.beatOffset = _engine.beatOffset(deckIndex);
     d.rate = 1;
     d.synced = false;
@@ -787,6 +799,14 @@ class DjController extends ChangeNotifier {
     final d = deck(deckIndex);
     d.keylock = enabled;
     _engine.setKeylock(deckIndex, enabled);
+    notifyListeners();
+  }
+
+  void setKeyShift(int deckIndex, int semitones) {
+    final d = deck(deckIndex);
+    d.keyShift = semitones.clamp(-6, 6);
+    if (d.keyShift != 0 && !d.keylock) setKeylock(deckIndex, true);
+    _engine.setKeyShift(deckIndex, d.keyShift.toDouble());
     notifyListeners();
   }
 

@@ -49,7 +49,7 @@ class _SuggestPageState extends State<SuggestPage> {
 
   DeckState get _d => widget.dj.deck(_deck);
 
-  CamelotKey? get _key => CamelotKey.fromIndex(_d.key);
+  CamelotKey? get _key => CamelotKey.fromIndex(_d.soundingKey);
 
   Future<void> _refresh() async {
     SuggestSeed.key = _key;
@@ -166,7 +166,7 @@ class _SuggestPageState extends State<SuggestPage> {
               ),
               const SizedBox(height: 4),
               Text(
-                '${k?.code ?? '?'}  ·  ${formatKey(_d.key)}  ·  ${_d.bpm.toStringAsFixed(1)} BPM',
+                '${k?.code ?? '?'}  ·  ${formatKey(_d.soundingKey)}  ·  ${_d.bpm.toStringAsFixed(1)} BPM',
                 style: const TextStyle(color: SideDeckTheme.muted),
               ),
               const SizedBox(height: 4),

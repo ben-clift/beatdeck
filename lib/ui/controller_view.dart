@@ -373,9 +373,45 @@ class _DeckPanelState extends State<_DeckPanel> {
             const Text(' BPM  ',
                 style: TextStyle(fontSize: 10, color: SideDeckTheme.muted)),
             Text(
-              d.key >= 0 ? formatKey(d.key) : '',
+              d.key >= 0 ? formatKey(d.soundingKey) : '',
               style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
             ),
+            if (d.loaded) ...[
+              const SizedBox(width: 8),
+              GestureDetector(
+                onTap: () => widget.dj.setKeyShift(widget.index, d.keyShift - 1),
+                child: const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 6),
+                  child: Text('−',
+                      style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
+                ),
+              ),
+              GestureDetector(
+                onTap: () => widget.dj.setKeyShift(widget.index, 0),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                  color: d.keyShift == 0 ? Colors.transparent : _accent,
+                  child: Text(
+                    d.keyShift == 0
+                        ? 'KEY'
+                        : 'KEY ${d.keyShift > 0 ? '+' : ''}${d.keyShift}',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w800,
+                      color: d.keyShift == 0 ? SideDeckTheme.muted : Colors.black,
+                    ),
+                  ),
+                ),
+              ),
+              GestureDetector(
+                onTap: () => widget.dj.setKeyShift(widget.index, d.keyShift + 1),
+                child: const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 6),
+                  child: Text('+',
+                      style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
+                ),
+              ),
+            ],
             const Spacer(),
             Text(
               d.loaded ? '-${formatDuration(remaining)}' : '',

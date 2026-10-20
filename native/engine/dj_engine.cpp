@@ -107,6 +107,7 @@ struct Deck {
   float fader = 1.0f;
   float rate = 1.0f;
   bool keylock = true;
+  std::atomic<float> transpose{1.0f}; // pitch ratio, used while keylock is on
   float filter = 0.0f; // -1 HPF .. 0 flat .. +1 LPF
   float eqLow = 0, eqMid = 0, eqHigh = 0;
   float eqLowG = 1, eqMidG = 1, eqHighG = 1;
@@ -786,6 +787,7 @@ struct Engine : public oboe::AudioStreamDataCallback,
 
       float* inPtrs[2] = {d.stretchInL.data(), d.stretchInR.data()};
       float* outPtrs[2] = {d.stretchOutL.data(), d.stretchOutR.data()};
+      d.stretcher.setTransposeFactor(d.transpose.load(std::memory_order_relaxed));
       d.stretcher.process(inPtrs, inN, outPtrs, frames);
 
       for (int i = 0; i < frames; ++i) {
@@ -1398,6 +1400,15 @@ void dj_set_keylock(DjEngine engine, int deck, int enabled) {
     d.flushStretcher();
   }
   d.keylock = next;
+}
+
+void dj_set_key_shift(DjEngine engine, int deck, float semitones) {
+  if (deck < 0 || deck >= kDecks) {
+    return;
+  }
+  const float s = std::max(-12.0f, std::min(12.0f, semitones));
+  asEngine(engine)->decks[deck].transpose.store(std::pow(2.0f, s / 12.0f),
+                                                std::memory_order_relaxed);
 }
 
 float dj_get_bpm(DjEngine engine, int deck) {
