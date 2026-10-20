@@ -33,16 +33,44 @@ jobs:
       - run: flutter config --no-analytics
       - run: flutter pub get
 
+      # Errors are also written as annotations so they can be read without
+      # downloading the full log.
       - name: Analyze
-        run: flutter analyze
         continue-on-error: true
+        run: |
+          set +e
+          flutter analyze --no-pub 2>&1 | tee analyze.txt
+          grep -E '^\s+error •' analyze.txt | head -40 | while IFS= read -r line; do
+            msg=$(echo "$line" | awk -F ' • ' '{print $2}')
+            loc=$(echo "$line" | awk -F ' • ' '{print $3}')
+            file=$(echo "$loc" | cut -d: -f1)
+            ln=$(echo "$loc" | cut -d: -f2)
+            echo "::error file=$file,line=$ln::$msg"
+          done
+          exit 0
 
       - name: Test
-        run: flutter test
         continue-on-error: true
+        run: |
+          set +e
+          flutter test 2>&1 | tee test.txt
+          code=${PIPESTATUS[0]}
+          if [ "$code" != "0" ]; then
+            body=$(tail -n 40 test.txt | sed 's/%/%25/g' | awk 'BEGIN{ORS="%0A"}{print}')
+            echo "::error title=flutter test failed::$body"
+          fi
+          exit 0
 
       - name: Build debug APK (arm64 phones)
-        run: flutter build apk --debug --target-platform=android-arm64
+        run: |
+          set +e
+          flutter build apk --debug --target-platform=android-arm64 2>&1 | tee build.txt
+          code=${PIPESTATUS[0]}
+          if [ "$code" != "0" ]; then
+            grep -E 'Error:|error:|FAILURE|What went wrong' -A2 build.txt | head -60 | sed 's/%/%25/g' | awk 'BEGIN{ORS="%0A"}{print}' > errs.txt
+            echo "::error title=APK build failed::$(cat errs.txt)"
+            exit 1
+          fi
 
       - uses: actions/upload-artifact@v4
         with:
