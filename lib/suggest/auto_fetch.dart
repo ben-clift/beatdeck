@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sidedeck/engine/music_utils.dart';
 import 'package:sidedeck/soulseek/soulseek_client.dart';
 import 'package:sidedeck/state/library_controller.dart';
@@ -16,6 +17,52 @@ class AutoFetch extends ChangeNotifier {
   static final AutoFetch instance = AutoFetch._();
 
   final SuggestService _service = SuggestService();
+
+  // What the AUTO switch uses. Set on the Auto-fetch page and remembered.
+  String genre = 'house';
+  double bpmMin = 120;
+  double bpmMax = 128;
+  int count = 5;
+  bool endless = true;
+
+  Future<void> load() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      genre = prefs.getString('af_genre') ?? genre;
+      bpmMin = prefs.getDouble('af_bpm_min') ?? bpmMin;
+      bpmMax = prefs.getDouble('af_bpm_max') ?? bpmMax;
+      count = prefs.getInt('af_count') ?? count;
+      endless = prefs.getBool('af_endless') ?? endless;
+      notifyListeners();
+    } catch (_) {}
+  }
+
+  Future<void> save() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('af_genre', genre);
+      await prefs.setDouble('af_bpm_min', bpmMin);
+      await prefs.setDouble('af_bpm_max', bpmMax);
+      await prefs.setInt('af_count', count);
+      await prefs.setBool('af_endless', endless);
+    } catch (_) {}
+  }
+
+  /// The AUTO switch: on starts fetching with the saved settings, off stops.
+  void toggle(bool on, LibraryController library) {
+    if (on) {
+      startByGenre(
+        genre: genre,
+        bpmMin: bpmMin,
+        bpmMax: bpmMax,
+        library: library,
+        count: count,
+        endless: endless,
+      );
+    } else {
+      stop();
+    }
+  }
 
   bool running = false;
   String status = '';

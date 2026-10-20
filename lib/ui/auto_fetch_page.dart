@@ -16,10 +16,21 @@ class AutoFetchPage extends StatefulWidget {
 }
 
 class _AutoFetchPageState extends State<AutoFetchPage> {
-  final _genre = TextEditingController(text: 'house');
-  RangeValues _bpm = const RangeValues(120, 128);
-  double _count = 5;
-  bool _endless = false;
+  final _genre = TextEditingController(text: AutoFetch.instance.genre);
+  late RangeValues _bpm =
+      RangeValues(AutoFetch.instance.bpmMin, AutoFetch.instance.bpmMax);
+  late double _count = AutoFetch.instance.count.toDouble();
+  late bool _endless = AutoFetch.instance.endless;
+
+  void _remember() {
+    final af = AutoFetch.instance;
+    af.genre = _genre.text.trim().isEmpty ? 'house' : _genre.text.trim();
+    af.bpmMin = _bpm.start;
+    af.bpmMax = _bpm.end;
+    af.count = _count.round();
+    af.endless = _endless;
+    af.save();
+  }
 
   static const _quick = [
     'house', 'deep house', 'tech house', 'techno', 'trance', 'drum and bass',
@@ -28,6 +39,7 @@ class _AutoFetchPageState extends State<AutoFetchPage> {
 
   @override
   void dispose() {
+    _remember();
     _genre.dispose();
     super.dispose();
   }
@@ -108,14 +120,17 @@ class _AutoFetchPageState extends State<AutoFetchPage> {
                 FilledButton(
                   onPressed: af.running
                       ? af.stop
-                      : () => af.startByGenre(
+                      : () {
+                          _remember();
+                          af.startByGenre(
                             genre: _genre.text.trim().isEmpty ? 'house' : _genre.text.trim(),
                             bpmMin: _bpm.start,
                             bpmMax: _bpm.end,
                             library: widget.library,
                             count: _count.round(),
                             endless: _endless,
-                          ),
+                          );
+                        },
                   child: Text(af.running ? 'Stop' : 'Start'),
                 ),
                 const SizedBox(width: 12),

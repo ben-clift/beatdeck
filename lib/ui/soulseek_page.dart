@@ -6,6 +6,7 @@ import 'package:sidedeck/soulseek/soulseek_client.dart';
 import 'package:sidedeck/state/library_controller.dart';
 import 'package:sidedeck/suggest/harmony.dart';
 import 'package:sidedeck/theme/sidedeck_theme.dart';
+import 'package:sidedeck/suggest/auto_fetch.dart';
 import 'package:sidedeck/ui/auto_fetch_page.dart';
 import 'package:sidedeck/ui/suggest_page.dart';
 
@@ -95,19 +96,6 @@ class _SoulseekPageState extends State<SoulseekPage> {
       appBar: AppBar(
         title: const Text('Soulseek'),
         actions: [
-          Padding(
-            padding: const EdgeInsets.only(right: 6),
-            child: FilledButton.icon(
-              style: FilledButton.styleFrom(
-                backgroundColor: const Color(0xFFFF9F1C),
-                foregroundColor: Colors.black,
-                textStyle: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15),
-              ),
-              icon: const Icon(Icons.auto_mode, size: 22),
-              label: const Text('AUTO'),
-              onPressed: _openAuto,
-            ),
-          ),
           ListenableBuilder(
             listenable: soulseek,
             builder: (context, _) => soulseek.online
@@ -232,23 +220,67 @@ class _SoulseekPageState extends State<SoulseekPage> {
               child: const Text('Change'),
             ),
           ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(12, 4, 12, 4),
-            child: SizedBox(
-              width: double.infinity,
-              height: 52,
-              child: FilledButton.icon(
-                style: FilledButton.styleFrom(
-                  backgroundColor: const Color(0xFFFF9F1C),
-                  foregroundColor: Colors.black,
-                  textStyle:
-                      const TextStyle(fontWeight: FontWeight.w800, fontSize: 16),
+          ListenableBuilder(
+            listenable: AutoFetch.instance,
+            builder: (context, _) {
+              final af = AutoFetch.instance;
+              return Container(
+                margin: const EdgeInsets.fromLTRB(12, 4, 12, 4),
+                padding: const EdgeInsets.fromLTRB(14, 6, 6, 6),
+                decoration: BoxDecoration(
+                  color: af.running ? const Color(0xFF2E7D32) : const Color(0xFF1E1E1E),
+                  border: Border.all(
+                    color: af.running ? const Color(0xFF3DDC57) : SideDeckTheme.muted,
+                    width: 2,
+                  ),
                 ),
-                icon: const Icon(Icons.auto_mode, size: 26),
-                label: const Text('AUTO-FETCH  ·  pick genre and tempo'),
-                onPressed: _openAuto,
-              ),
-            ),
+                child: Row(
+                  children: [
+                    Text(
+                      'AUTO',
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w900,
+                        color: af.running ? Colors.white : SideDeckTheme.muted,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Text(
+                      af.running ? 'ON' : 'OFF',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w800,
+                        color: af.running ? const Color(0xFF3DDC57) : SideDeckTheme.muted,
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    Transform.scale(
+                      scale: 1.3,
+                      child: Switch(
+                        value: af.running,
+                        onChanged: (v) => af.toggle(v, widget.library),
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        af.running && af.status.isNotEmpty
+                            ? '${af.status}  (${af.fetched})'
+                            : '${af.genre}  ${af.bpmMin.round()}-${af.bpmMax.round()} BPM'
+                                '${af.endless ? '  ·  keeps going' : '  ·  ${af.count} tracks'}',
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontSize: 12),
+                      ),
+                    ),
+                    TextButton(
+                      onPressed: _openAuto,
+                      child: const Text('Set up'),
+                    ),
+                  ],
+                ),
+              );
+            },
           ),
           TabBar(
             tabs: [
