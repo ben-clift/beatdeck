@@ -4,7 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 /// How the controller is finished, on top of the colours.
 enum LookStyle {
-  matte('Matte', 'Flat and calm'),
+  matte('Hardware', 'Black matte controller with ribbed jogs and outlined pads'),
   neon('Neon glow', 'Glowing outlines and a lit jog wheel'),
   sparkle('Sparkle', 'Twinkling stars drifting behind the decks'),
   aurora('Aurora', 'Slow moving glows of your deck colours'),
@@ -64,7 +64,7 @@ class LookController extends ChangeNotifier {
 
   /// Colours for the controller itself (deck and mixer panels).
   static const bodies = [
-    LookOption('Matte graphite', Color(0xFF262522)),
+    LookOption('Hardware black', Color(0xFF222222)),
     LookOption('Steel', Color(0xFF2A2F37)),
     LookOption('Espresso', Color(0xFF2E2622)),
     LookOption('Forest', Color(0xFF232B26)),
@@ -129,8 +129,16 @@ class LookController extends ChangeNotifier {
     switch (style) {
       case LookStyle.matte:
         return BoxDecoration(
-          color: body,
-          borderRadius: BorderRadius.circular(4),
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              Color.lerp(body, Colors.white, 0.04)!,
+              Color.lerp(body, Colors.black, 0.18)!,
+            ],
+          ),
+          borderRadius: BorderRadius.circular(6),
+          border: Border.all(color: const Color(0xFF060606)),
         );
       case LookStyle.neon:
         return BoxDecoration(

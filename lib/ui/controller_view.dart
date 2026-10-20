@@ -575,7 +575,17 @@ class _DeckPanelState extends State<_DeckPanel> {
       onLongPress: onLong,
       child: Container(
         alignment: Alignment.center,
-        color: on ? _accent : look.control,
+        decoration: BoxDecoration(
+          color: on ? _accent : const Color(0xFF1B1B1B),
+          borderRadius: BorderRadius.circular(3),
+          border: Border.all(
+            color: on ? Colors.white70 : const Color(0xFF6F6F6F),
+            width: 2,
+          ),
+          boxShadow: on
+              ? [BoxShadow(color: _accent.withValues(alpha: 0.6), blurRadius: 10)]
+              : null,
+        ),
         child: Text(
           label,
           style: TextStyle(
@@ -612,29 +622,73 @@ class _JogPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final c = size.center(Offset.zero);
     final r = size.width / 2;
-    canvas.drawCircle(c, r, Paint()..color = well);
-    canvas.drawCircle(c, r - 8, Paint()..color = ring);
+    // Bezel and ribbed rim that turns with the track.
+    canvas.drawCircle(c, r, Paint()..color = const Color(0xFF050505));
     canvas.drawCircle(
       c,
-      r - 8,
+      r - 0.5,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1
+        ..color = const Color(0xFF3A3A3A),
+    );
+    const ribs = 48;
+    final rim = Rect.fromCircle(center: c, radius: r - 5);
+    for (var i = 0; i < ribs; i++) {
+      canvas.drawArc(
+        rim,
+        angle + i * 2 * math.pi / ribs,
+        math.pi / ribs,
+        false,
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 8
+          ..color = const Color(0xFF1E1E1E),
+      );
+    }
+    // Platter with a lit edge when playing.
+    final platter = r * 0.78;
+    canvas.drawCircle(c, platter, Paint()..color = const Color(0xFF0C0C0C));
+    canvas.drawCircle(
+      c,
+      platter - 2,
+      Paint()
+        ..shader = RadialGradient(
+          colors: [face, ring, const Color(0xFF121212)],
+          stops: const [0.0, 0.7, 1.0],
+        ).createShader(Rect.fromCircle(center: c, radius: platter)),
+    );
+    canvas.drawCircle(
+      c,
+      platter,
       Paint()
         ..style = PaintingStyle.stroke
         ..strokeWidth = 2
         ..color = playing ? accent : inactive,
     );
-    canvas.drawCircle(c, r * 0.5, Paint()..color = face);
+    // Centre disc with the light ring.
+    canvas.drawCircle(c, r * 0.36, Paint()..color = const Color(0xFF181818));
+    canvas.drawCircle(
+      c,
+      r * 0.27,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 3
+        ..color = const Color(0xFFCFCFCF),
+    );
+    // Position marker.
     canvas.save();
     canvas.translate(c.dx, c.dy);
     canvas.rotate(angle);
     canvas.drawLine(
-      Offset.zero,
-      Offset(0, -(r - 12)),
+      Offset(0, -(platter * 0.62)),
+      Offset(0, -(platter - 4)),
       Paint()
-        ..color = accent
-        ..strokeWidth = 5,
+        ..color = Colors.white
+        ..strokeWidth = 4
+        ..strokeCap = StrokeCap.round,
     );
     canvas.restore();
-    canvas.drawCircle(c, 6, Paint()..color = well);
   }
 
   @override
@@ -660,12 +714,7 @@ class _MixerPanel extends StatelessWidget {
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 6),
       padding: const EdgeInsets.all(6),
-      decoration: LookController.instance.style == LookStyle.matte
-          ? BoxDecoration(
-              color: LookController.instance.well,
-              borderRadius: BorderRadius.circular(4),
-            )
-          : LookController.instance.panelDecoration(Colors.white),
+      decoration: LookController.instance.panelDecoration(Colors.white),
       child: Column(
         children: [
           Row(
