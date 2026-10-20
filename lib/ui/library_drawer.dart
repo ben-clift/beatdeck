@@ -11,6 +11,7 @@ import 'package:sidedeck/state/library_controller.dart';
 import 'package:sidedeck/state/playlist_controller.dart';
 import 'package:sidedeck/ui/playlists_panel.dart';
 import 'package:sidedeck/ui/soulseek_page.dart';
+import 'package:sidedeck/ui/wishlist_page.dart';
 import 'package:sidedeck/subsonic/subsonic_client.dart';
 import 'package:sidedeck/theme/sidedeck_theme.dart';
 
@@ -409,6 +410,16 @@ class _LibraryOverlayState extends State<LibraryOverlay> {
                               ));
                             },
                       icon: const Icon(Icons.refresh, size: 22),
+                    ),
+                    IconButton(
+                      tooltip: 'Song wish lists (from Spotify, Deezer and more)',
+                      visualDensity: VisualDensity.compact,
+                      onPressed: () => Navigator.of(context).push(
+                        MaterialPageRoute<void>(
+                          builder: (_) => WishListPage(library: lib),
+                        ),
+                      ),
+                      icon: const Icon(Icons.playlist_add_check, size: 22),
                     ),
                     IconButton(
                       tooltip: 'Search Soulseek',

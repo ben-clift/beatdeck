@@ -9,9 +9,12 @@ import 'package:sidedeck/theme/sidedeck_theme.dart';
 
 /// Search the Soulseek network and download straight into the library folder.
 class SoulseekPage extends StatefulWidget {
-  const SoulseekPage({super.key, required this.library});
+  const SoulseekPage({super.key, required this.library, this.initialQuery});
 
   final LibraryController library;
+
+  /// Searched as soon as you are signed in.
+  final String? initialQuery;
 
   @override
   State<SoulseekPage> createState() => _SoulseekPageState();
@@ -30,6 +33,23 @@ class _SoulseekPageState extends State<SoulseekPage> {
     soulseek.downloadDir = () => widget.library.folderPath ?? _fallbackDir;
     soulseek.onFileSaved = () => widget.library.refresh();
     _loadSaved();
+    final q = widget.initialQuery;
+    if (q != null && q.isNotEmpty) {
+      _query.text = q;
+      _pendingSearch = q;
+      soulseek.addListener(_trySearch);
+      WidgetsBinding.instance.addPostFrameCallback((_) => _trySearch());
+    }
+  }
+
+  String? _pendingSearch;
+
+  void _trySearch() {
+    final q = _pendingSearch;
+    if (q != null && soulseek.online) {
+      _pendingSearch = null;
+      soulseek.search(q);
+    }
   }
 
   Future<void> _loadSaved() async {
@@ -49,6 +69,7 @@ class _SoulseekPageState extends State<SoulseekPage> {
 
   @override
   void dispose() {
+    soulseek.removeListener(_trySearch);
     _user.dispose();
     _pass.dispose();
     _query.dispose();
