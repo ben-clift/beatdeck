@@ -1,6 +1,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:sidedeck/soulseek/playable.dart';
 import 'package:sidedeck/soulseek/slsk_setup.dart';
 import 'package:sidedeck/soulseek/soulseek_client.dart';
 import 'package:sidedeck/state/library_controller.dart';
@@ -48,6 +49,8 @@ class _SoulseekPageState extends State<SoulseekPage> {
       builder: (_) => AutoFetchPage(library: widget.library),
     ));
   }
+
+  bool _showAll = false;
 
   String? _pendingSearch;
 
@@ -165,7 +168,9 @@ class _SoulseekPageState extends State<SoulseekPage> {
   }
 
   Widget _mainView() {
-    final results = List<SlskResult>.of(soulseek.results)
+    final all = List<SlskResult>.of(soulseek.results);
+    final hidden = _showAll ? 0 : all.where((r) => !slskPlayable(r)).length;
+    final results = (_showAll ? all : all.where(slskPlayable).toList())
       ..sort((a, b) {
         if (a.freeSlot != b.freeSlot) return a.freeSlot ? -1 : 1;
         if (a.bitrate != b.bitrate) return b.bitrate.compareTo(a.bitrate);
@@ -290,7 +295,7 @@ class _SoulseekPageState extends State<SoulseekPage> {
           ),
           Expanded(
             child: TabBarView(
-              children: [_resultsList(results), _downloadsList()],
+              children: [_resultsList(results, hidden), _downloadsList()],
             ),
           ),
         ],
@@ -298,8 +303,8 @@ class _SoulseekPageState extends State<SoulseekPage> {
     );
   }
 
-  Widget _resultsList(List<SlskResult> results) {
-    if (results.isEmpty) {
+  Widget _resultsList(List<SlskResult> results, int hidden) {
+    if (results.isEmpty && hidden == 0) {
       return Center(
         child: Padding(
           padding: const EdgeInsets.all(24),
@@ -313,6 +318,29 @@ class _SoulseekPageState extends State<SoulseekPage> {
         ),
       );
     }
+    return Column(
+      children: [
+        ListTile(
+          dense: true,
+          title: Text(
+            _showAll
+                ? 'Showing every file, including ones the decks cannot play'
+                : (hidden > 0
+                    ? '$hidden hidden: formats or files the decks cannot play'
+                    : 'Only files the decks can play are shown'),
+            style: const TextStyle(fontSize: 12, color: SideDeckTheme.muted),
+          ),
+          trailing: Switch(
+            value: _showAll,
+            onChanged: (v) => setState(() => _showAll = v),
+          ),
+        ),
+        Expanded(child: _resultRows(results)),
+      ],
+    );
+  }
+
+  Widget _resultRows(List<SlskResult> results) {
     return ListView.builder(
       itemCount: results.length,
       itemBuilder: (context, i) {

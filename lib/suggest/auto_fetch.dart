@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sidedeck/engine/music_utils.dart';
+import 'package:sidedeck/soulseek/playable.dart';
 import 'package:sidedeck/soulseek/slsk_setup.dart';
 import 'package:sidedeck/soulseek/soulseek_client.dart';
 import 'package:sidedeck/state/library_controller.dart';
@@ -481,7 +482,7 @@ class AutoFetch extends ChangeNotifier {
     SlskResult? best;
     var bestScore = -1;
     for (final r in soulseek.results) {
-      if (!isNativeAudioExtension(r.ext)) continue;
+      if (!slskPlayable(r)) continue;
       final hay = '${r.folder} ${r.fileName}'.toLowerCase();
       if (words.isNotEmpty && !words.every(hay.contains)) continue;
       if (aWords.isNotEmpty && !aWords.any(hay.contains)) continue;
