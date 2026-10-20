@@ -7,6 +7,7 @@ import 'package:sidedeck/state/library_controller.dart';
 import 'package:sidedeck/theme/sidedeck_theme.dart';
 import 'package:sidedeck/ui/library_drawer.dart';
 import 'package:sidedeck/ui/mixer_strip.dart';
+import 'package:sidedeck/ui/pitch_sheet.dart';
 import 'package:sidedeck/ui/settings_page.dart';
 import 'package:sidedeck/ui/waveform.dart';
 
@@ -318,6 +319,8 @@ class _HomePageState extends State<HomePage> {
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
+                        _pitchButton(i, accent),
+                        const SizedBox(width: 6),
                         _keyLockButton(i, accent),
                         const SizedBox(width: 6),
                         _gridButton(i, accent),
@@ -376,6 +379,40 @@ class _HomePageState extends State<HomePage> {
             playing ? Icons.pause : Icons.play_arrow,
             color: Colors.white.withValues(alpha: 0.9),
             size: size * 0.55,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _pitchButton(int deck, Color accent) {
+    return Material(
+      color: const Color(0xCC111111),
+      borderRadius: BorderRadius.circular(6),
+      child: InkWell(
+        onTap: () => showPitchSheet(
+          context,
+          dj: _dj,
+          deck: deck,
+          accent: accent,
+        ),
+        borderRadius: BorderRadius.circular(6),
+        child: Container(
+          height: 32,
+          padding: const EdgeInsets.symmetric(horizontal: 10),
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(6),
+            border: Border.all(color: accent.withValues(alpha: 0.85)),
+          ),
+          child: Text(
+            'PITCH',
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 0.6,
+              color: accent,
+            ),
           ),
         ),
       ),
