@@ -34,6 +34,9 @@ typedef _GetKeyC = Int32 Function(Pointer<Void>, Int32);
 typedef _NudgeC = Void Function(Pointer<Void>, Int32, Float);
 typedef _SetLoopC = Void Function(Pointer<Void>, Int32, Int32, Float);
 typedef _BeatJumpC = Void Function(Pointer<Void>, Int32, Int32);
+typedef _DeckC = Void Function(Pointer<Void>, Int32);
+typedef _HotcueSetC = Void Function(Pointer<Void>, Int32, Int32, Double);
+typedef _HotcueGetC = Double Function(Pointer<Void>, Int32, Int32);
 typedef _WaveBinsC = Int32 Function();
 typedef _WaveCopyC = Int32 Function(
   Pointer<Void>,
@@ -120,6 +123,26 @@ class NativeEngine {
   late final _setKeylock = _lib
       .lookupFunction<_PlayC, void Function(Pointer<Void>, int, int)>(
         'dj_set_keylock',
+      );
+  late final _setCue = _lib
+      .lookupFunction<_DeckC, void Function(Pointer<Void>, int)>('dj_set_cue');
+  late final _jumpCue = _lib
+      .lookupFunction<_DeckC, void Function(Pointer<Void>, int)>('dj_jump_cue');
+  late final _setHotcue = _lib
+      .lookupFunction<_HotcueSetC, void Function(Pointer<Void>, int, int, double)>(
+        'dj_set_hotcue',
+      );
+  late final _jumpHotcue = _lib
+      .lookupFunction<_PlayC, void Function(Pointer<Void>, int, int)>(
+        'dj_jump_hotcue',
+      );
+  late final _getHotcue = _lib
+      .lookupFunction<_HotcueGetC, double Function(Pointer<Void>, int, int)>(
+        'dj_get_hotcue',
+      );
+  late final _clearHotcue = _lib
+      .lookupFunction<_PlayC, void Function(Pointer<Void>, int, int)>(
+        'dj_clear_hotcue',
       );
   late final _getBpm = _lib
       .lookupFunction<_GetBpmC, double Function(Pointer<Void>, int)>('dj_get_bpm');
@@ -232,6 +255,14 @@ class NativeEngine {
   void setXfader(double x) => _setXfader(_handle, x);
   void setMaster(double v) => _setMaster(_handle, v);
   void setRate(int deck, double rate) => _setRate(_handle, deck, rate);
+  void setCue(int deck) => _setCue(_handle, deck);
+  void jumpCue(int deck) => _jumpCue(_handle, deck);
+  /// Sets hot cue [index] at [seconds], or at the playhead if negative.
+  void setHotcue(int deck, int index, double seconds) =>
+      _setHotcue(_handle, deck, index, seconds);
+  void jumpHotcue(int deck, int index) => _jumpHotcue(_handle, deck, index);
+  double hotcue(int deck, int index) => _getHotcue(_handle, deck, index);
+  void clearHotcue(int deck, int index) => _clearHotcue(_handle, deck, index);
   void setKeylock(int deck, bool enabled) =>
       _setKeylock(_handle, deck, enabled ? 1 : 0);
   double bpm(int deck) => _getBpm(_handle, deck);

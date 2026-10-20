@@ -27,6 +27,8 @@ class DeckState {
   // Key lock keeps the pitch fixed when tempo changes. The engine starts with
   // it on, so the app starts with it on too.
   bool keylock = true;
+  /// Hot cue times in seconds, -1 when not set. Eight pads per deck.
+  final List<double> hotcues = List<double>.filled(8, -1);
   bool synced = false;
   double beatOffset = 0;
   double gain = 1;
@@ -374,6 +376,7 @@ class DjController extends ChangeNotifier {
     d.beatOffset = _engine.beatOffset(deckIndex);
     d.rate = 1;
     d.synced = false;
+    d.hotcues.fillRange(0, d.hotcues.length, -1.0);
     d.loopEnabled = false;
     d.loopStart = 0;
     d.loopEnd = 0;
@@ -514,6 +517,44 @@ class DjController extends ChangeNotifier {
     d.synced = false;
     _applyRate(deckIndex);
     _followMasterBpm(deckIndex);
+    notifyListeners();
+  }
+
+  /// CUE button. While playing: jump back to the cue point and stop.
+  /// While stopped: set the cue point where the playhead is.
+  void cue(int deckIndex) {
+    final d = deck(deckIndex);
+    if (!d.loaded) return;
+    if (d.playing) {
+      _engine.jumpCue(deckIndex);
+      _engine.play(deckIndex, false);
+      d.playing = false;
+      d.position = _engine.position(deckIndex);
+    } else {
+      _engine.setCue(deckIndex);
+    }
+    notifyListeners();
+  }
+
+  /// Hot cue pad: sets the cue if empty, otherwise jumps to it.
+  void hotcue(int deckIndex, int index) {
+    final d = deck(deckIndex);
+    if (!d.loaded || index < 0 || index >= d.hotcues.length) return;
+    if (d.hotcues[index] < 0) {
+      _engine.setHotcue(deckIndex, index, -1);
+      d.hotcues[index] = _engine.hotcue(deckIndex, index);
+    } else {
+      _engine.jumpHotcue(deckIndex, index);
+      d.position = _engine.position(deckIndex);
+    }
+    notifyListeners();
+  }
+
+  void clearHotcue(int deckIndex, int index) {
+    final d = deck(deckIndex);
+    if (!d.loaded || index < 0 || index >= d.hotcues.length) return;
+    _engine.clearHotcue(deckIndex, index);
+    d.hotcues[index] = -1;
     notifyListeners();
   }
 

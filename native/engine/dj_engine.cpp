@@ -42,7 +42,7 @@ namespace {
 
 // ~10–20 ms per bin on typical tracks so the zoomed view has real transients.
 constexpr int kWaveformBins = 32768;
-constexpr int kHotCues = 4;
+constexpr int kHotCues = 8;
 constexpr int kMaxCallbackFrames = 2048;
 constexpr int kMaxStretchInFrames = kMaxCallbackFrames * 2 + 256;
 // Loop wrap crossfade, in source frames (~10 ms at 48 kHz). Long enough to
@@ -99,7 +99,7 @@ struct Deck {
   float eqLow = 0, eqMid = 0, eqHigh = 0;
   float eqLowG = 1, eqMidG = 1, eqHighG = 1;
   double cuePoint = 0.0;
-  double hotcues[kHotCues] = {-1, -1, -1, -1};
+  double hotcues[kHotCues] = {-1, -1, -1, -1, -1, -1, -1, -1};
   bool loopEnabled = false;
   float loopBars = 1.0f;
   double loopStart = 0.0;

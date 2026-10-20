@@ -3,6 +3,7 @@ import 'package:path/path.dart' as p;
 import 'package:sidedeck/state/dj_controller.dart';
 import 'package:sidedeck/state/library_controller.dart';
 import 'package:sidedeck/state/playlist_controller.dart';
+import 'package:sidedeck/state/playlist_store.dart';
 import 'package:sidedeck/theme/sidedeck_theme.dart';
 
 /// Local playlists and automix. Shown as the "Playlists" tab in the library.
