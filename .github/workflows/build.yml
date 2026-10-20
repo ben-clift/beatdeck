@@ -33,7 +33,13 @@ jobs:
           echo "FLUTTER_ROOT=$HOME/flutter" >> "$GITHUB_ENV"
 
       - run: flutter config --no-analytics
-      - run: flutter pub get
+      - name: flutter pub get
+        run: |
+          if ! flutter pub get > pub.txt 2>&1; then
+            body=$(head -c 1500 pub.txt | tr '\n' ' ')
+            echo "::error title=pub get failed::$body"
+            exit 1
+          fi
 
       # Errors are also written as annotations so they can be read without
       # downloading the full log.
