@@ -15,8 +15,11 @@ class ControllerKnob extends StatelessWidget {
     this.size = 44,
     this.center = 0.5,
     this.accent = SideDeckTheme.accentA,
+    this.ticks = false,
   });
 
+  /// Draws a printed scale either side of the slot, like a tempo fader.
+  final bool ticks;
   final double value;
   final ValueChanged<double> onChanged;
   final String label;
@@ -134,6 +137,12 @@ class ControllerFader extends StatelessWidget {
         child: Stack(
           alignment: Alignment.topCenter,
           children: [
+            if (ticks)
+              Positioned.fill(
+                top: capHeight / 2,
+                bottom: capHeight / 2,
+                child: CustomPaint(painter: _TickPainter()),
+              ),
             Positioned(
               top: capHeight / 2,
               bottom: capHeight / 2,
@@ -155,4 +164,27 @@ class ControllerFader extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Scale marks for a tempo fader: a long mark at the centre, shorter ones
+/// every tenth of the throw.
+class _TickPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = const Color(0xFF8A8A8A)
+      ..strokeWidth = 1;
+    final cx = size.width / 2;
+    for (var i = 0; i <= 20; i++) {
+      final y = size.height * i / 20;
+      final centre = i == 10;
+      final major = i % 5 == 0;
+      final len = centre ? 15.0 : (major ? 11.0 : 6.0);
+      canvas.drawLine(Offset(cx - len, y), Offset(cx - 5, y), paint);
+      canvas.drawLine(Offset(cx + 5, y), Offset(cx + len, y), paint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(_TickPainter old) => false;
 }

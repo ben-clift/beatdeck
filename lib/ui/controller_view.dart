@@ -204,7 +204,9 @@ class _DeckPanelState extends State<_DeckPanel> {
   static const _loopBars = [0.25, 0.5, 1.0, 2.0, 4.0, 8.0];
   static const _jumpBeats = [-1, 1, -4, 4, -8, 8, -16, 16];
   // Tempo fader range: plus or minus 8 percent.
-  static const _range = 0.08;
+  static const _ranges = [0.06, 0.10, 0.16, 0.50];
+  int _rangeIdx = 1;
+  double get _range => _ranges[_rangeIdx];
 
   LookController get look => LookController.instance;
   Color get _accent => look.accent(widget.index);
@@ -385,21 +387,37 @@ class _DeckPanelState extends State<_DeckPanel> {
 
   Widget _tempo(DeckState d) {
     final v = (0.5 + (d.rate - 1.0) / (2 * _range)).clamp(0.0, 1.0).toDouble();
+    final pct = (d.rate - 1.0) * 100;
     return Column(
-      mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        const Text('+', style: TextStyle(fontSize: 10, color: SideDeckTheme.muted)),
-        ControllerFader(
-          value: v,
-          height: 150,
-          accent: _accent,
-          onChanged: (x) {
-            final snapped = (x - 0.5).abs() < 0.01 ? 0.5 : x;
-            widget.dj.setRate(widget.index, 1.0 + (snapped - 0.5) * 2 * _range);
-          },
+        Text(
+          '${pct >= 0 ? '+' : ''}${pct.toStringAsFixed(1)}%',
+          style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w800),
         ),
-        const Text('-', style: TextStyle(fontSize: 10, color: SideDeckTheme.muted)),
+        const Text('+', style: TextStyle(fontSize: 11, color: SideDeckTheme.muted)),
+        Expanded(
+          child: LayoutBuilder(
+            builder: (context, c) => ControllerFader(
+              value: v,
+              height: c.maxHeight,
+              accent: _accent,
+              ticks: true,
+              onChanged: (x) {
+                final snapped = (x - 0.5).abs() < 0.01 ? 0.5 : x;
+                widget.dj
+                    .setRate(widget.index, 1.0 + (snapped - 0.5) * 2 * _range);
+              },
+            ),
+          ),
+        ),
+        const Text('-', style: TextStyle(fontSize: 11, color: SideDeckTheme.muted)),
         const SizedBox(height: 2),
+        _smallButton(
+          '±${(_range * 100).round()}%',
+          false,
+          () => setState(() => _rangeIdx = (_rangeIdx + 1) % _ranges.length),
+        ),
+        const SizedBox(height: 3),
         _smallButton(
           'KEY LOCK',
           d.keylock,
