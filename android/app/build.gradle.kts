@@ -30,7 +30,9 @@ android {
     }
 
     defaultConfig {
-        applicationId = "es.manifold.sidedeck"
+        // Own id so BeatDeck installs next to the original SideDeck. The code
+        // namespace above stays the same (native code is bound to it).
+        applicationId = "com.benclift.beatdeck"
         minSdk = 26
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
@@ -53,6 +55,17 @@ android {
                 storeFile = file(keystoreProperties["storeFile"] as String)
                 storePassword = keystoreProperties["storePassword"] as String
             }
+        }
+    }
+
+    // Fixed signing key for debug builds, so every new APK installs over the
+    // last one (a random key per build forces an uninstall). Private repo only.
+    signingConfigs {
+        getByName("debug") {
+            storeFile = file("beatdeck-debug.keystore")
+            storePassword = "android"
+            keyAlias = "beatdeck"
+            keyPassword = "android"
         }
     }
 
