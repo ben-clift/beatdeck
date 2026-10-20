@@ -4,9 +4,11 @@ import 'package:sidedeck/engine/music_utils.dart';
 import 'package:sidedeck/engine/usb_output.dart';
 import 'package:sidedeck/state/dj_controller.dart';
 import 'package:sidedeck/state/library_controller.dart';
+import 'package:sidedeck/state/look_controller.dart';
 import 'package:sidedeck/theme/sidedeck_theme.dart';
 import 'package:sidedeck/ui/controller_view.dart';
 import 'package:sidedeck/ui/library_drawer.dart';
+import 'package:sidedeck/ui/look_sheet.dart';
 import 'package:sidedeck/ui/mixer_strip.dart';
 import 'package:sidedeck/ui/pitch_sheet.dart';
 import 'package:sidedeck/ui/settings_page.dart';
@@ -36,6 +38,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     ]);
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
     WidgetsBinding.instance.addObserver(this);
+    LookController.instance.load();
     _dj = DjController();
     _library = LibraryController();
     _dj.addListener(_onDjChanged);
@@ -157,10 +160,11 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   @override
   Widget build(BuildContext context) {
     return AnimatedBuilder(
-      animation: Listenable.merge([_dj, _library]),
+      animation: Listenable.merge([_dj, _library, LookController.instance]),
       builder: (context, _) {
         return Scaffold(
-          backgroundColor: Colors.black,
+          backgroundColor:
+              _controllerMode ? LookController.instance.bg : Colors.black,
           body: SafeArea(
             child: Stack(
               children: [
@@ -192,15 +196,29 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                 Positioned(
                   top: 0,
                   right: 4,
-                  child: IconButton(
-                    visualDensity: VisualDensity.compact,
-                    tooltip: _controllerMode ? 'Classic layout' : 'Controller layout',
-                    onPressed: () =>
-                        setState(() => _controllerMode = !_controllerMode),
-                    icon: Icon(
-                      _controllerMode ? Icons.view_agenda : Icons.album,
-                      size: 20,
-                    ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (_controllerMode)
+                        IconButton(
+                          visualDensity: VisualDensity.compact,
+                          tooltip: 'Customise look',
+                          onPressed: () => showLookSheet(context),
+                          icon: const Icon(Icons.palette, size: 20),
+                        ),
+                      IconButton(
+                        visualDensity: VisualDensity.compact,
+                        tooltip: _controllerMode
+                            ? 'Classic layout'
+                            : 'Controller layout',
+                        onPressed: () =>
+                            setState(() => _controllerMode = !_controllerMode),
+                        icon: Icon(
+                          _controllerMode ? Icons.view_agenda : Icons.album,
+                          size: 20,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ],

@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:sidedeck/state/look_controller.dart';
 import 'package:sidedeck/theme/sidedeck_theme.dart';
 
 /// Rotary knob. Drag up to turn it up, drag down to turn it down.
@@ -41,7 +42,12 @@ class ControllerKnob extends StatelessWidget {
           onDoubleTap: () => onChanged(center),
           child: CustomPaint(
             size: Size.square(size),
-            painter: _KnobPainter(value: value, accent: accent),
+            painter: _KnobPainter(
+              value: value,
+              accent: accent,
+              base: LookController.instance.knobBase,
+              face: LookController.instance.knobFace,
+            ),
           ),
         ),
         if (label.isNotEmpty)
@@ -55,10 +61,17 @@ class ControllerKnob extends StatelessWidget {
 }
 
 class _KnobPainter extends CustomPainter {
-  _KnobPainter({required this.value, required this.accent});
+  _KnobPainter({
+    required this.value,
+    required this.accent,
+    required this.base,
+    required this.face,
+  });
 
   final double value;
   final Color accent;
+  final Color base;
+  final Color face;
 
   // The pointer sweeps 270 degrees, from 7 o'clock round to 5 o'clock.
   static const _start = 0.75 * math.pi;
@@ -68,8 +81,8 @@ class _KnobPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final c = size.center(Offset.zero);
     final r = size.width / 2;
-    canvas.drawCircle(c, r, Paint()..color = const Color(0xFF34322E));
-    canvas.drawCircle(c, r * 0.65, Paint()..color = const Color(0xFF4A4742));
+    canvas.drawCircle(c, r, Paint()..color = base);
+    canvas.drawCircle(c, r * 0.65, Paint()..color = face);
     final angle = _start + _sweep * value;
     canvas.drawLine(
       c + Offset(math.cos(angle), math.sin(angle)) * (r * 0.2),
@@ -83,7 +96,10 @@ class _KnobPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_KnobPainter old) =>
-      old.value != value || old.accent != accent;
+      old.value != value ||
+      old.accent != accent ||
+      old.base != base ||
+      old.face != face;
 }
 
 /// Vertical fader. Drag up to raise it, drag down to lower it.
@@ -121,7 +137,7 @@ class ControllerFader extends StatelessWidget {
             Positioned(
               top: capHeight / 2,
               bottom: capHeight / 2,
-              child: Container(width: 6, color: const Color(0xFF141311)),
+              child: Container(width: 6, color: LookController.instance.well),
             ),
             Positioned(
               top: (1 - value) * travel,

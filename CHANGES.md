@@ -10,3 +10,6 @@ Forked from SideDeck 1.1.1 (https://github.com/manueljpy/SideDeck), 20 Oct 2026.
 - Library header: rescan button, and an "Open Seeker" button (finds the app by its launcher name).
 - The library rescans its folder whenever BeatDeck comes back to the foreground, so files Seeker just downloaded appear without a manual refresh.
 - Step B (Soulseek search built into BeatDeck) is a later project.
+
+## Customisable look (20 Oct 2026)
+- Palette button on the controller screen opens "Customise look": 12 gentle background colours, 12 controller body colours, and 12 accent colours for each of the four decks. Saved on the phone, with a Reset button. Defaults are the matte graphite / amber / teal look.

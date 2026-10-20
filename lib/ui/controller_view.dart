@@ -4,16 +4,11 @@ import 'package:flutter/material.dart';
 import 'package:sidedeck/engine/music_utils.dart';
 import 'package:sidedeck/state/dj_controller.dart';
 import 'package:sidedeck/state/library_controller.dart';
+import 'package:sidedeck/state/look_controller.dart';
 import 'package:sidedeck/theme/sidedeck_theme.dart';
 import 'package:sidedeck/ui/controller_widgets.dart';
 import 'package:sidedeck/ui/library_drawer.dart';
 
-const _deckColors = [
-  SideDeckTheme.accentA,
-  SideDeckTheme.accentB,
-  SideDeckTheme.accentC,
-  SideDeckTheme.accentD,
-];
 
 /// Hardware-style layout: two decks with a mixer between them.
 ///
@@ -116,7 +111,7 @@ class _DeckPair extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
-      listenable: dj,
+      listenable: Listenable.merge([dj, LookController.instance]),
       builder: (context, _) {
         return FittedBox(
           fit: BoxFit.contain,
@@ -159,7 +154,8 @@ class _DeckPanelState extends State<_DeckPanel> {
   // Tempo fader range: plus or minus 8 percent.
   static const _range = 0.08;
 
-  Color get _accent => _deckColors[widget.index];
+  LookController get look => LookController.instance;
+  Color get _accent => look.accent(widget.index);
   DeckState get _d => widget.dj.deck(widget.index);
 
   @override
@@ -171,7 +167,7 @@ class _DeckPanelState extends State<_DeckPanel> {
     return Container(
       margin: const EdgeInsets.all(6),
       decoration: BoxDecoration(
-        color: SideDeckTheme.panel,
+        color: look.body,
         borderRadius: BorderRadius.circular(4),
       ),
       clipBehavior: Clip.antiAlias,
@@ -283,7 +279,7 @@ class _DeckPanelState extends State<_DeckPanel> {
           child: Container(
             height: 8,
             alignment: Alignment.centerLeft,
-            color: const Color(0xFF3A3834),
+            color: look.control,
             child: FractionallySizedBox(
               widthFactor: frac.toDouble(),
               child: Container(color: _accent),
@@ -312,7 +308,15 @@ class _DeckPanelState extends State<_DeckPanel> {
       },
       child: CustomPaint(
         size: const Size.square(size),
-        painter: _JogPainter(angle: angle, accent: _accent, playing: d.playing),
+        painter: _JogPainter(
+          angle: angle,
+          accent: _accent,
+          playing: d.playing,
+          well: look.well,
+          ring: look.control,
+          inactive: look.controlHigh,
+          face: look.body,
+        ),
       ),
     );
   }
@@ -349,7 +353,7 @@ class _DeckPanelState extends State<_DeckPanel> {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 3),
         decoration: BoxDecoration(
-          color: on ? _accent : const Color(0xFF3A3834),
+          color: on ? _accent : look.control,
         ),
         child: Text(
           label,
@@ -372,7 +376,7 @@ class _DeckPanelState extends State<_DeckPanel> {
             height: 38,
             alignment: Alignment.center,
             margin: const EdgeInsets.symmetric(horizontal: 3),
-            color: on ? _accent : const Color(0xFF3A3834),
+            color: on ? _accent : look.control,
             child: Text(
               label,
               style: TextStyle(
@@ -406,7 +410,7 @@ class _DeckPanelState extends State<_DeckPanel> {
           child: Container(
             height: 20,
             alignment: Alignment.center,
-            color: on ? SideDeckTheme.text : const Color(0xFF34322E),
+            color: on ? SideDeckTheme.text : look.control,
             child: Text(
               label,
               style: TextStyle(
@@ -485,7 +489,7 @@ class _DeckPanelState extends State<_DeckPanel> {
       onLongPress: onLong,
       child: Container(
         alignment: Alignment.center,
-        color: on ? _accent : const Color(0xFF3A3834),
+        color: on ? _accent : look.control,
         child: Text(
           label,
           style: TextStyle(
@@ -500,27 +504,39 @@ class _DeckPanelState extends State<_DeckPanel> {
 }
 
 class _JogPainter extends CustomPainter {
-  _JogPainter({required this.angle, required this.accent, required this.playing});
+  _JogPainter({
+    required this.angle,
+    required this.accent,
+    required this.playing,
+    required this.well,
+    required this.ring,
+    required this.inactive,
+    required this.face,
+  });
 
   final double angle;
   final Color accent;
   final bool playing;
+  final Color well;
+  final Color ring;
+  final Color inactive;
+  final Color face;
 
   @override
   void paint(Canvas canvas, Size size) {
     final c = size.center(Offset.zero);
     final r = size.width / 2;
-    canvas.drawCircle(c, r, Paint()..color = const Color(0xFF141311));
-    canvas.drawCircle(c, r - 8, Paint()..color = const Color(0xFF34322E));
+    canvas.drawCircle(c, r, Paint()..color = well);
+    canvas.drawCircle(c, r - 8, Paint()..color = ring);
     canvas.drawCircle(
       c,
       r - 8,
       Paint()
         ..style = PaintingStyle.stroke
         ..strokeWidth = 2
-        ..color = playing ? accent : const Color(0xFF4A4742),
+        ..color = playing ? accent : inactive,
     );
-    canvas.drawCircle(c, r * 0.5, Paint()..color = const Color(0xFF2A2926));
+    canvas.drawCircle(c, r * 0.5, Paint()..color = face);
     canvas.save();
     canvas.translate(c.dx, c.dy);
     canvas.rotate(angle);
@@ -532,12 +548,18 @@ class _JogPainter extends CustomPainter {
         ..strokeWidth = 5,
     );
     canvas.restore();
-    canvas.drawCircle(c, 6, Paint()..color = const Color(0xFF141311));
+    canvas.drawCircle(c, 6, Paint()..color = well);
   }
 
   @override
   bool shouldRepaint(_JogPainter old) =>
-      old.angle != angle || old.playing != playing || old.accent != accent;
+      old.angle != angle ||
+      old.playing != playing ||
+      old.accent != accent ||
+      old.well != well ||
+      old.ring != ring ||
+      old.inactive != inactive ||
+      old.face != face;
 }
 
 class _MixerPanel extends StatelessWidget {
@@ -553,7 +575,7 @@ class _MixerPanel extends StatelessWidget {
       margin: const EdgeInsets.symmetric(vertical: 6),
       padding: const EdgeInsets.all(6),
       decoration: BoxDecoration(
-        color: const Color(0xFF141311),
+        color: LookController.instance.well,
         borderRadius: BorderRadius.circular(4),
       ),
       child: Column(
@@ -599,7 +621,7 @@ class _MixerPanel extends StatelessWidget {
 
   Widget _channel(int i) {
     final d = dj.deck(i);
-    final c = _deckColors[i];
+    final c = LookController.instance.accent(i);
     // EQ knobs run -12 to +12 dB with the middle at 0.
     double eqIn(double db) => ((db + 12) / 24).clamp(0.0, 1.0).toDouble();
     double eqOut(double v) => v * 24 - 12;
