@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sidedeck/engine/music_utils.dart';
+import 'package:sidedeck/soulseek/slsk_setup.dart';
 import 'package:sidedeck/soulseek/soulseek_client.dart';
 import 'package:sidedeck/state/library_controller.dart';
 import 'package:sidedeck/suggest/harmony.dart';
@@ -38,6 +39,7 @@ class AutoFetch extends ChangeNotifier {
       bpmMin = prefs.getDouble('af_bpm_min') ?? bpmMin;
       bpmMax = prefs.getDouble('af_bpm_max') ?? bpmMax;
       count = prefs.getInt('af_count') ?? count;
+      buffer = prefs.getInt('af_buffer') ?? buffer;
       endless = prefs.getBool('af_endless') ?? endless;
       notifyListeners();
     } catch (_) {}
@@ -55,6 +57,7 @@ class AutoFetch extends ChangeNotifier {
       await prefs.setDouble('af_bpm_min', bpmMin);
       await prefs.setDouble('af_bpm_max', bpmMax);
       await prefs.setInt('af_count', count);
+      await prefs.setInt('af_buffer', buffer);
       await prefs.setBool('af_endless', endless);
     } catch (_) {}
   }
@@ -324,6 +327,29 @@ class AutoFetch extends ChangeNotifier {
     );
   }
 
+  // Fetched this session, to know how many are waiting to be played.
+  final List<String> _fetched = [];
+
+  /// Stop fetching while this many tracks are already waiting to be played.
+  int buffer = 3;
+
+  int _waiting() {
+    final dj = SlskSetup.dj;
+    if (dj == null) return 0;
+    if (dj.automixOn) return dj.automixWaiting;
+    return _fetched
+        .where((p) => !dj.loadedPaths.contains(p) && !dj.failedPaths.contains(p))
+        .length;
+  }
+
+  /// Holds off while enough good tracks are queued up.
+  Future<void> _waitForRoom() async {
+    while (!_stop && _waiting() >= buffer) {
+      _say('Paused: ${_waiting()} tracks waiting to be played');
+      await Future<void>.delayed(const Duration(seconds: 3));
+    }
+  }
+
   /// Picks by genre and tempo alone, no seed track. With [endless] it keeps
   /// going until stopped; otherwise it stops after [count] downloads.
   Future<void> startByGenre({
@@ -396,6 +422,8 @@ class AutoFetch extends ChangeNotifier {
   /// Searches, picks the best match, waits until it has downloaded. Returns
   /// the saved path, or null when nothing usable turned up.
   Future<String?> _fetchOne(Suggestion s, CamelotKey? seedKey) async {
+    await _waitForRoom();
+    if (_stop) return null;
     _say('Searching for ${s.artist} - ${s.title}');
     soulseek.search(s.query);
     var waited = 0;
@@ -420,7 +448,11 @@ class AutoFetch extends ChangeNotifier {
     if (dl == null) return null;
     final started = DateTime.now();
     while (!_stop) {
-      if (dl.state == DlState.done) return dl.savedPath;
+      if (dl.state == DlState.done) {
+        final sp = dl.savedPath;
+        if (sp != null) _fetched.add(sp);
+        return sp;
+      }
       if (dl.state == DlState.failed) {
         _say('Download failed, trying the next');
         return null;

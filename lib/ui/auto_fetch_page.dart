@@ -236,6 +236,26 @@ class _AutoFetchPageState extends State<AutoFetchPage> {
                   Text('${_count.round()}'),
                 ],
               ),
+            Row(
+              children: [
+                const Expanded(
+                  child: Text('Pause when this many tracks are waiting to be played'),
+                ),
+                Text('${af.buffer}'),
+              ],
+            ),
+            Slider(
+              value: af.buffer.toDouble(),
+              min: 1,
+              max: 10,
+              divisions: 9,
+              label: '${af.buffer}',
+              onChanged: (v) {
+                af.buffer = v.round();
+                af.save();
+                setState(() {});
+              },
+            ),
             const SizedBox(height: 8),
             Row(
               children: [

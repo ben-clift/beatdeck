@@ -404,6 +404,14 @@ class DjController extends ChangeNotifier {
     } catch (_) {}
   }
 
+  /// Files that have been put on a deck, and files that would not load.
+  final Set<String> loadedPaths = {};
+  final Set<String> failedPaths = {};
+
+  /// Tracks queued after the one now playing in automix.
+  int get automixWaiting =>
+      automixOn ? math.max(0, _automixQueue.length - _automixIndex - 1) : 0;
+
   /// A new track (for example a finished Soulseek download) joins the end of
   /// the automix queue if automix is running.
   void automixAppend(String path) {
@@ -623,6 +631,7 @@ class DjController extends ChangeNotifier {
       loadingDeck = null;
       loadingTitle = null;
       loadingPath = null;
+      failedPaths.add(path);
       final name = title ?? path.split(RegExp(r'[\\/]')).last;
       final detail = _engine.lastError();
       engineError = detail.isNotEmpty
@@ -631,6 +640,7 @@ class DjController extends ChangeNotifier {
       notifyListeners();
       return false;
     }
+    loadedPaths.add(path);
     d.path = path;
     d.title = title ?? path.split(RegExp(r'[\\/]')).last;
     d.artist = artist ?? '';
