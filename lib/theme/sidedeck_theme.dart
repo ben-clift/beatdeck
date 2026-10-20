@@ -6,6 +6,8 @@ class SideDeckTheme {
   static const panelAlt = Color(0xFF1E2430);
   static const accentA = Color(0xFF4CC9F0);
   static const accentB = Color(0xFFF72585);
+  static const accentC = Color(0xFFFFB703);
+  static const accentD = Color(0xFF80ED99);
   static const text = Color(0xFFE8ECF1);
   static const muted = Color(0xFF8B93A7);
 

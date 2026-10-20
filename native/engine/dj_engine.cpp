@@ -43,6 +43,7 @@ namespace {
 // ~10–20 ms per bin on typical tracks so the zoomed view has real transients.
 constexpr int kWaveformBins = 32768;
 constexpr int kHotCues = 8;
+constexpr int kDecks = 4;
 constexpr int kMaxCallbackFrames = 2048;
 constexpr int kMaxStretchInFrames = kMaxCallbackFrames * 2 + 256;
 // Loop wrap crossfade, in source frames (~10 ms at 48 kHz). Long enough to
@@ -424,7 +425,7 @@ struct Engine : public oboe::AudioStreamDataCallback,
                 public oboe::AudioStreamErrorCallback {
   std::mutex streamMutex;
   std::shared_ptr<oboe::AudioStream> stream;
-  Deck decks[2];
+  Deck decks[kDecks];
   std::atomic<float> xfader{0.5f};
   std::atomic<float> master{1.0f};
   std::atomic<int> outputMode{0}; // 0 internal 2ch, 1 external 4ch
@@ -434,8 +435,11 @@ struct Engine : public oboe::AudioStreamDataCallback,
   std::atomic<bool> reconnecting{false};
   std::atomic<bool> managingStream{false};
   std::vector<float> mixAL, mixAR, mixBL, mixBR;
+  std::vector<float> scratchL, scratchR;
 
   Engine() {
+    scratchL.assign(kMaxCallbackFrames, 0.0f);
+    scratchR.assign(kMaxCallbackFrames, 0.0f);
     mixAL.assign(kMaxCallbackFrames, 0.0f);
     mixAR.assign(kMaxCallbackFrames, 0.0f);
     mixBL.assign(kMaxCallbackFrames, 0.0f);
@@ -455,8 +459,7 @@ struct Engine : public oboe::AudioStreamDataCallback,
   ~Engine() {
     alive.store(false);
     closeStream();
-    decks[0].cache.stop();
-    decks[1].cache.stop();
+    for (int k = 0; k < kDecks; ++k) decks[k].cache.stop();
   }
 
   void applyLoadedDeckSampleRate(int newSr) {
@@ -755,8 +758,18 @@ struct Engine : public oboe::AudioStreamDataCallback,
       return;
     }
     const int n = std::min(frames, kMaxCallbackFrames);
+    // Decks 1 and 3 feed the A side of the crossfader, decks 2 and 4 the B side.
     renderDeck(decks[0], mixAL.data(), mixAR.data(), n);
     renderDeck(decks[1], mixBL.data(), mixBR.data(), n);
+    for (int k = 2; k < kDecks; ++k) {
+      renderDeck(decks[k], scratchL.data(), scratchR.data(), n);
+      float* dl = (k % 2 == 0) ? mixAL.data() : mixBL.data();
+      float* dr = (k % 2 == 0) ? mixAR.data() : mixBR.data();
+      for (int i = 0; i < n; ++i) {
+        dl[i] += scratchL[i];
+        dr[i] += scratchR[i];
+      }
+    }
 
     const float x = xfader.load();
     float gainA = 1.0f;
@@ -920,7 +933,7 @@ int dj_load(DjEngine engine, int deck, const char* path) {
 int dj_load_with_analysis(DjEngine engine, int deck, const char* path, float bpm, int key,
                           float beat_offset) {
   djClearLastError();
-  if (deck < 0 || deck > 1 || !path) {
+  if (deck < 0 || deck >= kDecks || !path) {
     djSetLastError("Invalid deck or path.");
     return 0;
   }
@@ -1044,7 +1057,7 @@ double dj_file_duration(const char* path) {
 }
 
 void dj_unload(DjEngine engine, int deck) {
-  if (deck < 0 || deck > 1) {
+  if (deck < 0 || deck >= kDecks) {
     return;
   }
   Deck& d = asEngine(engine)->decks[deck];
@@ -1065,7 +1078,7 @@ void dj_unload(DjEngine engine, int deck) {
 }
 
 void dj_play(DjEngine engine, int deck, int playing) {
-  if (deck < 0 || deck > 1) {
+  if (deck < 0 || deck >= kDecks) {
     return;
   }
   Deck& d = asEngine(engine)->decks[deck];
@@ -1080,7 +1093,7 @@ void dj_play(DjEngine engine, int deck, int playing) {
 }
 
 void dj_seek(DjEngine engine, int deck, double seconds) {
-  if (deck < 0 || deck > 1) {
+  if (deck < 0 || deck >= kDecks) {
     return;
   }
   Deck& d = asEngine(engine)->decks[deck];
@@ -1092,7 +1105,7 @@ void dj_seek(DjEngine engine, int deck, double seconds) {
 }
 
 void dj_set_cue(DjEngine engine, int deck) {
-  if (deck < 0 || deck > 1) {
+  if (deck < 0 || deck >= kDecks) {
     return;
   }
   Deck& d = asEngine(engine)->decks[deck];
@@ -1101,7 +1114,7 @@ void dj_set_cue(DjEngine engine, int deck) {
 }
 
 void dj_jump_cue(DjEngine engine, int deck) {
-  if (deck < 0 || deck > 1) {
+  if (deck < 0 || deck >= kDecks) {
     return;
   }
   Deck& d = asEngine(engine)->decks[deck];
@@ -1110,7 +1123,7 @@ void dj_jump_cue(DjEngine engine, int deck) {
 }
 
 double dj_position(DjEngine engine, int deck) {
-  if (deck < 0 || deck > 1) {
+  if (deck < 0 || deck >= kDecks) {
     return 0;
   }
   Deck& d = asEngine(engine)->decks[deck];
@@ -1119,7 +1132,7 @@ double dj_position(DjEngine engine, int deck) {
 }
 
 double dj_duration(DjEngine engine, int deck) {
-  if (deck < 0 || deck > 1) {
+  if (deck < 0 || deck >= kDecks) {
     return 0;
   }
   Deck& d = asEngine(engine)->decks[deck];
@@ -1129,7 +1142,7 @@ double dj_duration(DjEngine engine, int deck) {
 }
 
 int dj_playing(DjEngine engine, int deck) {
-  if (deck < 0 || deck > 1) {
+  if (deck < 0 || deck >= kDecks) {
     return 0;
   }
   Deck& d = asEngine(engine)->decks[deck];
@@ -1138,7 +1151,7 @@ int dj_playing(DjEngine engine, int deck) {
 }
 
 int dj_loaded(DjEngine engine, int deck) {
-  if (deck < 0 || deck > 1) {
+  if (deck < 0 || deck >= kDecks) {
     return 0;
   }
   Deck& d = asEngine(engine)->decks[deck];
@@ -1147,7 +1160,7 @@ int dj_loaded(DjEngine engine, int deck) {
 }
 
 void dj_set_gain(DjEngine engine, int deck, float linear) {
-  if (deck < 0 || deck > 1) {
+  if (deck < 0 || deck >= kDecks) {
     return;
   }
   Deck& d = asEngine(engine)->decks[deck];
@@ -1156,7 +1169,7 @@ void dj_set_gain(DjEngine engine, int deck, float linear) {
 }
 
 void dj_set_eq(DjEngine engine, int deck, float low_db, float mid_db, float high_db) {
-  if (deck < 0 || deck > 1) {
+  if (deck < 0 || deck >= kDecks) {
     return;
   }
   auto* e = asEngine(engine);
@@ -1169,7 +1182,7 @@ void dj_set_eq(DjEngine engine, int deck, float low_db, float mid_db, float high
 }
 
 void dj_set_filter(DjEngine engine, int deck, float amount) {
-  if (deck < 0 || deck > 1) {
+  if (deck < 0 || deck >= kDecks) {
     return;
   }
   auto* e = asEngine(engine);
@@ -1180,7 +1193,7 @@ void dj_set_filter(DjEngine engine, int deck, float amount) {
 }
 
 void dj_set_fader(DjEngine engine, int deck, float linear) {
-  if (deck < 0 || deck > 1) {
+  if (deck < 0 || deck >= kDecks) {
     return;
   }
   Deck& d = asEngine(engine)->decks[deck];
@@ -1197,7 +1210,7 @@ void dj_set_master(DjEngine engine, float linear) {
 }
 
 void dj_set_rate(DjEngine engine, int deck, float rate) {
-  if (deck < 0 || deck > 1) {
+  if (deck < 0 || deck >= kDecks) {
     return;
   }
   Deck& d = asEngine(engine)->decks[deck];
@@ -1206,7 +1219,7 @@ void dj_set_rate(DjEngine engine, int deck, float rate) {
 }
 
 void dj_set_keylock(DjEngine engine, int deck, int enabled) {
-  if (deck < 0 || deck > 1) {
+  if (deck < 0 || deck >= kDecks) {
     return;
   }
   Deck& d = asEngine(engine)->decks[deck];
@@ -1219,7 +1232,7 @@ void dj_set_keylock(DjEngine engine, int deck, int enabled) {
 }
 
 float dj_get_bpm(DjEngine engine, int deck) {
-  if (deck < 0 || deck > 1) {
+  if (deck < 0 || deck >= kDecks) {
     return 0;
   }
   Deck& d = asEngine(engine)->decks[deck];
@@ -1228,7 +1241,7 @@ float dj_get_bpm(DjEngine engine, int deck) {
 }
 
 int dj_get_key(DjEngine engine, int deck) {
-  if (deck < 0 || deck > 1) {
+  if (deck < 0 || deck >= kDecks) {
     return -1;
   }
   Deck& d = asEngine(engine)->decks[deck];
@@ -1237,7 +1250,7 @@ int dj_get_key(DjEngine engine, int deck) {
 }
 
 float dj_get_beat_offset(DjEngine engine, int deck) {
-  if (deck < 0 || deck > 1) {
+  if (deck < 0 || deck >= kDecks) {
     return 0;
   }
   Deck& d = asEngine(engine)->decks[deck];
@@ -1246,7 +1259,7 @@ float dj_get_beat_offset(DjEngine engine, int deck) {
 }
 
 void dj_nudge_grid(DjEngine engine, int deck, float seconds) {
-  if (deck < 0 || deck > 1) {
+  if (deck < 0 || deck >= kDecks) {
     return;
   }
   Deck& d = asEngine(engine)->decks[deck];
@@ -1255,7 +1268,7 @@ void dj_nudge_grid(DjEngine engine, int deck, float seconds) {
 }
 
 void dj_set_loop(DjEngine engine, int deck, int enabled, float bars) {
-  if (deck < 0 || deck > 1) {
+  if (deck < 0 || deck >= kDecks) {
     return;
   }
   Deck& d = asEngine(engine)->decks[deck];
@@ -1275,7 +1288,7 @@ void dj_set_loop(DjEngine engine, int deck, int enabled, float bars) {
 }
 
 double dj_loop_start(DjEngine engine, int deck) {
-  if (deck < 0 || deck > 1) {
+  if (deck < 0 || deck >= kDecks) {
     return 0;
   }
   Deck& d = asEngine(engine)->decks[deck];
@@ -1284,7 +1297,7 @@ double dj_loop_start(DjEngine engine, int deck) {
 }
 
 double dj_loop_end(DjEngine engine, int deck) {
-  if (deck < 0 || deck > 1) {
+  if (deck < 0 || deck >= kDecks) {
     return 0;
   }
   Deck& d = asEngine(engine)->decks[deck];
@@ -1293,7 +1306,7 @@ double dj_loop_end(DjEngine engine, int deck) {
 }
 
 void dj_set_hotcue(DjEngine engine, int deck, int index, double seconds) {
-  if (deck < 0 || deck > 1 || index < 0 || index >= kHotCues) {
+  if (deck < 0 || deck >= kDecks || index < 0 || index >= kHotCues) {
     return;
   }
   Deck& d = asEngine(engine)->decks[deck];
@@ -1302,7 +1315,7 @@ void dj_set_hotcue(DjEngine engine, int deck, int index, double seconds) {
 }
 
 void dj_jump_hotcue(DjEngine engine, int deck, int index) {
-  if (deck < 0 || deck > 1 || index < 0 || index >= kHotCues) {
+  if (deck < 0 || deck >= kDecks || index < 0 || index >= kHotCues) {
     return;
   }
   Deck& d = asEngine(engine)->decks[deck];
@@ -1313,7 +1326,7 @@ void dj_jump_hotcue(DjEngine engine, int deck, int index) {
 }
 
 double dj_get_hotcue(DjEngine engine, int deck, int index) {
-  if (deck < 0 || deck > 1 || index < 0 || index >= kHotCues) {
+  if (deck < 0 || deck >= kDecks || index < 0 || index >= kHotCues) {
     return -1;
   }
   Deck& d = asEngine(engine)->decks[deck];
@@ -1322,7 +1335,7 @@ double dj_get_hotcue(DjEngine engine, int deck, int index) {
 }
 
 void dj_clear_hotcue(DjEngine engine, int deck, int index) {
-  if (deck < 0 || deck > 1 || index < 0 || index >= kHotCues) {
+  if (deck < 0 || deck >= kDecks || index < 0 || index >= kHotCues) {
     return;
   }
   Deck& d = asEngine(engine)->decks[deck];
@@ -1331,7 +1344,7 @@ void dj_clear_hotcue(DjEngine engine, int deck, int index) {
 }
 
 void dj_beat_jump(DjEngine engine, int deck, int beats) {
-  if (deck < 0 || deck > 1) {
+  if (deck < 0 || deck >= kDecks) {
     return;
   }
   Deck& d = asEngine(engine)->decks[deck];
@@ -1344,7 +1357,7 @@ void dj_beat_jump(DjEngine engine, int deck, int beats) {
 int dj_waveform_bins(void) { return kWaveformBins; }
 
 int dj_waveform_copy(DjEngine engine, int deck, float* min_out, float* max_out, int bins) {
-  if (deck < 0 || deck > 1 || !min_out || !max_out || bins <= 0) {
+  if (deck < 0 || deck >= kDecks || !min_out || !max_out || bins <= 0) {
     return 0;
   }
   Deck& d = asEngine(engine)->decks[deck];

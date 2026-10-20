@@ -19,11 +19,16 @@ class LibraryOverlay extends StatefulWidget {
     required this.dj,
     required this.library,
     this.onOpenSettings,
+    this.embedded = false,
   });
 
   final DjController dj;
   final LibraryController library;
   final VoidCallback? onOpenSettings;
+
+  /// True when shown as a page inside the controller view: loading a track
+  /// or tapping close must not pop the route.
+  final bool embedded;
 
   @override
   State<LibraryOverlay> createState() => _LibraryOverlayState();
@@ -189,7 +194,7 @@ class _LibraryOverlayState extends State<LibraryOverlay> {
           key: widget.dj.deck(deck).key,
           beatOffset: widget.dj.deck(deck).beatOffset,
         );
-        if (mounted) Navigator.pop(context);
+        if (mounted && !widget.embedded) Navigator.pop(context);
       } else if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(widget.dj.engineError ?? 'Load failed')),
@@ -280,7 +285,7 @@ class _LibraryOverlayState extends State<LibraryOverlay> {
         bpm: widget.dj.deck(deck).bpm,
         key: widget.dj.deck(deck).key,
       );
-      if (mounted) Navigator.pop(context);
+      if (mounted && !widget.embedded) Navigator.pop(context);
     }
   }
 
@@ -400,11 +405,12 @@ class _LibraryOverlayState extends State<LibraryOverlay> {
                       icon: const Icon(Icons.folder_open, size: 22),
                     ),
                   ],
-                  IconButton(
-                    visualDensity: VisualDensity.compact,
-                    onPressed: () => Navigator.pop(context),
-                    icon: const Icon(Icons.close, size: 22),
-                  ),
+                  if (!widget.embedded)
+                    IconButton(
+                      visualDensity: VisualDensity.compact,
+                      onPressed: () => Navigator.pop(context),
+                      icon: const Icon(Icons.close, size: 22),
+                    ),
                 ],
               ),
             ),
@@ -695,9 +701,11 @@ class _LibraryOverlayState extends State<LibraryOverlay> {
           key: t.key,
           durationSec: t.durationMs / 1000.0,
           actions: [
-            _deckBtn('A', busy ? null : () => _loadLocal(t, 0), loadingThis && widget.dj.loadingDeck == 0),
-            const SizedBox(width: 8),
-            _deckBtn('B', busy ? null : () => _loadLocal(t, 1), loadingThis && widget.dj.loadingDeck == 1),
+            for (var k = 0; k < DjController.deckCount; k++) ...[
+              if (k > 0) const SizedBox(width: 6),
+              _deckBtn('ABCD'[k], busy ? null : () => _loadLocal(t, k),
+                  loadingThis && widget.dj.loadingDeck == k),
+            ],
           ],
         );
       },
@@ -860,9 +868,10 @@ class _LibraryOverlayState extends State<LibraryOverlay> {
           key: meta?.key,
           durationSec: t.duration.toDouble(),
           actions: [
-            _deckBtn('A', busy ? null : () => _loadRemote(t, 0)),
-            const SizedBox(width: 8),
-            _deckBtn('B', busy ? null : () => _loadRemote(t, 1)),
+            for (var k = 0; k < DjController.deckCount; k++) ...[
+              if (k > 0) const SizedBox(width: 6),
+              _deckBtn('ABCD'[k], busy ? null : () => _loadRemote(t, k)),
+            ],
           ],
         );
       },

@@ -61,6 +61,9 @@ class DjController extends ChangeNotifier {
 
   final DeckState deckA = DeckState();
   final DeckState deckB = DeckState();
+  final DeckState deckC = DeckState();
+  final DeckState deckD = DeckState();
+  static const int deckCount = 4;
   double xfader = 0.5;
   double master = 1.0;
   bool externalMixer = false;
@@ -72,7 +75,18 @@ class DjController extends ChangeNotifier {
   String? loadingTitle;
   String? loadingPath;
 
-  DeckState deck(int i) => i == 0 ? deckA : deckB;
+  DeckState deck(int i) {
+    switch (i) {
+      case 0:
+        return deckA;
+      case 1:
+        return deckB;
+      case 2:
+        return deckC;
+      default:
+        return deckD;
+    }
+  }
 
   void clearError() {
     engineError = null;
@@ -131,7 +145,7 @@ class DjController extends ChangeNotifier {
 
   void _tick() {
     var dirty = false;
-    for (var i = 0; i < 2; i++) {
+    for (var i = 0; i < deckCount; i++) {
       final d = deck(i);
       if (!d.loaded || !d.playing) continue;
       d.position = _engine.position(i);
@@ -420,7 +434,7 @@ class DjController extends ChangeNotifier {
     String? title,
     String? artist,
   }) async {
-    for (var i = 0; i < 2; i++) {
+    for (var i = 0; i < deckCount; i++) {
       final d = deck(i);
       if (d.path != path) continue;
       await loadFile(

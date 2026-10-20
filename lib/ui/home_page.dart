@@ -5,6 +5,7 @@ import 'package:sidedeck/engine/usb_output.dart';
 import 'package:sidedeck/state/dj_controller.dart';
 import 'package:sidedeck/state/library_controller.dart';
 import 'package:sidedeck/theme/sidedeck_theme.dart';
+import 'package:sidedeck/ui/controller_view.dart';
 import 'package:sidedeck/ui/library_drawer.dart';
 import 'package:sidedeck/ui/mixer_strip.dart';
 import 'package:sidedeck/ui/pitch_sheet.dart';
@@ -21,6 +22,7 @@ class HomePage extends StatefulWidget {
 class _HomePageState extends State<HomePage> {
   late final DjController _dj;
   late final LibraryController _library;
+  bool _controllerMode = true;
   int? _gridEditDeck;
   bool _mixerDialogOpen = false;
   BuildContext? _mixerDialogContext;
@@ -150,15 +152,47 @@ class _HomePageState extends State<HomePage> {
         return Scaffold(
           backgroundColor: Colors.black,
           body: SafeArea(
-            child: Column(
+            child: Stack(
               children: [
-                if (_dj.engineError != null) _errorBar(),
-                Expanded(flex: 5, child: _waveDeck(0, SideDeckTheme.accentA)),
-                Expanded(flex: 5, child: _waveDeck(1, SideDeckTheme.accentB)),
-                if (_dj.externalMixer)
-                  _mixerBar()
+                if (_controllerMode)
+                  Column(
+                    children: [
+                      if (_dj.engineError != null) _errorBar(),
+                      Expanded(
+                        child: ControllerView(
+                          dj: _dj,
+                          library: _library,
+                          onOpenSettings: _openSettings,
+                        ),
+                      ),
+                    ],
+                  )
                 else
-                  Expanded(flex: 7, child: _mixerBar(expand: true)),
+                  Column(
+                    children: [
+                      if (_dj.engineError != null) _errorBar(),
+                      Expanded(flex: 5, child: _waveDeck(0, SideDeckTheme.accentA)),
+                      Expanded(flex: 5, child: _waveDeck(1, SideDeckTheme.accentB)),
+                      if (_dj.externalMixer)
+                        _mixerBar()
+                      else
+                        Expanded(flex: 7, child: _mixerBar(expand: true)),
+                    ],
+                  ),
+                Positioned(
+                  top: 0,
+                  right: 4,
+                  child: IconButton(
+                    visualDensity: VisualDensity.compact,
+                    tooltip: _controllerMode ? 'Classic layout' : 'Controller layout',
+                    onPressed: () =>
+                        setState(() => _controllerMode = !_controllerMode),
+                    icon: Icon(
+                      _controllerMode ? Icons.view_agenda : Icons.album,
+                      size: 20,
+                    ),
+                  ),
+                ),
               ],
             ),
           ),

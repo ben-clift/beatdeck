@@ -1,0 +1,662 @@
+import 'dart:math' as math;
+
+import 'package:flutter/material.dart';
+import 'package:sidedeck/engine/music_utils.dart';
+import 'package:sidedeck/state/dj_controller.dart';
+import 'package:sidedeck/state/library_controller.dart';
+import 'package:sidedeck/theme/sidedeck_theme.dart';
+import 'package:sidedeck/ui/controller_widgets.dart';
+import 'package:sidedeck/ui/library_drawer.dart';
+
+const _deckColors = [
+  SideDeckTheme.accentA,
+  SideDeckTheme.accentB,
+  SideDeckTheme.accentC,
+  SideDeckTheme.accentD,
+];
+
+/// Hardware-style layout: two decks with a mixer between them.
+///
+/// Pages, left to right: library and sources, decks 1 and 2, decks 3 and 4.
+/// Swipe left or right to move between them.
+class ControllerView extends StatefulWidget {
+  const ControllerView({
+    super.key,
+    required this.dj,
+    required this.library,
+    this.onOpenSettings,
+  });
+
+  final DjController dj;
+  final LibraryController library;
+  final VoidCallback? onOpenSettings;
+
+  @override
+  State<ControllerView> createState() => _ControllerViewState();
+}
+
+class _ControllerViewState extends State<ControllerView> {
+  final _pages = PageController(initialPage: 1);
+  int _page = 1;
+
+  @override
+  void dispose() {
+    _pages.dispose();
+    super.dispose();
+  }
+
+  static const _titles = ['LIBRARY', 'DECKS 1 · 2', 'DECKS 3 · 4'];
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        SizedBox(
+          height: 26,
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              for (var i = 0; i < 3; i++)
+                GestureDetector(
+                  onTap: () => _pages.animateToPage(
+                    i,
+                    duration: const Duration(milliseconds: 250),
+                    curve: Curves.easeOut,
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 14),
+                    child: Text(
+                      _titles[i],
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 1,
+                        color: _page == i
+                            ? SideDeckTheme.text
+                            : SideDeckTheme.muted,
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+        Expanded(
+          child: PageView(
+            controller: _pages,
+            onPageChanged: (i) => setState(() => _page = i),
+            children: [
+              LibraryOverlay(
+                dj: widget.dj,
+                library: widget.library,
+                onOpenSettings: widget.onOpenSettings,
+                embedded: true,
+              ),
+              _DeckPair(dj: widget.dj, left: 0, right: 1),
+              _DeckPair(dj: widget.dj, left: 2, right: 3),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// Two decks and the mixer between them, drawn on a fixed canvas that scales
+/// to the screen.
+class _DeckPair extends StatelessWidget {
+  const _DeckPair({required this.dj, required this.left, required this.right});
+
+  final DjController dj;
+  final int left;
+  final int right;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListenableBuilder(
+      listenable: dj,
+      builder: (context, _) {
+        return FittedBox(
+          fit: BoxFit.contain,
+          child: SizedBox(
+            width: 920,
+            height: 400,
+            child: Row(
+              children: [
+                SizedBox(width: 340, child: _DeckPanel(dj: dj, index: left)),
+                SizedBox(
+                  width: 240,
+                  child: _MixerPanel(dj: dj, left: left, right: right),
+                ),
+                SizedBox(width: 340, child: _DeckPanel(dj: dj, index: right)),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+enum _PadMode { hotCue, loop, jump }
+
+class _DeckPanel extends StatefulWidget {
+  const _DeckPanel({required this.dj, required this.index});
+
+  final DjController dj;
+  final int index;
+
+  @override
+  State<_DeckPanel> createState() => _DeckPanelState();
+}
+
+class _DeckPanelState extends State<_DeckPanel> {
+  _PadMode _mode = _PadMode.hotCue;
+  static const _loopBars = [0.25, 0.5, 1.0, 2.0, 4.0, 8.0];
+  static const _jumpBeats = [-1, 1, -4, 4, -8, 8, -16, 16];
+  // Tempo fader range: plus or minus 8 percent.
+  static const _range = 0.08;
+
+  Color get _accent => _deckColors[widget.index];
+  DeckState get _d => widget.dj.deck(widget.index);
+
+  @override
+  Widget build(BuildContext context) {
+    final d = _d;
+    final i = widget.index;
+    final remaining = d.duration > d.position ? d.duration - d.position : 0.0;
+    final heard = d.bpm > 1 ? d.bpm * d.rate : 0.0;
+    return Container(
+      margin: const EdgeInsets.all(6),
+      padding: const EdgeInsets.all(8),
+      decoration: BoxDecoration(
+        color: const Color(0xFF14171D),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: _accent.withValues(alpha: 0.35)),
+      ),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 22,
+                height: 22,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: _accent,
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Text(
+                  '${i + 1}',
+                  style: const TextStyle(
+                    color: Colors.black,
+                    fontWeight: FontWeight.w900,
+                    fontSize: 13,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  d.loaded ? d.title : 'Empty',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Row(
+            children: [
+              Text(
+                heard > 0 ? heard.toStringAsFixed(1) : '--',
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w800,
+                  color: _accent,
+                ),
+              ),
+              const Text(' BPM  ',
+                  style: TextStyle(fontSize: 10, color: SideDeckTheme.muted)),
+              Text(
+                d.key >= 0 ? formatKey(d.key) : '',
+                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
+              ),
+              const Spacer(),
+              Text(
+                d.loaded ? '-${formatDuration(remaining)}' : '',
+                style: const TextStyle(fontSize: 13),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          _progress(d),
+          const SizedBox(height: 6),
+          Expanded(
+            child: Row(
+              children: [
+                Expanded(child: Center(child: _jog(d))),
+                _tempo(d),
+              ],
+            ),
+          ),
+          const SizedBox(height: 4),
+          _transport(d),
+          const SizedBox(height: 6),
+          _modeRow(),
+          const SizedBox(height: 4),
+          _pads(d),
+        ],
+      ),
+    );
+  }
+
+  Widget _progress(DeckState d) {
+    final frac = d.duration > 0 ? (d.position / d.duration).clamp(0.0, 1.0) : 0.0;
+    return LayoutBuilder(
+      builder: (context, c) {
+        return GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTapDown: (t) {
+            if (d.duration <= 0) return;
+            widget.dj.seekTo(
+              widget.index,
+              t.localPosition.dx / c.maxWidth * d.duration,
+            );
+          },
+          child: Container(
+            height: 10,
+            alignment: Alignment.centerLeft,
+            color: Colors.white10,
+            child: FractionallySizedBox(
+              widthFactor: frac.toDouble(),
+              child: Container(color: _accent),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _jog(DeckState d) {
+    const size = 150.0;
+    // 33 1/3 rpm look: one turn every 1.8 seconds of track.
+    final angle = d.position / 1.8 * 2 * math.pi;
+    return GestureDetector(
+      onPanUpdate: (u) {
+        if (!d.loaded) return;
+        final c = const Offset(size / 2, size / 2);
+        final p = u.localPosition - c;
+        final prev = p - u.delta;
+        var da = math.atan2(p.dy, p.dx) - math.atan2(prev.dy, prev.dx);
+        if (da > math.pi) da -= 2 * math.pi;
+        if (da < -math.pi) da += 2 * math.pi;
+        // Turning clockwise moves forward through the track.
+        widget.dj.seekTo(widget.index, d.position + da / (2 * math.pi) * 1.8);
+      },
+      child: CustomPaint(
+        size: const Size.square(size),
+        painter: _JogPainter(angle: angle, accent: _accent, playing: d.playing),
+      ),
+    );
+  }
+
+  Widget _tempo(DeckState d) {
+    final v = (0.5 + (d.rate - 1.0) / (2 * _range)).clamp(0.0, 1.0).toDouble();
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        const Text('+', style: TextStyle(fontSize: 10, color: SideDeckTheme.muted)),
+        ControllerFader(
+          value: v,
+          height: 116,
+          accent: _accent,
+          onChanged: (x) {
+            final snapped = (x - 0.5).abs() < 0.01 ? 0.5 : x;
+            widget.dj.setRate(widget.index, 1.0 + (snapped - 0.5) * 2 * _range);
+          },
+        ),
+        const Text('-', style: TextStyle(fontSize: 10, color: SideDeckTheme.muted)),
+        const SizedBox(height: 2),
+        _smallButton(
+          'KEY LOCK',
+          d.keylock,
+          () => widget.dj.toggleKeylock(widget.index),
+        ),
+      ],
+    );
+  }
+
+  Widget _smallButton(String label, bool on, VoidCallback onTap) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 3),
+        decoration: BoxDecoration(
+          color: on ? _accent : Colors.white10,
+          borderRadius: BorderRadius.circular(3),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 8,
+            fontWeight: FontWeight.w800,
+            color: on ? Colors.black : SideDeckTheme.muted,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _transport(DeckState d) {
+    Widget big(String label, VoidCallback onTap, {bool on = false}) {
+      return Expanded(
+        child: GestureDetector(
+          onTap: d.loaded ? onTap : null,
+          child: Container(
+            height: 38,
+            alignment: Alignment.center,
+            margin: const EdgeInsets.symmetric(horizontal: 3),
+            decoration: BoxDecoration(
+              color: on ? _accent : const Color(0xFF262B36),
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: Text(
+              label,
+              style: TextStyle(
+                fontWeight: FontWeight.w900,
+                fontSize: 13,
+                color: on ? Colors.black : SideDeckTheme.text,
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Row(
+      children: [
+        big('CUE', () => widget.dj.cue(widget.index)),
+        big(d.playing ? 'PAUSE' : 'PLAY', () => widget.dj.playPause(widget.index),
+            on: d.playing),
+        big('SYNC', () => widget.dj.sync(widget.index), on: d.synced),
+      ],
+    );
+  }
+
+  Widget _modeRow() {
+    Widget chip(String label, _PadMode m) {
+      final on = _mode == m;
+      return Expanded(
+        child: GestureDetector(
+          onTap: () => setState(() => _mode = m),
+          child: Container(
+            height: 20,
+            alignment: Alignment.center,
+            margin: const EdgeInsets.symmetric(horizontal: 2),
+            decoration: BoxDecoration(
+              color: on ? _accent.withValues(alpha: 0.3) : Colors.white10,
+              borderRadius: BorderRadius.circular(3),
+              border: Border.all(color: on ? _accent : Colors.transparent),
+            ),
+            child: Text(
+              label,
+              style: const TextStyle(fontSize: 9, fontWeight: FontWeight.w800),
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Row(
+      children: [
+        chip('HOT CUE', _PadMode.hotCue),
+        chip('LOOP', _PadMode.loop),
+        chip('JUMP', _PadMode.jump),
+      ],
+    );
+  }
+
+  Widget _pads(DeckState d) {
+    final pads = <Widget>[];
+    for (var k = 0; k < 8; k++) {
+      switch (_mode) {
+        case _PadMode.hotCue:
+          final set = d.hotcues[k] >= 0;
+          pads.add(_pad(
+            '${k + 1}',
+            set,
+            () => widget.dj.hotcue(widget.index, k),
+            onLong: set ? () => widget.dj.clearHotcue(widget.index, k) : null,
+          ));
+        case _PadMode.loop:
+          if (k < _loopBars.length) {
+            final bars = _loopBars[k];
+            final active = d.loopEnabled && d.loopBars == bars;
+            pads.add(_pad(
+              bars < 1 ? '1/${(1 / bars).round()}' : '${bars.round()}',
+              active,
+              () => widget.dj.setLoop(widget.index, !active, bars),
+            ));
+          } else if (k == 6) {
+            pads.add(_pad('½', false, () => widget.dj.halfLoop(widget.index)));
+          } else {
+            pads.add(_pad('×2', false, () => widget.dj.doubleLoop(widget.index)));
+          }
+        case _PadMode.jump:
+          final b = _jumpBeats[k];
+          pads.add(_pad(
+            b > 0 ? '+$b' : '$b',
+            false,
+            () => widget.dj.beatJump(widget.index, b),
+          ));
+      }
+    }
+    return SizedBox(
+      height: 76,
+      child: GridView.count(
+        crossAxisCount: 4,
+        childAspectRatio: 2.1,
+        mainAxisSpacing: 4,
+        crossAxisSpacing: 4,
+        physics: const NeverScrollableScrollPhysics(),
+        padding: EdgeInsets.zero,
+        children: pads,
+      ),
+    );
+  }
+
+  Widget _pad(String label, bool on, VoidCallback onTap, {VoidCallback? onLong}) {
+    return GestureDetector(
+      onTap: _d.loaded ? onTap : null,
+      onLongPress: onLong,
+      child: Container(
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: on ? _accent : const Color(0xFF232833),
+          borderRadius: BorderRadius.circular(5),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontWeight: FontWeight.w800,
+            fontSize: 12,
+            color: on ? Colors.black : SideDeckTheme.text,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _JogPainter extends CustomPainter {
+  _JogPainter({required this.angle, required this.accent, required this.playing});
+
+  final double angle;
+  final Color accent;
+  final bool playing;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final c = size.center(Offset.zero);
+    final r = size.width / 2;
+    canvas.drawCircle(c, r, Paint()..color = const Color(0xFF0B0D11));
+    canvas.drawCircle(
+      c,
+      r,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 3
+        ..color = playing ? accent : Colors.white24,
+    );
+    canvas.drawCircle(c, r - 12, Paint()..color = const Color(0xFF1B1F27));
+    canvas.save();
+    canvas.translate(c.dx, c.dy);
+    canvas.rotate(angle);
+    for (var k = 0; k < 24; k++) {
+      canvas.rotate(2 * math.pi / 24);
+      canvas.drawLine(
+        Offset(0, -(r - 16)),
+        Offset(0, -(r - 24)),
+        Paint()
+          ..color = Colors.white12
+          ..strokeWidth = 2,
+      );
+    }
+    canvas.drawLine(
+      Offset.zero,
+      Offset(0, -(r - 14)),
+      Paint()
+        ..color = accent
+        ..strokeWidth = 4
+        ..strokeCap = StrokeCap.round,
+    );
+    canvas.restore();
+    canvas.drawCircle(c, 8, Paint()..color = const Color(0xFF0B0D11));
+  }
+
+  @override
+  bool shouldRepaint(_JogPainter old) =>
+      old.angle != angle || old.playing != playing || old.accent != accent;
+}
+
+class _MixerPanel extends StatelessWidget {
+  const _MixerPanel({required this.dj, required this.left, required this.right});
+
+  final DjController dj;
+  final int left;
+  final int right;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 6),
+      padding: const EdgeInsets.all(6),
+      decoration: BoxDecoration(
+        color: const Color(0xFF101318),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Column(
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              ControllerKnob(
+                label: 'MASTER',
+                value: (dj.master / 1.5).clamp(0.0, 1.0).toDouble(),
+                center: 1.0 / 1.5,
+                accent: Colors.white70,
+                onChanged: (v) => dj.setMaster(v * 1.5),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Expanded(
+            child: Row(
+              children: [
+                Expanded(child: _channel(left)),
+                Expanded(child: _channel(right)),
+              ],
+            ),
+          ),
+          const SizedBox(height: 4),
+          const Text('CROSSFADER',
+              style: TextStyle(fontSize: 8, color: SideDeckTheme.muted)),
+          SliderTheme(
+            data: SliderTheme.of(context).copyWith(
+              trackHeight: 3,
+              thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 9),
+            ),
+            child: Slider(
+              value: dj.xfader.clamp(0.0, 1.0).toDouble(),
+              onChanged: dj.setXfader,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _channel(int i) {
+    final d = dj.deck(i);
+    final c = _deckColors[i];
+    // EQ knobs run -12 to +12 dB with the middle at 0.
+    double eqIn(double db) => ((db + 12) / 24).clamp(0.0, 1.0).toDouble();
+    double eqOut(double v) => v * 24 - 12;
+    return Column(
+      children: [
+        ControllerKnob(
+          label: 'TRIM',
+          size: 34,
+          accent: c,
+          value: (d.gain / 2).clamp(0.0, 1.0).toDouble(),
+          center: 0.5,
+          onChanged: (v) => dj.setGain(i, v * 2),
+        ),
+        ControllerKnob(
+          label: 'HI',
+          size: 34,
+          accent: c,
+          value: eqIn(d.eqHigh),
+          onChanged: (v) => dj.setEq(i, high: eqOut(v)),
+        ),
+        ControllerKnob(
+          label: 'MID',
+          size: 34,
+          accent: c,
+          value: eqIn(d.eqMid),
+          onChanged: (v) => dj.setEq(i, mid: eqOut(v)),
+        ),
+        ControllerKnob(
+          label: 'LOW',
+          size: 34,
+          accent: c,
+          value: eqIn(d.eqLow),
+          onChanged: (v) => dj.setEq(i, low: eqOut(v)),
+        ),
+        ControllerKnob(
+          label: 'FILTER',
+          size: 34,
+          accent: c,
+          value: ((d.filter + 1) / 2).clamp(0.0, 1.0).toDouble(),
+          onChanged: (v) => dj.setFilter(i, v * 2 - 1),
+        ),
+        const SizedBox(height: 2),
+        Expanded(
+          child: Center(
+            child: ControllerFader(
+              value: d.fader.clamp(0.0, 1.0).toDouble(),
+              height: 90,
+              accent: c,
+              onChanged: (v) => dj.setFader(i, v),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
