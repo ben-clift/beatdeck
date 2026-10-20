@@ -241,7 +241,12 @@ class _ControllerViewState extends State<ControllerView> {
     }
   }
 
-  static const _titles = ['LIBRARY', 'DECKS 1 · 2', 'DECKS 3 · 4', 'EQUALISER'];
+  List<String> get _titles => [
+        'LIBRARY',
+        'DECKS 1 · 2',
+        if (widget.dj.showDecks34) 'DECKS 3 · 4',
+        'EQUALISER',
+      ];
 
   @override
   Widget build(BuildContext context) {
@@ -378,7 +383,8 @@ class _ControllerViewState extends State<ControllerView> {
                 embedded: true,
               ),
               _DeckPair(dj: widget.dj, library: widget.library, left: 0, right: 1),
-              _DeckPair(dj: widget.dj, library: widget.library, left: 2, right: 3),
+              if (widget.dj.showDecks34)
+                _DeckPair(dj: widget.dj, library: widget.library, left: 2, right: 3),
               EqualiserView(dj: widget.dj),
             ],
           ),

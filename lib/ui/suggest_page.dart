@@ -39,7 +39,7 @@ class _SuggestPageState extends State<SuggestPage> {
   void initState() {
     super.initState();
     final dj = widget.dj;
-    for (var i = 0; i < DjController.deckCount; i++) {
+    for (var i = 0; i < widget.dj.visibleDecks; i++) {
       if (dj.deck(i).loaded && dj.deck(i).playing) {
         _deck = i;
         break;
@@ -149,7 +149,7 @@ class _SuggestPageState extends State<SuggestPage> {
               Wrap(
                 spacing: 8,
                 children: [
-                  for (var i = 0; i < DjController.deckCount; i++)
+                  for (var i = 0; i < widget.dj.visibleDecks; i++)
                     if (widget.dj.deck(i).loaded)
                       ChoiceChip(
                         label: Text('Deck ${i + 1}'),

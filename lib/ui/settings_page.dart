@@ -104,6 +104,20 @@ class _SettingsPageState extends State<SettingsPage> {
             },
           ),
           const Divider(height: 32),
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            title: const Text('Show decks 3 and 4'),
+            subtitle: const Text(
+              'Off by default. Decks 1 and 2 are the main pair and the only ones '
+              'automix uses.',
+            ),
+            value: widget.dj.showDecks34,
+            onChanged: (v) async {
+              await widget.dj.setShowDecks34(v);
+              if (mounted) setState(() {});
+            },
+          ),
+          const Divider(height: 32),
           const Text(
             'Subsonic server',
             style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),

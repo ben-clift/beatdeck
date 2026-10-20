@@ -44,6 +44,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     LookController.instance.load();
     _dj = DjController();
     _library = LibraryController();
+    SlskSetup.dj = _dj;
     SlskSetup.load().then((_) => SlskSetup.wire(_library));
     SlskSetup.wire(_library);
     _dj.addListener(_onDjChanged);

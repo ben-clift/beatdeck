@@ -777,7 +777,7 @@ class _LibraryOverlayState extends State<LibraryOverlay> {
           key: t.key,
           durationSec: t.durationMs / 1000.0,
           actions: [
-            for (var k = 0; k < DjController.deckCount; k++) ...[
+            for (var k = 0; k < widget.dj.visibleDecks; k++) ...[
               if (k > 0) const SizedBox(width: 6),
               _deckBtn('ABCD'[k], busy ? null : () => _loadLocal(t, k),
                   loadingThis && widget.dj.loadingDeck == k),
@@ -944,7 +944,7 @@ class _LibraryOverlayState extends State<LibraryOverlay> {
           key: meta?.key,
           durationSec: t.duration.toDouble(),
           actions: [
-            for (var k = 0; k < DjController.deckCount; k++) ...[
+            for (var k = 0; k < widget.dj.visibleDecks; k++) ...[
               if (k > 0) const SizedBox(width: 6),
               _deckBtn('ABCD'[k], busy ? null : () => _loadRemote(t, k)),
             ],

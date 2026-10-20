@@ -4,10 +4,14 @@ import 'package:file_picker/file_picker.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sidedeck/soulseek/soulseek_client.dart';
+import 'package:sidedeck/state/dj_controller.dart';
 import 'package:sidedeck/state/library_controller.dart';
 
 /// Where Soulseek downloads go, and what happens when one finishes.
 class SlskSetup {
+  /// Set at start-up so finished downloads can join a running automix.
+  static DjController? dj;
+
   /// Folder the user picked, if any.
   static String? chosen;
 
@@ -40,7 +44,10 @@ class SlskSetup {
   /// saved, and is analysed for tempo and key.
   static void wire(LibraryController lib) {
     soulseek.downloadDir = () => dirFor(lib);
-    soulseek.onFileSaved = (path) => lib.addFile(path);
+    soulseek.onFileSaved = (path) {
+      lib.addFile(path);
+      dj?.automixAppend(path);
+    };
   }
 
   static Future<bool> choose(LibraryController lib) async {

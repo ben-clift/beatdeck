@@ -62,6 +62,7 @@ class DjController extends ChangeNotifier {
       engineError = 'Audio engine failed to start.';
     }
     restoreSamples();
+    loadDeckSetting();
     if (Platform.isAndroid) {
       _usbSub = UsbOutput.events().listen(_onUsbEvent);
     }
@@ -378,6 +379,37 @@ class DjController extends ChangeNotifier {
     }
     if (_automixTick()) dirty = true;
     if (dirty) notifyListeners();
+  }
+
+  // ---- Decks 3 and 4 are hidden unless switched on in settings.
+  bool showDecks34 = false;
+
+  /// How many decks the screens offer.
+  int get visibleDecks => showDecks34 ? 4 : 2;
+
+  Future<void> loadDeckSetting() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      showDecks34 = prefs.getBool('show_decks_34') ?? false;
+      notifyListeners();
+    } catch (_) {}
+  }
+
+  Future<void> setShowDecks34(bool v) async {
+    showDecks34 = v;
+    notifyListeners();
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('show_decks_34', v);
+    } catch (_) {}
+  }
+
+  /// A new track (for example a finished Soulseek download) joins the end of
+  /// the automix queue if automix is running.
+  void automixAppend(String path) {
+    if (!automixOn || _automixQueue.contains(path)) return;
+    _automixQueue.add(path);
+    notifyListeners();
   }
 
   // ---- Automix -----------------------------------------------------------
