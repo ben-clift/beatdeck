@@ -113,6 +113,29 @@ class LibraryController extends ChangeNotifier {
     _emit();
   }
 
+  /// Number of tracks the last [refresh] found.
+  int lastRefreshAdded = 0;
+
+  /// Looks again in the saved folder (for example after Seeker downloaded
+  /// something) and adds new files. Quiet: no loading spinner unless it
+  /// finds something.
+  Future<int> refresh() async {
+    final dir = folderPath;
+    if (dir == null || dir.isEmpty || loading) return 0;
+    final before = tracks.length;
+    try {
+      await scanDirectory(dir, persist: false);
+    } catch (e) {
+      error = e.toString();
+    }
+    lastRefreshAdded = tracks.length - before;
+    if (lastRefreshAdded > 0) {
+      await _persist();
+      _emit();
+    }
+    return lastRefreshAdded;
+  }
+
   Future<void> _persist() async {
     final prefs = await SharedPreferences.getInstance();
     if (folderPath != null) {

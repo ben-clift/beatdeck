@@ -19,7 +19,7 @@ class HomePage extends StatefulWidget {
   State<HomePage> createState() => _HomePageState();
 }
 
-class _HomePageState extends State<HomePage> {
+class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   late final DjController _dj;
   late final LibraryController _library;
   bool _controllerMode = true;
@@ -35,13 +35,23 @@ class _HomePageState extends State<HomePage> {
       DeviceOrientation.landscapeRight,
     ]);
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+    WidgetsBinding.instance.addObserver(this);
     _dj = DjController();
     _library = LibraryController();
     _dj.addListener(_onDjChanged);
   }
 
   @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Coming back from Seeker: pick up files it just downloaded.
+    if (state == AppLifecycleState.resumed) {
+      _library.refresh();
+    }
+  }
+
+  @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _dj.removeListener(_onDjChanged);
     _dj.dispose();
     _library.dispose();

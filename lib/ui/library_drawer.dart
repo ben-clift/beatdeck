@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:path/path.dart' as p;
 import 'package:sidedeck/engine/analysis_cache.dart';
+import 'package:sidedeck/engine/app_launcher.dart';
 import 'package:sidedeck/engine/music_utils.dart';
 import 'package:sidedeck/engine/track_analyzer.dart';
 import 'package:sidedeck/state/dj_controller.dart';
@@ -392,6 +393,36 @@ class _LibraryOverlayState extends State<LibraryOverlay> {
                           ),
                         ],
                       ),
+                    IconButton(
+                      tooltip: 'Rescan folder',
+                      visualDensity: VisualDensity.compact,
+                      onPressed: lib.loading || lib.analyzing
+                          ? null
+                          : () async {
+                              final messenger = ScaffoldMessenger.of(context);
+                              final n = await lib.refresh();
+                              messenger.showSnackBar(SnackBar(
+                                content: Text(n > 0
+                                    ? 'Added $n new track${n == 1 ? '' : 's'}'
+                                    : 'No new tracks'),
+                              ));
+                            },
+                      icon: const Icon(Icons.refresh, size: 22),
+                    ),
+                    IconButton(
+                      tooltip: 'Open Seeker (Soulseek)',
+                      visualDensity: VisualDensity.compact,
+                      onPressed: () async {
+                        final messenger = ScaffoldMessenger.of(context);
+                        final ok = await AppLauncher.openByName('Seeker');
+                        if (!ok) {
+                          messenger.showSnackBar(const SnackBar(
+                            content: Text('Seeker is not installed on this phone'),
+                          ));
+                        }
+                      },
+                      icon: const Icon(Icons.cloud_download, size: 22),
+                    ),
                     IconButton(
                       tooltip: 'Pick files',
                       visualDensity: VisualDensity.compact,

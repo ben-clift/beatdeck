@@ -1,6 +1,7 @@
 package es.manifold.sidedeck
 
 import android.content.Context
+import android.content.Intent
 import android.media.AudioDeviceInfo
 import android.media.AudioManager
 import android.os.Build
@@ -49,6 +50,10 @@ class MainActivity : FlutterActivity() {
                         val channels = call.argument<Int>("channels") ?: 4
                         result.success(UsbPlayer.start(this, handle, deviceId, channels))
                     }
+                    "openAppByName" -> {
+                        val name = call.argument<String>("name") ?: ""
+                        result.success(openAppByName(name))
+                    }
                     "stopUsbPlayback" -> {
                         UsbPlayer.stop()
                         result.success(null)
@@ -66,6 +71,21 @@ class MainActivity : FlutterActivity() {
         usbHotplug = null
         UsbPlayer.stop()
         super.onDestroy()
+    }
+
+    /** Opens an installed app whose launcher name matches [name] (case-insensitive). */
+    private fun openAppByName(name: String): Boolean {
+        if (name.isBlank()) return false
+        val pm = packageManager
+        val main = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
+        val apps = pm.queryIntentActivities(main, 0)
+        val hit = apps.firstOrNull { it.loadLabel(pm).toString().equals(name, ignoreCase = true) }
+            ?: apps.firstOrNull { it.loadLabel(pm).toString().contains(name, ignoreCase = true) }
+            ?: return false
+        val launch = pm.getLaunchIntentForPackage(hit.activityInfo.packageName) ?: return false
+        launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        startActivity(launch)
+        return true
     }
 
     /** Android 14+ reports the configurations a USB output stream can be opened with. */
