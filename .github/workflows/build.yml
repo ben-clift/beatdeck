@@ -8,6 +8,8 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     env:
       PUB_CACHE: ${{ github.workspace }}/.pub-cache
     steps:
@@ -77,3 +79,16 @@ jobs:
           name: beatdeck-debug-apk
           path: build/app/outputs/flutter-apk/app-debug.apk
           if-no-files-found: error
+
+      # Also publish the newest APK on the Releases page, which is easy to
+      # find on a phone.
+      - name: Publish latest APK as a release
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cp build/app/outputs/flutter-apk/app-debug.apk BeatDeck.apk
+          gh release delete latest --cleanup-tag --yes || true
+          gh release create latest BeatDeck.apk --prerelease \
+            --title "Latest build ($(git rev-parse --short HEAD))" \
+            --notes "Newest BeatDeck debug build. Tap BeatDeck.apk to download."
