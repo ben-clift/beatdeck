@@ -7,6 +7,7 @@ import 'package:sidedeck/engine/analysis_cache.dart';
 import 'package:sidedeck/engine/native_engine.dart';
 import 'package:sidedeck/engine/track_analyzer.dart';
 import 'package:sidedeck/engine/usb_output.dart';
+import 'package:sidedeck/state/automix_math.dart';
 
 class DeckState {
   String? path;
@@ -138,7 +139,185 @@ class DjController extends ChangeNotifier {
       }
       dirty = true;
     }
+    if (_automixTick()) dirty = true;
     if (dirty) notifyListeners();
+  }
+
+  // ---- Automix -----------------------------------------------------------
+  // Plays a list of tracks one after another. Shortly before the playing deck
+  // ends, the next track is loaded on the other deck, matched to the same
+  // tempo, started on the same point in the beat, and crossfaded in.
+
+  bool automixOn = false;
+  double automixFadeSeconds = 12;
+  String? automixStatus;
+  List<String> _automixQueue = [];
+  int _automixIndex = -1; // queue index of the track on the current deck
+  int _automixDeck = -1; // deck playing that track
+  int _automixNextTarget = -1;
+  bool _automixBusy = false;
+  bool _automixPreloaded = false;
+  bool _automixFading = false;
+  DateTime _automixFadeStart = DateTime.fromMillisecondsSinceEpoch(0);
+  double _automixFadeFrom = 0;
+
+  int get automixQueueLength => _automixQueue.length;
+  int get automixIndex => _automixIndex;
+
+  Future<void> startAutomix(
+    List<String> paths, {
+    double fadeSeconds = 12,
+  }) async {
+    if (paths.isEmpty) return;
+    stopAutomix();
+    _automixQueue = List<String>.of(paths);
+    automixFadeSeconds = fadeSeconds.clamp(2.0, 30.0).toDouble();
+    automixOn = true;
+    automixStatus = 'Loading first track';
+    _automixBusy = true;
+    notifyListeners();
+    final ok = await loadFile(0, _automixQueue.first);
+    _automixBusy = false;
+    if (!automixOn) return; // stopped while loading
+    if (!ok) {
+      automixOn = false;
+      automixStatus = 'Could not load the first track';
+      notifyListeners();
+      return;
+    }
+    if (deckB.playing) {
+      _engine.play(1, false);
+      deckB.playing = false;
+    }
+    setXfader(0.0);
+    _engine.play(0, true);
+    deckA.playing = true;
+    _automixDeck = 0;
+    _automixIndex = 0;
+    _automixPreloaded = false;
+    _automixFading = false;
+    automixStatus = null;
+    notifyListeners();
+  }
+
+  void stopAutomix() {
+    final wasOn = automixOn;
+    automixOn = false;
+    _automixFading = false;
+    _automixPreloaded = false;
+    _automixDeck = -1;
+    _automixIndex = -1;
+    if (wasOn) {
+      automixStatus = null;
+      notifyListeners();
+    }
+  }
+
+  /// Returns true if something on screen changed.
+  bool _automixTick() {
+    if (!automixOn || _automixBusy || _automixDeck < 0) return false;
+    if (_automixFading) {
+      _automixAdvanceFade();
+      return true;
+    }
+    final cur = _automixDeck;
+    final other = 1 - cur;
+    final d = deck(cur);
+    if (!d.loaded || !d.playing) return false; // paused by the DJ: wait
+    final remaining = remainingSeconds(
+      position: d.position,
+      duration: d.duration,
+      rate: d.rate,
+    );
+    final next = nextIndex(
+      current: _automixIndex,
+      length: _automixQueue.length,
+    );
+    if (next == null) {
+      if (remaining <= 0.5) {
+        automixOn = false;
+        automixStatus = 'Automix finished';
+        return true;
+      }
+      return false;
+    }
+    if (!_automixPreloaded) {
+      if (shouldPreload(remaining: remaining, fadeSeconds: automixFadeSeconds)) {
+        _automixBusy = true;
+        final path = _automixQueue[next];
+        loadFile(other, path).then((ok) {
+          _automixBusy = false;
+          if (!automixOn) return;
+          if (ok) {
+            _automixPreloaded = true;
+          } else {
+            // Skip a track that will not load.
+            _automixQueue.removeAt(next);
+            automixStatus = 'Skipped a track that would not load';
+          }
+          notifyListeners();
+        });
+      }
+      return false;
+    }
+    if (shouldStartFade(remaining: remaining, fadeSeconds: automixFadeSeconds)) {
+      _automixBeginFade(cur, other, next);
+      return true;
+    }
+    return false;
+  }
+
+  void _automixBeginFade(int cur, int other, int next) {
+    final out = deck(cur);
+    final inc = deck(other);
+    final outPosition = _engine.position(cur);
+    inc.rate = incomingRate(
+      outBpm: out.bpm,
+      outRate: out.rate,
+      inBpm: inc.bpm,
+    );
+    inc.synced = false;
+    _applyRate(other);
+    final start = incomingStartPosition(
+      outPosition: outPosition,
+      outBpm: out.bpm,
+      outBeatOffset: out.beatOffset,
+      inBpm: inc.bpm,
+      inBeatOffset: inc.beatOffset,
+    ).clamp(0.0, math.max(0.0, inc.duration)).toDouble();
+    _engine.seek(other, start);
+    inc.position = start;
+    _automixFadeFrom = crossfaderEndFor(cur);
+    xfader = _automixFadeFrom;
+    _engine.setXfader(xfader);
+    _engine.play(other, true);
+    inc.playing = true;
+    _automixFadeStart = DateTime.now();
+    _automixNextTarget = next;
+    _automixFading = true;
+    automixStatus = null;
+  }
+
+  void _automixAdvanceFade() {
+    final cur = _automixDeck;
+    final other = 1 - cur;
+    final elapsed =
+        DateTime.now().difference(_automixFadeStart).inMilliseconds / 1000.0;
+    xfader = crossfaderAt(
+      elapsed: elapsed,
+      fadeSeconds: automixFadeSeconds,
+      from: _automixFadeFrom,
+      to: crossfaderEndFor(other),
+    );
+    _engine.setXfader(xfader);
+    if (elapsed >= automixFadeSeconds) {
+      _engine.play(cur, false);
+      deck(cur).playing = false;
+      _automixDeck = other;
+      _automixIndex = _automixNextTarget;
+      _automixPreloaded = false;
+      _automixFading = false;
+    }
   }
 
   Future<bool> loadFile(
