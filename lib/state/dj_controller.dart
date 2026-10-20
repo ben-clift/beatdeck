@@ -487,6 +487,7 @@ class DjController extends ChangeNotifier {
     d.beatOffset = _engine.beatOffset(deckIndex);
     d.rate = 1;
     d.synced = false;
+    if (masterDeck == deckIndex) _followMasterBpm(deckIndex);
     d.hotcues.fillRange(0, d.hotcues.length, -1.0);
     d.loopEnabled = false;
     d.loopStart = 0;
@@ -549,6 +550,8 @@ class DjController extends ChangeNotifier {
     final next = !d.playing;
     _engine.play(deckIndex, next);
     d.playing = next;
+    // A synced deck finds the master's beat again every time it starts.
+    if (next && d.synced) _alignPhase(deckIndex);
     notifyListeners();
   }
 
@@ -682,8 +685,8 @@ class DjController extends ChangeNotifier {
   final List<double> _nudgeBend = [0, 0, 0, 0]; // temporary pitch bend while held
   final List<Timer?> _nudgeHold = [null, null, null, null];
 
-  /// Deck that SYNC follows: 1<->2 and 3<->4.
-  int _partner(int i) => i ^ 1;
+  /// The one deck every synced deck follows, or -1 when there is none.
+  int masterDeck = -1;
 
   void _applyRate(int deckIndex) {
     final d = deck(deckIndex);
@@ -797,16 +800,88 @@ class DjController extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Match [slave] tempo to the other deck and keep following its BPM.
-  /// Does not move the playhead. Press SYNC on the deck you want to change.
-  void sync(int slave) {
-    final masterIdx = _partner(slave);
-    if (!deck(slave).loaded || !deck(masterIdx).loaded) return;
-    _nudgeBend[slave] = 0;
-    deck(slave).synced = true;
-    deck(masterIdx).synced = false;
-    _applySlaveTempo(slave);
+  /// MASTER button: make this deck the tempo and beat reference. Only one
+  /// deck can be master. Pressing it again on the master clears it.
+  void setMasterDeck(int deckIndex) {
+    final d = deck(deckIndex);
+    if (!d.loaded) return;
+    if (masterDeck == deckIndex) {
+      masterDeck = -1;
+      notifyListeners();
+      return;
+    }
+    masterDeck = deckIndex;
+    d.synced = false;
+    _followMasterBpm(deckIndex);
     notifyListeners();
+  }
+
+  /// SYNC button: follow the master. Matches the tempo and moves the playhead
+  /// onto the master's beat. A paused deck finds the beat when it starts.
+  /// With no master chosen yet, the playing deck (else the first loaded deck)
+  /// becomes master.
+  void sync(int deckIndex) {
+    final d = deck(deckIndex);
+    if (!d.loaded || masterDeck == deckIndex) return;
+    if (masterDeck < 0 || !deck(masterDeck).loaded) {
+      final pick = _pickMaster(deckIndex);
+      if (pick < 0) return;
+      masterDeck = pick;
+      deck(pick).synced = false;
+    }
+    _nudgeBend[deckIndex] = 0;
+    d.synced = true;
+    _applySlaveTempo(deckIndex);
+    if (d.playing) _alignPhase(deckIndex);
+    notifyListeners();
+  }
+
+  /// Long press on SYNC: stop following the master.
+  void unsync(int deckIndex) {
+    deck(deckIndex).synced = false;
+    notifyListeners();
+  }
+
+  int _pickMaster(int except) {
+    var fallback = -1;
+    for (var i = 0; i < deckCount; i++) {
+      if (i == except || !deck(i).loaded) continue;
+      if (deck(i).playing) return i;
+      if (fallback < 0) fallback = i;
+    }
+    return fallback;
+  }
+
+  /// Move [deckIndex] by less than half a beat so its beats fall exactly on
+  /// the master's beats. Does nothing unless the master is playing.
+  void _alignPhase(int deckIndex) {
+    final m = masterDeck;
+    if (m < 0 || m == deckIndex) return;
+    final d = deck(deckIndex);
+    final md = deck(m);
+    if (!d.loaded || !md.loaded || !md.playing) return;
+    if (d.bpm <= 1 || md.bpm <= 1) return;
+    final posM = _engine.position(m);
+    final posF = _engine.position(deckIndex);
+    final pm = beatPhase(
+      position: posM,
+      bpm: md.bpm,
+      beatOffset: md.beatOffset,
+    );
+    final pf = beatPhase(
+      position: posF,
+      bpm: d.bpm,
+      beatOffset: d.beatOffset,
+    );
+    var delta = pm - pf;
+    if (delta > 0.5) delta -= 1;
+    if (delta < -0.5) delta += 1;
+    final target = (posF + delta * 60.0 / d.bpm)
+        .clamp(0.0, math.max(0.0, d.duration))
+        .toDouble();
+    _engine.seek(deckIndex, target);
+    d.position = target;
+    _readLoop(deckIndex);
   }
 
   double _tempoMatchRate(DeckState slave, DeckState master) {
@@ -816,17 +891,19 @@ class DjController extends ChangeNotifier {
 
   void _applySlaveTempo(int slave) {
     final d = deck(slave);
-    final master = deck(_partner(slave));
+    if (masterDeck < 0 || masterDeck == slave) return;
+    final master = deck(masterDeck);
     if (!d.loaded || !master.loaded) return;
     d.rate = _tempoMatchRate(d, master);
     _applyRate(slave);
   }
 
-  /// If [deckIndex] is the master of a synced slave, keep that slave matched.
+  /// If [deckIndex] is the master, keep every synced deck matched to it.
   void _followMasterBpm(int deckIndex) {
-    final slave = _partner(deckIndex);
-    if (!deck(slave).synced) return;
-    _applySlaveTempo(slave);
+    if (deckIndex != masterDeck) return;
+    for (var i = 0; i < deckCount; i++) {
+      if (i != deckIndex && deck(i).synced) _applySlaveTempo(i);
+    }
   }
 
   /// Change the beat-grid tempo only. The audio keeps its speed.

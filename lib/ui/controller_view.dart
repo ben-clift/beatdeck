@@ -506,12 +506,60 @@ class _DeckPanelState extends State<_DeckPanel> {
       );
     }
 
+    Widget syncButton(
+      String label,
+      VoidCallback onTap, {
+      bool on = false,
+      VoidCallback? onLong,
+      bool small = false,
+    }) {
+      return Expanded(
+        child: GestureDetector(
+          onTap: d.loaded ? onTap : null,
+          onLongPress: d.loaded ? onLong : null,
+          child: Container(
+            height: 46,
+            alignment: Alignment.center,
+            margin: const EdgeInsets.symmetric(horizontal: 3),
+            color: on ? (small ? Colors.white : _accent) : look.control,
+            child: Text(
+              label,
+              style: TextStyle(
+                fontWeight: FontWeight.w800,
+                fontSize: small ? 11 : 15,
+                letterSpacing: 1,
+                color: on ? SideDeckTheme.bg : SideDeckTheme.text,
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
     return Row(
       children: [
         big('CUE', () => widget.dj.cue(widget.index)),
         big(d.playing ? 'PAUSE' : 'PLAY', () => widget.dj.playPause(widget.index),
             on: d.playing),
-        big('SYNC', () => widget.dj.sync(widget.index), on: d.synced),
+        Expanded(
+          flex: 2,
+          child: Row(
+            children: [
+              syncButton(
+                'SYNC',
+                () => widget.dj.sync(widget.index),
+                on: d.synced,
+                onLong: () => widget.dj.unsync(widget.index),
+              ),
+              syncButton(
+                'MASTER',
+                () => widget.dj.setMasterDeck(widget.index),
+                on: widget.dj.masterDeck == widget.index,
+                small: true,
+              ),
+            ],
+          ),
+        ),
       ],
     );
   }
