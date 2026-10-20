@@ -6,6 +6,7 @@ import 'package:sidedeck/state/dj_controller.dart';
 import 'package:sidedeck/state/library_controller.dart';
 import 'package:sidedeck/state/look_controller.dart';
 import 'package:sidedeck/theme/sidedeck_theme.dart';
+import 'package:sidedeck/ui/automix_chip.dart';
 import 'package:sidedeck/ui/controller_widgets.dart';
 import 'package:sidedeck/ui/equaliser_view.dart';
 import 'package:sidedeck/ui/library_drawer.dart';
@@ -50,7 +51,15 @@ class _ControllerViewState extends State<ControllerView> {
       children: [
         SizedBox(
           height: 26,
-          child: Row(
+          child: Stack(
+            children: [
+              Positioned(
+                left: 8,
+                top: 0,
+                bottom: 0,
+                child: Center(child: AutomixChip(dj: widget.dj)),
+              ),
+              Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               for (var i = 0; i < _titles.length; i++)
@@ -77,6 +86,8 @@ class _ControllerViewState extends State<ControllerView> {
                     ),
                   ),
                 ),
+            ],
+          ),
             ],
           ),
         ),
