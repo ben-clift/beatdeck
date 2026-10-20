@@ -171,6 +171,68 @@ class _LibraryOverlayState extends State<LibraryOverlay> {
     }
   }
 
+  Future<void> _duplicates(LibraryController lib) async {
+    final extras = lib.duplicateTracks();
+    if (extras.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No duplicate tracks found')),
+      );
+      return;
+    }
+    var bytes = 0;
+    for (final t in extras) {
+      try {
+        bytes += File(t.path).lengthSync();
+      } catch (_) {}
+    }
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('Delete ${extras.length} duplicate '
+            '${extras.length == 1 ? 'file' : 'files'}?'),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Frees about ${(bytes / 1048576).toStringAsFixed(0)} MB. '
+                  'The best copy of each song is kept (analysed first, then the '
+                  'largest). These are deleted from the phone:'),
+              const SizedBox(height: 8),
+              Flexible(
+                child: ListView(
+                  shrinkWrap: true,
+                  children: [
+                    for (final t in extras)
+                      Text(t.path.split(RegExp(r'[\\/]')).last,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(fontSize: 12)),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Delete')),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    final n = await lib.deleteTracks(extras);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(n == extras.length
+            ? 'Deleted $n duplicate ${n == 1 ? 'file' : 'files'}'
+            : 'Deleted $n of ${extras.length}. The phone refused the rest.'),
+      ),
+    );
+  }
+
   Future<void> _loadRemote(SubsonicTrack track, int deck) async {
     if (_client == null) return;
     setState(() {
@@ -422,6 +484,12 @@ class _LibraryOverlayState extends State<LibraryOverlay> {
                         ),
                       ),
                       icon: const Icon(Icons.playlist_add_check, size: 22),
+                    ),
+                    IconButton(
+                      tooltip: 'Find and delete duplicate tracks',
+                      visualDensity: VisualDensity.compact,
+                      onPressed: () => _duplicates(lib),
+                      icon: const Icon(Icons.content_copy, size: 22),
                     ),
                     IconButton(
                       tooltip: 'Suggest what mixes with the playing track',

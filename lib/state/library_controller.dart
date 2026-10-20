@@ -227,10 +227,81 @@ class LibraryController extends ChangeNotifier {
     _emit();
   }
 
+  /// Same song under different file names: ignores case, the extension and a
+  /// trailing "(1)" style copy marker.
+  static String dupKey(String path) {
+    var name = p.basenameWithoutExtension(path);
+    name = name.replaceFirst(RegExp(r'\s*\(\d+\)$'), '');
+    return name.toLowerCase().trim();
+  }
+
+  bool _sameLength(int a, int b) => a <= 0 || b <= 0 || (a - b).abs() < 3000;
+
+  /// The extra copies: for each song found more than once, every file except
+  /// the best one (analysed first, then the largest).
+  List<LibraryTrack> duplicateTracks() {
+    final groups = <String, List<LibraryTrack>>{};
+    for (final t in tracks) {
+      groups.putIfAbsent(dupKey(t.path), () => []).add(t);
+    }
+    final extras = <LibraryTrack>[];
+    for (final g in groups.values) {
+      if (g.length < 2) continue;
+      // Split into runs of the same length so different mixes with one name stay.
+      final remaining = List<LibraryTrack>.of(g);
+      while (remaining.isNotEmpty) {
+        final first = remaining.removeAt(0);
+        final same = [first, ...remaining.where((t) => _sameLength(first.durationMs, t.durationMs))];
+        remaining.removeWhere((t) => same.contains(t));
+        if (same.length < 2) continue;
+        int size(LibraryTrack t) {
+          try {
+            return File(t.path).lengthSync();
+          } catch (_) {
+            return 0;
+          }
+        }
+        same.sort((a, b) {
+          if (a.hasAnalysis != b.hasAnalysis) return a.hasAnalysis ? -1 : 1;
+          return size(b).compareTo(size(a));
+        });
+        extras.addAll(same.skip(1));
+      }
+    }
+    return extras;
+  }
+
+  /// Deletes the given files from the phone and the library. Returns how many
+  /// could be deleted.
+  Future<int> deleteTracks(List<LibraryTrack> list) async {
+    var done = 0;
+    for (final t in list) {
+      try {
+        await File(t.path).delete();
+        tracks.removeWhere((x) => x.path == t.path);
+        done++;
+      } catch (_) {}
+    }
+    await _persist();
+    _emit();
+    return done;
+  }
+
   /// Adds one finished download (or any file) to the library at once, keeps
   /// it across restarts and works out its tempo and key.
   Future<void> addFile(String path) async {
     if (!isNativeAudioExtension(p.extension(path))) return;
+    // A copy of a track already in the library is not kept.
+    final key = dupKey(path);
+    final ms = (fileDurationSec(path) * 1000).round();
+    final have = tracks.any((t) =>
+        t.path != path && dupKey(t.path) == key && _sameLength(t.durationMs, ms));
+    if (have) {
+      try {
+        await File(path).delete();
+      } catch (_) {}
+      return;
+    }
     await _addPath(path);
     await _persist();
     _emit();
