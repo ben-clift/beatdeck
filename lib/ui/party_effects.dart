@@ -1,4 +1,5 @@
 import 'dart:math' as math;
+import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
@@ -418,11 +419,11 @@ class _EffectsPainter extends CustomPainter {
           canvas.drawPath(
             path,
             Paint()
-              ..shader = LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [f.color.withValues(alpha: a * 0.8), f.color.withValues(alpha: 0)],
-              ).createShader(Rect.fromPoints(origin, (tip1 + tip2) / 2)),
+              ..shader = ui.Gradient.linear(
+                origin,
+                (tip1 + tip2) / 2,
+                [f.color.withValues(alpha: a * 0.8), f.color.withValues(alpha: 0)],
+              ),
           );
       }
     }
