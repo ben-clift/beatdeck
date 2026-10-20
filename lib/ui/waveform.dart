@@ -17,7 +17,7 @@ class WaveformPainter extends CustomPainter {
     this.loopEnabled = false,
     this.loopStart = 0,
     this.loopEnd = 0,
-    this.zoomWindowSec = 8,
+    this.zoomWindowSec = 6,
     this.showJumpZone = false,
   });
 
@@ -66,17 +66,19 @@ class WaveformPainter extends CustomPainter {
 
     double xForTime(double t) => ((t - viewStart) / viewDur) * size.width;
 
-    for (var px = 0.0; px < size.width; px++) {
-      final t0 = (px / size.width) * duration;
-      final t1 = ((px + 1) / size.width) * duration;
-      final amp = _peakInRange(t0, t1, n, duration, peak);
-      final h = amp * (overviewH - 2);
-      final y0 = (overviewH - h) / 2;
-      canvas.drawRect(
-        Rect.fromLTWH(px, y0, 1.2, h.clamp(1, overviewH)),
-        Paint()..color = _ampColor(color, amp).withValues(alpha: 0.95),
-      );
-    }
+    _fillWave(
+      canvas,
+      n: n,
+      peak: peak,
+      x0: 0,
+      x1: size.width,
+      t0: 0,
+      t1: duration,
+      mid: overviewH / 2,
+      halfH: (overviewH - 2) / 2,
+      step: 1.0,
+      outline: false,
+    );
     final winL = (viewStart / duration) * size.width;
     final winR = (viewEnd / duration) * size.width;
     canvas.drawRect(
@@ -93,20 +95,19 @@ class WaveformPainter extends CustomPainter {
     );
     _drawLoopOverview(canvas, size, overviewH);
 
-    for (var px = 0.0; px < size.width; px++) {
-      final t0 = viewStart + (px / size.width) * viewDur;
-      final t1 = viewStart + ((px + 1) / size.width) * viewDur;
-      if (t1 <= 0 || t0 >= duration) continue;
-      final loHi = _minMaxInRange(t0.clamp(0.0, duration), t1.clamp(0.0, duration), n, duration);
-      final amp = math.max(loHi.$1.abs(), loHi.$2.abs()) / peak;
-      final yHi = mid - (loHi.$2.abs() / peak) * (waveH * 0.48);
-      final yLo = mid + (loHi.$1.abs() / peak) * (waveH * 0.48);
-      final h = (yLo - yHi).clamp(1.0, waveH);
-      canvas.drawRect(
-        Rect.fromLTWH(px, yHi, 1.05, h),
-        Paint()..color = _ampColor(color, amp),
-      );
-    }
+    _fillWave(
+      canvas,
+      n: n,
+      peak: peak,
+      x0: 0,
+      x1: size.width,
+      t0: viewStart,
+      t1: viewEnd,
+      mid: mid,
+      halfH: waveH * 0.48,
+      step: 0.75,
+      outline: true,
+    );
 
     canvas.drawLine(
       Offset(0, mid),
@@ -153,6 +154,98 @@ class WaveformPainter extends CustomPainter {
       y1: size.height,
       coreWidth: 2.6,
       tick: false,
+    );
+  }
+
+  /// Smooth filled waveform: a mirrored envelope drawn as one shape, with
+  /// values interpolated between bins so zooming in stays smooth, not blocky.
+  void _fillWave(
+    Canvas canvas, {
+    required int n,
+    required double peak,
+    required double x0,
+    required double x1,
+    required double t0,
+    required double t1,
+    required double mid,
+    required double halfH,
+    required double step,
+    required bool outline,
+  }) {
+    final width = x1 - x0;
+    final top = <Offset>[];
+    final bottom = <Offset>[];
+    for (var x = 0.0; x <= width + step; x += step) {
+      final ta = t0 + (x / width) * (t1 - t0);
+      final tb = t0 + ((x + step) / width) * (t1 - t0);
+      if (tb <= 0 || ta >= duration) {
+        top.add(Offset(x0 + x, mid));
+        bottom.add(Offset(x0 + x, mid));
+        continue;
+      }
+      final v = _smoothRange(ta, tb, n);
+      final hi = (v.$2 / peak).clamp(0.0, 1.0);
+      final lo = (v.$1.abs() / peak).clamp(0.0, 1.0);
+      top.add(Offset(x0 + x, mid - math.max(0.6, hi * halfH)));
+      bottom.add(Offset(x0 + x, mid + math.max(0.6, lo * halfH)));
+    }
+    final path = Path()..moveTo(top.first.dx, top.first.dy);
+    for (final o in top.skip(1)) {
+      path.lineTo(o.dx, o.dy);
+    }
+    for (final o in bottom.reversed) {
+      path.lineTo(o.dx, o.dy);
+    }
+    path.close();
+    final rect = Rect.fromLTRB(x0, mid - halfH, x1, mid + halfH);
+    canvas.drawPath(
+      path,
+      Paint()
+        ..shader = LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            Color.lerp(color, Colors.white, 0.55)!.withValues(alpha: 0.95),
+            color.withValues(alpha: 0.85),
+            color.withValues(alpha: 0.55),
+            color.withValues(alpha: 0.85),
+            Color.lerp(color, Colors.white, 0.55)!.withValues(alpha: 0.95),
+          ],
+          stops: const [0.0, 0.3, 0.5, 0.7, 1.0],
+        ).createShader(rect),
+    );
+    if (outline) {
+      canvas.drawPath(
+        path,
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1
+          ..strokeJoin = StrokeJoin.round
+          ..color = Color.lerp(color, Colors.white, 0.7)!.withValues(alpha: 0.9),
+      );
+    }
+  }
+
+  /// Min and max over [ta, tb]; interpolates between neighbouring bins when
+  /// the span is narrower than one bin.
+  (double, double) _smoothRange(double ta, double tb, int n) {
+    final binSec = duration / n;
+    if (tb - ta >= binSec) {
+      return _minMaxInRange(
+        ta.clamp(0.0, duration).toDouble(),
+        tb.clamp(0.0, duration).toDouble(),
+        n,
+        duration,
+      );
+    }
+    final f = ((ta + tb) / 2) / binSec - 0.5;
+    final i = f.floor();
+    final k = f - i;
+    final i0 = i.clamp(0, n - 1);
+    final i1 = (i + 1).clamp(0, n - 1);
+    return (
+      min[i0] * (1 - k) + min[i1] * k,
+      max[i0] * (1 - k) + max[i1] * k,
     );
   }
 
@@ -305,25 +398,6 @@ class WaveformPainter extends CustomPainter {
     return (lo, hi);
   }
 
-  double _peakInRange(double t0, double t1, int n, double duration, double peak) {
-    final mm = _minMaxInRange(t0, t1, n, duration);
-    return math.max(mm.$1.abs(), mm.$2.abs()) / peak;
-  }
-
-  Color _ampColor(Color base, double amp) {
-    final a = amp.clamp(0.0, 1.0);
-    if (a < 0.25) {
-      return Color.lerp(base.withValues(alpha: 0.35), base, a / 0.25)!;
-    }
-    if (a < 0.6) {
-      return Color.lerp(base, const Color(0xFFE040FB), (a - 0.25) / 0.35)!;
-    }
-    if (a < 0.85) {
-      return Color.lerp(const Color(0xFFE040FB), const Color(0xFFFF6B35), (a - 0.6) / 0.25)!;
-    }
-    return Color.lerp(const Color(0xFFFF6B35), const Color(0xFFFFF3B0), (a - 0.85) / 0.15)!;
-  }
-
   @override
   bool shouldRepaint(covariant WaveformPainter oldDelegate) {
     return oldDelegate.position != position ||
@@ -374,7 +448,7 @@ class WaveformView extends StatelessWidget {
   /// Full-track overview strip tap → absolute position in seconds.
   final ValueChanged<double>? onOverviewSeek;
 
-  static const zoom = 8.0;
+  static const zoom = 6.0;
 
   @override
   Widget build(BuildContext context) {
