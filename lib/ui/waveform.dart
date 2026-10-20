@@ -2,6 +2,7 @@ import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 
 /// Horizontal scrolling DJ waveform: playhead pinned center, regular beat grid.
 class WaveformPainter extends CustomPainter {
@@ -17,7 +18,7 @@ class WaveformPainter extends CustomPainter {
     this.loopEnabled = false,
     this.loopStart = 0,
     this.loopEnd = 0,
-    this.zoomWindowSec = 6,
+    this.zoomWindowSec = 3,
     this.showJumpZone = false,
   });
 
@@ -414,7 +415,7 @@ class WaveformPainter extends CustomPainter {
   }
 }
 
-class WaveformView extends StatelessWidget {
+class WaveformView extends StatefulWidget {
   const WaveformView({
     super.key,
     required this.min,
@@ -430,6 +431,7 @@ class WaveformView extends StatelessWidget {
     this.loopEnd = 0,
     this.onSeek,
     this.onOverviewSeek,
+    this.playing = false,
   });
 
   final Float32List min;
@@ -448,10 +450,75 @@ class WaveformView extends StatelessWidget {
   /// Full-track overview strip tap → absolute position in seconds.
   final ValueChanged<double>? onOverviewSeek;
 
-  static const zoom = 6.0;
+  /// When true the view glides between position updates, so the wave flows
+  /// smoothly instead of stepping 20 times a second.
+  final bool playing;
+
+  static const zoom = 3.0;
+
+  @override
+  State<WaveformView> createState() => _WaveformViewState();
+}
+
+class _WaveformViewState extends State<WaveformView>
+    with SingleTickerProviderStateMixin {
+  late final Ticker _ticker;
+  double _basePos = 0;
+  Duration _baseAt = Duration.zero;
+  Duration _now = Duration.zero;
+
+  @override
+  void initState() {
+    super.initState();
+    _basePos = widget.position;
+    _ticker = createTicker((d) {
+      _now = d;
+      if (widget.playing) setState(() {});
+    })..start();
+  }
+
+  @override
+  void didUpdateWidget(WaveformView old) {
+    super.didUpdateWidget(old);
+    if (old.position != widget.position || old.playing != widget.playing) {
+      _basePos = widget.position;
+      _baseAt = _now;
+    }
+  }
+
+  @override
+  void dispose() {
+    _ticker.dispose();
+    super.dispose();
+  }
+
+  double get _position {
+    if (!widget.playing) return widget.position;
+    final dt = (_now - _baseAt).inMicroseconds / 1e6;
+    // Never run ahead more than a couple of update intervals.
+    final glide = dt.clamp(0.0, 0.12);
+    return (_basePos + glide * widget.rate)
+        .clamp(0.0, widget.duration > 0 ? widget.duration : _basePos)
+        .toDouble();
+  }
+
+  Color get color => widget.color;
+  Float32List get min => widget.min;
+  Float32List get max => widget.max;
+  double get duration => widget.duration;
+  double get beatOffset => widget.beatOffset;
+  double get bpm => widget.bpm;
+  double get rate => widget.rate;
+  bool get loopEnabled => widget.loopEnabled;
+  double get loopStart => widget.loopStart;
+  double get loopEnd => widget.loopEnd;
+  ValueChanged<double>? get onSeek => widget.onSeek;
+  ValueChanged<double>? get onOverviewSeek => widget.onOverviewSeek;
+  static const zoom = WaveformView.zoom;
 
   @override
   Widget build(BuildContext context) {
+    final position = _position;
     return LayoutBuilder(
       builder: (context, constraints) {
         final w = constraints.maxWidth.isFinite ? constraints.maxWidth : 300.0;

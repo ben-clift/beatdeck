@@ -325,6 +325,7 @@ class _DeckPanelState extends State<_DeckPanel> {
       color: look.well,
       child: d.loaded && d.duration > 0
           ? WaveformView(
+              playing: d.playing,
               min: d.waveMin,
               max: d.waveMax,
               position: d.position,
