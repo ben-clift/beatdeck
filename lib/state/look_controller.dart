@@ -2,6 +2,22 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+/// How the controller is finished, on top of the colours.
+enum LookStyle {
+  matte('Matte', 'Flat and calm'),
+  neon('Neon glow', 'Glowing outlines and a lit jog wheel'),
+  sparkle('Sparkle', 'Twinkling stars drifting behind the decks'),
+  aurora('Aurora', 'Slow moving glows of your deck colours'),
+  chrome('Chrome', 'Brushed metal panels with a shine');
+
+  const LookStyle(this.label, this.blurb);
+
+  final String label;
+  final String blurb;
+
+  bool get animated => this == sparkle || this == aurora;
+}
+
 class LookOption {
   const LookOption(this.name, this.color);
 
@@ -66,6 +82,7 @@ class LookController extends ChangeNotifier {
 
   static const _defaultAccents = [0, 1, 2, 3];
 
+  LookStyle style = LookStyle.matte;
   int backgroundIndex = 0;
   int bodyIndex = 0;
   final List<int> deckAccent = List<int>.of(_defaultAccents);
@@ -81,6 +98,66 @@ class LookController extends ChangeNotifier {
   Color get knobBase => Color.lerp(body, Colors.white, 0.10)!;
   Color get knobFace => Color.lerp(body, Colors.white, 0.20)!;
 
+  /// Panel look for the current style. [accent] tints glows and edges.
+  BoxDecoration panelDecoration(Color accent) {
+    switch (style) {
+      case LookStyle.matte:
+        return BoxDecoration(
+          color: body,
+          borderRadius: BorderRadius.circular(4),
+        );
+      case LookStyle.neon:
+        return BoxDecoration(
+          color: Color.lerp(body, Colors.black, 0.35),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: accent.withValues(alpha: 0.9), width: 1.2),
+          boxShadow: [
+            BoxShadow(
+              color: accent.withValues(alpha: 0.45),
+              blurRadius: 16,
+              spreadRadius: 0.5,
+            ),
+          ],
+        );
+      case LookStyle.sparkle:
+        return BoxDecoration(
+          borderRadius: BorderRadius.circular(10),
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              Color.lerp(body, accent, 0.16)!,
+              body,
+              Color.lerp(body, accent, 0.08)!,
+            ],
+          ),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.18)),
+        );
+      case LookStyle.aurora:
+        return BoxDecoration(
+          color: body.withValues(alpha: 0.72),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.14)),
+        );
+      case LookStyle.chrome:
+        return BoxDecoration(
+          borderRadius: BorderRadius.circular(8),
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              Color.lerp(body, Colors.white, 0.28)!,
+              Color.lerp(body, Colors.white, 0.06)!,
+              Color.lerp(body, Colors.black, 0.25)!,
+              Color.lerp(body, Colors.white, 0.10)!,
+            ],
+            stops: const [0, 0.45, 0.55, 1],
+          ),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.35)),
+        );
+    }
+  }
+
   bool _loaded = false;
 
   Future<void> load() async {
@@ -91,6 +168,7 @@ class LookController extends ChangeNotifier {
       backgroundIndex =
           _clamp(prefs.getInt('look_bg') ?? 0, backgrounds.length);
       bodyIndex = _clamp(prefs.getInt('look_body') ?? 0, bodies.length);
+      style = LookStyle.values[_clamp(prefs.getInt('look_style') ?? 0, LookStyle.values.length)];
       final saved = prefs.getStringList('look_decks');
       if (saved != null && saved.length == deckAccent.length) {
         for (var i = 0; i < saved.length; i++) {
@@ -109,8 +187,15 @@ class LookController extends ChangeNotifier {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setInt('look_bg', backgroundIndex);
       await prefs.setInt('look_body', bodyIndex);
+      await prefs.setInt('look_style', style.index);
       await prefs.setStringList('look_decks', [for (final a in deckAccent) '$a']);
     } catch (_) {}
+  }
+
+  void setStyle(LookStyle value) {
+    style = value;
+    notifyListeners();
+    _save();
   }
 
   void setBackground(int i) {
@@ -132,6 +217,7 @@ class LookController extends ChangeNotifier {
   }
 
   void reset() {
+    style = LookStyle.matte;
     backgroundIndex = 0;
     bodyIndex = 0;
     for (var i = 0; i < deckAccent.length; i++) {

@@ -167,10 +167,7 @@ class _DeckPanelState extends State<_DeckPanel> {
     final heard = d.bpm > 1 ? d.bpm * d.rate : 0.0;
     return Container(
       margin: const EdgeInsets.all(6),
-      decoration: BoxDecoration(
-        color: look.body,
-        borderRadius: BorderRadius.circular(4),
-      ),
+      decoration: look.panelDecoration(_accent),
       clipBehavior: Clip.antiAlias,
       child: Column(
         children: [
@@ -587,10 +584,12 @@ class _MixerPanel extends StatelessWidget {
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 6),
       padding: const EdgeInsets.all(6),
-      decoration: BoxDecoration(
-        color: LookController.instance.well,
-        borderRadius: BorderRadius.circular(4),
-      ),
+      decoration: LookController.instance.style == LookStyle.matte
+          ? BoxDecoration(
+              color: LookController.instance.well,
+              borderRadius: BorderRadius.circular(4),
+            )
+          : LookController.instance.panelDecoration(Colors.white),
       child: Column(
         children: [
           Row(

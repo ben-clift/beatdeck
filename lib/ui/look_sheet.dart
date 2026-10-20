@@ -47,6 +47,29 @@ class _LookSheet extends StatelessWidget {
                     ),
                   ],
                 ),
+                _section('Style'),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    for (final st in LookStyle.values)
+                      ChoiceChip(
+                        label: Text(st.label),
+                        selected: look.style == st,
+                        onSelected: (_) => look.setStyle(st),
+                      ),
+                  ],
+                ),
+                Padding(
+                  padding: const EdgeInsets.only(top: 6),
+                  child: Text(
+                    look.style.blurb,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: SideDeckTheme.muted,
+                    ),
+                  ),
+                ),
                 _section('Background'),
                 _swatches(
                   LookController.backgrounds,

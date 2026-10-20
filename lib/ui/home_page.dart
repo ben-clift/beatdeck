@@ -8,6 +8,7 @@ import 'package:sidedeck/state/look_controller.dart';
 import 'package:sidedeck/theme/sidedeck_theme.dart';
 import 'package:sidedeck/ui/controller_view.dart';
 import 'package:sidedeck/ui/library_drawer.dart';
+import 'package:sidedeck/ui/look_background.dart';
 import 'package:sidedeck/ui/look_sheet.dart';
 import 'package:sidedeck/ui/mixer_strip.dart';
 import 'package:sidedeck/ui/pitch_sheet.dart';
@@ -165,7 +166,11 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         return Scaffold(
           backgroundColor:
               _controllerMode ? LookController.instance.bg : Colors.black,
-          body: SafeArea(
+          body: Stack(
+            children: [
+              if (_controllerMode)
+                const Positioned.fill(child: LookBackground()),
+              SafeArea(
             child: Stack(
               children: [
                 if (_controllerMode)
@@ -223,6 +228,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                 ),
               ],
             ),
+          ),
+            ],
           ),
         );
       },
