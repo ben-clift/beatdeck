@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sidedeck/engine/music_utils.dart';
 import 'package:sidedeck/soulseek/playable.dart';
 import 'package:sidedeck/soulseek/slsk_setup.dart';
+import 'package:sidedeck/soulseek/storage_guard.dart';
 import 'package:sidedeck/soulseek/soulseek_client.dart';
 import 'package:sidedeck/state/library_controller.dart';
 import 'package:sidedeck/suggest/harmony.dart';
@@ -99,6 +100,7 @@ class AutoFetch extends ChangeNotifier {
   final List<String> log = [];
 
   bool _stop = false;
+  LibraryController? _lib;
 
   void _say(String s) {
     status = s;
@@ -126,6 +128,7 @@ class AutoFetch extends ChangeNotifier {
       return;
     }
     running = true;
+    _lib = library;
     _stop = false;
     fetched = 0;
     limit = count;
@@ -226,6 +229,7 @@ class AutoFetch extends ChangeNotifier {
       return;
     }
     running = true;
+    _lib = library;
     _stop = false;
     fetched = 0;
     limit = endless ? 0 : count;
@@ -367,6 +371,7 @@ class AutoFetch extends ChangeNotifier {
       return;
     }
     running = true;
+    _lib = library;
     _stop = false;
     fetched = 0;
     limit = endless ? 0 : count;
@@ -423,6 +428,15 @@ class AutoFetch extends ChangeNotifier {
   /// Searches, picks the best match, waits until it has downloaded. Returns
   /// the saved path, or null when nothing usable turned up.
   Future<String?> _fetchOne(Suggestion s, CamelotKey? seedKey) async {
+    final dir = SlskSetup.dj == null || _lib == null ? null : SlskSetup.dirFor(_lib!);
+    if (dir != null) {
+      final reason = await StorageGuard.blockReason(dir, 60 * 1024 * 1024);
+      if (reason != null) {
+        _stop = true;
+        _say('Stopped. $reason');
+        return null;
+      }
+    }
     await _waitForRoom();
     if (_stop) return null;
     _say('Searching for ${s.artist} - ${s.title}');

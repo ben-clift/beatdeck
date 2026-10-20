@@ -4,6 +4,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sidedeck/soulseek/soulseek_client.dart';
+import 'package:sidedeck/soulseek/storage_guard.dart';
 import 'package:sidedeck/state/dj_controller.dart';
 import 'package:sidedeck/state/library_controller.dart';
 
@@ -20,6 +21,7 @@ class SlskSetup {
 
   static Future<void> load() async {
     try {
+      await StorageGuard.load();
       final prefs = await SharedPreferences.getInstance();
       chosen = prefs.getString('slsk_dir');
       final ext = await getExternalStorageDirectory();
@@ -44,6 +46,7 @@ class SlskSetup {
   /// saved, and is analysed for tempo and key.
   static void wire(LibraryController lib) {
     soulseek.downloadDir = () => dirFor(lib);
+    soulseek.storageCheck = (size) => StorageGuard.blockReason(dirFor(lib), size);
     soulseek.onFileSaved = (path) {
       lib.addFile(path);
       dj?.automixAppend(path);

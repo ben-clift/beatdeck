@@ -98,6 +98,9 @@ class SoulseekClient extends ChangeNotifier {
   /// Called after a file finishes so the library can pick it up.
   void Function(String path)? onFileSaved;
 
+  /// Asked before each download starts: a reason to refuse, or null.
+  Future<String?> Function(int size)? storageCheck;
+
   Socket? _server;
   ServerSocket? _listener;
   final FrameBuffer _serverBuf = FrameBuffer();
@@ -333,7 +336,21 @@ class SoulseekClient extends ChangeNotifier {
     }
     final d = SlskDownload(r)..size = r.size;
     downloads.insert(0, d);
-    _beginDownload(d);
+    final check = storageCheck;
+    if (check == null) {
+      _beginDownload(d);
+    } else {
+      d.message = 'Checking space';
+      check(r.size).then((reason) {
+        if (reason != null) {
+          d.state = DlState.failed;
+          d.message = reason;
+          _changed();
+        } else if (downloads.contains(d)) {
+          _beginDownload(d);
+        }
+      });
+    }
     notifyListeners();
   }
 

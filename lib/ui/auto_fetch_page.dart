@@ -3,6 +3,8 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:sidedeck/soulseek/soulseek_client.dart';
 import 'package:sidedeck/state/library_controller.dart';
+import 'package:sidedeck/soulseek/slsk_setup.dart';
+import 'package:sidedeck/soulseek/storage_guard.dart';
 import 'package:sidedeck/suggest/auto_fetch.dart';
 import 'package:sidedeck/suggest/genres.dart';
 import 'package:sidedeck/suggest/suggest_service.dart';
@@ -253,6 +255,47 @@ class _AutoFetchPageState extends State<AutoFetchPage> {
               onChanged: (v) {
                 af.buffer = v.round();
                 af.save();
+                setState(() {});
+              },
+            ),
+            const Divider(),
+            Text(
+              'Phone space  ·  ${StorageGuard.usageLine(SlskSetup.dirFor(widget.library))}',
+              style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
+            ),
+            Row(
+              children: [
+                const Expanded(child: Text('Most space downloads may use')),
+                Text('${StorageGuard.maxGb.round()} GB'),
+              ],
+            ),
+            Slider(
+              value: StorageGuard.maxGb,
+              min: 1,
+              max: 50,
+              divisions: 49,
+              label: '${StorageGuard.maxGb.round()} GB',
+              onChanged: (v) {
+                StorageGuard.maxGb = v;
+                StorageGuard.save();
+                setState(() {});
+              },
+            ),
+            Row(
+              children: [
+                const Expanded(child: Text('Always keep this much free')),
+                Text('${StorageGuard.reserveGb.round()} GB'),
+              ],
+            ),
+            Slider(
+              value: StorageGuard.reserveGb,
+              min: 1,
+              max: 30,
+              divisions: 29,
+              label: '${StorageGuard.reserveGb.round()} GB',
+              onChanged: (v) {
+                StorageGuard.reserveGb = v;
+                StorageGuard.save();
                 setState(() {});
               },
             ),
