@@ -10,6 +10,7 @@ import 'package:sidedeck/state/dj_controller.dart';
 import 'package:sidedeck/state/library_controller.dart';
 import 'package:sidedeck/state/playlist_controller.dart';
 import 'package:sidedeck/ui/playlists_panel.dart';
+import 'package:sidedeck/ui/free_music_page.dart';
 import 'package:sidedeck/ui/soulseek_page.dart';
 import 'package:sidedeck/ui/wishlist_page.dart';
 import 'package:sidedeck/subsonic/subsonic_client.dart';
@@ -420,6 +421,16 @@ class _LibraryOverlayState extends State<LibraryOverlay> {
                         ),
                       ),
                       icon: const Icon(Icons.playlist_add_check, size: 22),
+                    ),
+                    IconButton(
+                      tooltip: 'Free music (Jamendo, Internet Archive)',
+                      visualDensity: VisualDensity.compact,
+                      onPressed: () => Navigator.of(context).push(
+                        MaterialPageRoute<void>(
+                          builder: (_) => FreeMusicPage(library: lib),
+                        ),
+                      ),
+                      icon: const Icon(Icons.library_music, size: 22),
                     ),
                     IconButton(
                       tooltip: 'Search Soulseek',
