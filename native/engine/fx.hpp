@@ -144,17 +144,18 @@ struct DeckFx {
   float phY1[4][2] = {};
   float phFb[2] = {};
   float phLfo = 0;
-  // gate
-  float gateLfo = 0;
-  float gateGain = 1;
+  // filter (low pass whose cutoff drops as the amount rises)
+  Biquad fltL, fltR;
+  float fltAmount = -1;
   // crush
   int crushCount = 0;
   float crushL = 0;
   float crushR = 0;
-  // wobble
-  Biquad wobL, wobR;
-  float wobLfo = 0;
-  int wobTick = 0;
+  // noise sweep (white noise through a rising high pass)
+  Biquad nzL, nzR;
+  float nzPhase = 0;
+  int nzTick = 0;
+  unsigned nzSeed = 22222u;
   // roll
   std::vector<float> rollL, rollR;
   int rollRec = 0;
@@ -168,12 +169,15 @@ struct DeckFx {
     base.prepare(sr);
     rollL.assign(sr, 0.0f);
     rollR.assign(sr, 0.0f);
-    wobL.lowPass((float)sr, 800.0f, 1.0f);
-    wobR.lowPass((float)sr, 800.0f, 1.0f);
+    fltL.lowPass((float)sr, 18000.0f, 1.5f);
+    fltR.lowPass((float)sr, 18000.0f, 1.5f);
+    nzL.highPass((float)sr, 300.0f, 0.8f);
+    nzR.highPass((float)sr, 300.0f, 0.8f);
+    fltAmount = -1;
   }
 
-  // mask bit 0 echo, 1 reverb, 2 flanger, 3 phaser, 4 gate, 5 crush,
-  // 6 wobble, 7 roll. timeSec is the length of one beat.
+  // mask bit 0 echo, 1 reverb, 2 flanger, 3 phaser, 4 filter, 5 crush,
+  // 6 noise sweep, 7 roll. timeSec is the length of one beat.
   void process(int mask, float amount, float timeSec, float& l, float& r) {
     if (sr == 0) return;
     if (!(mask & 128)) rollActive = false;
@@ -204,12 +208,15 @@ struct DeckFx {
       }
     }
     if (mask & 16) {
-      gateLfo += 1.0f / (beat * 0.5f * (float)sr);
-      if (gateLfo >= 1.0f) gateLfo -= 1.0f;
-      const float target = gateLfo < 0.5f ? 1.0f : 1.0f - a;
-      gateGain += 0.01f * (target - gateGain);
-      l *= gateGain;
-      r *= gateGain;
+      if (std::fabs(a - fltAmount) > 0.004f) {
+        fltAmount = a;
+        const float fc = 18000.0f * std::pow(0.01f, a); // 18 kHz down to 180 Hz
+        const float f = std::min(fc, 0.45f * (float)sr);
+        fltL.lowPass((float)sr, f, 1.5f);
+        fltR.lowPass((float)sr, f, 1.5f);
+      }
+      l = fltL.process(l);
+      r = fltR.process(r);
     }
     if (mask & 32) {
       const int step = 1 + (int)(a * 20.0f);
@@ -224,17 +231,22 @@ struct DeckFx {
       r = crushR;
     }
     if (mask & 64) {
-      wobLfo += 6.2831853f / (beat * 2.0f * (float)sr);
-      if (wobLfo > 6.2831853f) wobLfo -= 6.2831853f;
-      if (++wobTick >= 32) {
-        wobTick = 0;
-        const float fc = 250.0f * std::exp2(3.2f * (0.5f + 0.5f * std::sin(wobLfo)));
-        const float q = 1.0f + 3.0f * a;
-        wobL.lowPass((float)sr, fc, q);
-        wobR.lowPass((float)sr, fc, q);
+      // Sweep rises over four beats, then starts again.
+      nzPhase += 1.0f / (beat * 4.0f * (float)sr);
+      if (nzPhase >= 1.0f) nzPhase -= 1.0f;
+      if (++nzTick >= 32) {
+        nzTick = 0;
+        const float fc = std::min(300.0f * std::pow(30.0f, nzPhase), 0.45f * (float)sr);
+        nzL.highPass((float)sr, fc, 0.8f);
+        nzR.highPass((float)sr, fc, 0.8f);
       }
-      l = wobL.process(l);
-      r = wobR.process(r);
+      nzSeed = nzSeed * 1664525u + 1013904223u;
+      const float n1 = ((float)(nzSeed >> 8) / 8388608.0f - 1.0f);
+      nzSeed = nzSeed * 1664525u + 1013904223u;
+      const float n2 = ((float)(nzSeed >> 8) / 8388608.0f - 1.0f);
+      const float level = 0.35f * a * (0.3f + 0.7f * nzPhase);
+      l += nzL.process(n1) * level;
+      r += nzR.process(n2) * level;
     }
     if (mask & 128) {
       if (!rollActive) {

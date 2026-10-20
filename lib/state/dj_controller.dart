@@ -107,7 +107,7 @@ class DjController extends ChangeNotifier {
   /// The eight effect pads. Each pad holds one effect; any pad can be given
   /// any effect.
   static const fxNames = [
-    'ECHO', 'REVERB', 'FLANGER', 'PHASER', 'GATE', 'CRUSH', 'WOBBLE', 'ROLL',
+    'ECHO', 'REVERB', 'FLANGER', 'PHASER', 'FILTER', 'CRUSH', 'NOISE', 'ROLL',
   ];
   final List<List<int>> padFx =
       List.generate(4, (_) => List<int>.generate(8, (i) => i));
