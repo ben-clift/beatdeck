@@ -47,6 +47,28 @@ class _LookSheet extends StatelessWidget {
                     ),
                   ],
                 ),
+                _section('Party effects'),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  dense: true,
+                  title: const Text('Smoke when the sound hits the red'),
+                  value: look.smokeOn,
+                  onChanged: look.setSmoke,
+                ),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  dense: true,
+                  title: const Text('Party streamers on big peaks'),
+                  value: look.streamersOn,
+                  onChanged: look.setStreamers,
+                ),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: OutlinedButton(
+                    onPressed: look.testEffects,
+                    child: const Text('Try the effects now'),
+                  ),
+                ),
                 _section('Style'),
                 Wrap(
                   spacing: 8,

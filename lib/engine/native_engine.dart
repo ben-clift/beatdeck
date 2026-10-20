@@ -120,6 +120,13 @@ class NativeEngine {
       .lookupFunction<_SetFloatDeckC, void Function(Pointer<Void>, int, double)>(
         'dj_set_rate',
       );
+  late final _setMasterEq = _lib
+      .lookupFunction<_SetFloatDeckC, void Function(Pointer<Void>, int, double)>(
+        'dj_set_master_eq',
+      );
+  late final _getSpectrum = _lib.lookupFunction<
+      Void Function(Pointer<Void>, Pointer<Float>, Int32),
+      void Function(Pointer<Void>, Pointer<Float>, int)>('dj_get_spectrum');
   late final _setBpm = _lib
       .lookupFunction<_SetFloatDeckC, void Function(Pointer<Void>, int, double)>(
         'dj_set_bpm',
@@ -260,6 +267,22 @@ class NativeEngine {
   void setMaster(double v) => _setMaster(_handle, v);
   void setRate(int deck, double rate) => _setRate(_handle, deck, rate);
   void setBpm(int deck, double bpm) => _setBpm(_handle, deck, bpm);
+
+  /// Master graphic equaliser: [band] 0..9, [db] -12..+12.
+  void setMasterEq(int band, double db) => _setMasterEq(_handle, band, db);
+
+  static const int spectrumBands = 14;
+
+  /// Linear levels (0..1ish) of the 14 analyser bands.
+  List<double> spectrum() {
+    final ptr = malloc<Float>(spectrumBands);
+    try {
+      _getSpectrum(_handle, ptr, spectrumBands);
+      return [for (var i = 0; i < spectrumBands; i++) ptr[i]];
+    } finally {
+      malloc.free(ptr);
+    }
+  }
   void setCue(int deck) => _setCue(_handle, deck);
   void jumpCue(int deck) => _jumpCue(_handle, deck);
   /// Sets hot cue [index] at [seconds], or at the playhead if negative.

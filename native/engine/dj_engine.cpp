@@ -56,6 +56,15 @@ constexpr float kFilterMinHz = 13.0f;
 constexpr float kFilterMaxHz = 22050.0f;
 constexpr float kXfaderTransform = 1.0f;
 
+// Master graphic equaliser (10 bands) and spectrum analyser (14 bands).
+constexpr int kMasterEqBands = 10;
+constexpr int kSpecBands = 14;
+constexpr float kMasterEqHz[kMasterEqBands] = {31.0f,  62.0f,  125.0f,  250.0f,  500.0f,
+                                               1000.0f, 2000.0f, 4000.0f, 8000.0f, 16000.0f};
+constexpr float kSpecHz[kSpecBands] = {40.0f,   63.0f,   100.0f,  160.0f,  250.0f,
+                                       400.0f,  630.0f,  1000.0f, 1600.0f, 2500.0f,
+                                       4000.0f, 6300.0f, 10000.0f, 16000.0f};
+
 inline float clamp01(float v) { return std::max(0.0f, std::min(1.0f, v)); }
 
 // Isolator fader: 0 = kill, 1 = unity, 4 = +12 dB.
@@ -428,6 +437,47 @@ struct Engine : public oboe::AudioStreamDataCallback,
   Deck decks[kDecks];
   std::atomic<float> xfader{0.5f};
   std::atomic<float> master{1.0f};
+
+  // Master graphic equaliser state. Gains are set from the UI thread; the
+  // audio thread rebuilds its filters when eqVersion changes.
+  std::atomic<float> eqDb[kMasterEqBands];
+  std::atomic<int> eqVersion{0};
+  std::atomic<float> specOut[kSpecBands];
+  Biquad eqL[kMasterEqBands];
+  Biquad eqR[kMasterEqBands];
+  Biquad specBand[kSpecBands];
+  float specEnv[kSpecBands] = {};
+  int eqSeenVersion = -1;
+  int eqSeenSr = 0;
+  bool eqActive = false;
+
+  // Audio thread only. Returns true when any band is boosted or cut.
+  bool prepareMasterEq(int sr) {
+    const int v = eqVersion.load();
+    if (v == eqSeenVersion && sr == eqSeenSr) {
+      return eqActive;
+    }
+    const bool srChanged = sr != eqSeenSr;
+    eqSeenVersion = v;
+    eqSeenSr = sr;
+    bool any = false;
+    for (int b = 0; b < kMasterEqBands; ++b) {
+      const float db = eqDb[b].load();
+      if (std::fabs(db) > 0.05f) {
+        any = true;
+      }
+      eqL[b].peaking((float)sr, kMasterEqHz[b], 1.4f, db);
+      eqR[b].peaking((float)sr, kMasterEqHz[b], 1.4f, db);
+    }
+    if (srChanged) {
+      for (int b = 0; b < kSpecBands; ++b) {
+        specBand[b].bandPass((float)sr, std::min(kSpecHz[b], 0.45f * (float)sr), 2.5f);
+        specBand[b].reset();
+      }
+    }
+    eqActive = any;
+    return any;
+  }
   std::atomic<int> outputMode{0}; // 0 internal 2ch, 1 external 4ch
   std::atomic<int> engineSampleRate{48000};
   std::atomic<int> engineChannels{2};
@@ -438,6 +488,12 @@ struct Engine : public oboe::AudioStreamDataCallback,
   std::vector<float> scratchL, scratchR;
 
   Engine() {
+    for (int b = 0; b < kMasterEqBands; ++b) {
+      eqDb[b].store(0.0f);
+    }
+    for (int b = 0; b < kSpecBands; ++b) {
+      specOut[b].store(0.0f);
+    }
     scratchL.assign(kMaxCallbackFrames, 0.0f);
     scratchR.assign(kMaxCallbackFrames, 0.0f);
     mixAL.assign(kMaxCallbackFrames, 0.0f);
@@ -790,14 +846,36 @@ struct Engine : public oboe::AudioStreamDataCallback,
         }
       }
     } else {
+      const int srNow = std::max(8000, engineSampleRate.load());
+      const bool eqOn = prepareMasterEq(srNow);
+      float peak[kSpecBands] = {};
       for (int i = 0; i < n; ++i) {
-        const float l = (mixAL[i] * gainA + mixBL[i] * gainB) * m;
-        const float r = (mixAR[i] * gainA + mixBR[i] * gainB) * m;
-        out[i * channels + 0] = std::max(-1.0f, std::min(1.0f, l));
-        out[i * channels + 1] = std::max(-1.0f, std::min(1.0f, r));
+        float l = (mixAL[i] * gainA + mixBL[i] * gainB) * m;
+        float r = (mixAR[i] * gainA + mixBR[i] * gainB) * m;
+        if (eqOn) {
+          for (int b = 0; b < kMasterEqBands; ++b) {
+            l = eqL[b].process(l);
+            r = eqR[b].process(r);
+          }
+        }
+        l = std::max(-1.0f, std::min(1.0f, l));
+        r = std::max(-1.0f, std::min(1.0f, r));
+        out[i * channels + 0] = l;
+        out[i * channels + 1] = r;
         for (int c = 2; c < channels; ++c) {
           out[i * channels + c] = 0.0f;
         }
+        const float mono = 0.5f * (l + r);
+        for (int b = 0; b < kSpecBands; ++b) {
+          const float y = std::fabs(specBand[b].process(mono));
+          if (y > peak[b]) {
+            peak[b] = y;
+          }
+        }
+      }
+      for (int b = 0; b < kSpecBands; ++b) {
+        specEnv[b] = std::max(peak[b], specEnv[b] * 0.85f);
+        specOut[b].store(specEnv[b]);
       }
     }
     if (frames > n) {
@@ -1207,6 +1285,25 @@ void dj_set_xfader(DjEngine engine, float x) {
 
 void dj_set_master(DjEngine engine, float linear) {
   asEngine(engine)->master.store(std::max(0.0f, linear));
+}
+
+void dj_set_master_eq(DjEngine engine, int band, float db) {
+  if (band < 0 || band >= kMasterEqBands) {
+    return;
+  }
+  Engine* e = asEngine(engine);
+  e->eqDb[band].store(std::max(-12.0f, std::min(12.0f, db)));
+  e->eqVersion.fetch_add(1);
+}
+
+void dj_get_spectrum(DjEngine engine, float* out, int n) {
+  if (!out || n <= 0) {
+    return;
+  }
+  Engine* e = asEngine(engine);
+  for (int i = 0; i < n; ++i) {
+    out[i] = i < kSpecBands ? e->specOut[i].load() : 0.0f;
+  }
 }
 
 void dj_set_rate(DjEngine engine, int deck, float rate) {

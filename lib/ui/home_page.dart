@@ -11,6 +11,7 @@ import 'package:sidedeck/ui/library_drawer.dart';
 import 'package:sidedeck/ui/look_background.dart';
 import 'package:sidedeck/ui/look_sheet.dart';
 import 'package:sidedeck/ui/mixer_strip.dart';
+import 'package:sidedeck/ui/party_effects.dart';
 import 'package:sidedeck/ui/pitch_sheet.dart';
 import 'package:sidedeck/ui/settings_page.dart';
 import 'package:sidedeck/ui/waveform.dart';
@@ -229,6 +230,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
               ],
             ),
           ),
+              if (_controllerMode)
+                Positioned.fill(child: PartyEffects(dj: _dj)),
             ],
           ),
         );

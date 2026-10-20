@@ -75,6 +75,66 @@ class DjController extends ChangeNotifier {
   String? loadingTitle;
   String? loadingPath;
 
+  // Master graphic equaliser (10 bands) and spectrum analyser (14 bands).
+  static const int eqBandCount = 10;
+  static const int spectrumBandCount = NativeEngine.spectrumBands;
+  final List<double> eqBands = List<double>.filled(eqBandCount, 0);
+  final List<double> spectrum = List<double>.filled(spectrumBandCount, 0);
+  final List<double> spectrumPeak = List<double>.filled(spectrumBandCount, 0);
+  final List<int> _peakHold = List<int>.filled(spectrumBandCount, 0);
+  bool spectrumOn = false;
+  bool effectsOn = false;
+
+  /// The party effects need the levels too, even off the equaliser screen.
+  void setEffectsOn(bool on) {
+    effectsOn = on;
+  }
+
+  void setMasterEq(int band, double db) {
+    if (band < 0 || band >= eqBandCount) return;
+    eqBands[band] = db.clamp(-12.0, 12.0).toDouble();
+    _engine.setMasterEq(band, eqBands[band]);
+    notifyListeners();
+  }
+
+  void resetMasterEq() {
+    for (var b = 0; b < eqBandCount; b++) {
+      eqBands[b] = 0;
+      _engine.setMasterEq(b, 0);
+    }
+    notifyListeners();
+  }
+
+  /// Turn on while the equaliser screen is showing; off saves a little CPU.
+  void setSpectrumOn(bool on) {
+    spectrumOn = on;
+    if (!on) {
+      for (var i = 0; i < spectrumBandCount; i++) {
+        spectrum[i] = 0;
+        spectrumPeak[i] = 0;
+      }
+    }
+  }
+
+  void _updateSpectrum() {
+    final raw = _engine.spectrum();
+    for (var i = 0; i < spectrumBandCount; i++) {
+      final amp = raw[i];
+      final db = amp > 1e-6 ? 20 * math.log(amp) / math.ln10 : -120.0;
+      final level = ((db + 54) / 48).clamp(0.0, 1.0).toDouble();
+      // Rise fast, fall slowly, like an old analyser.
+      spectrum[i] = level > spectrum[i] ? level : spectrum[i] * 0.82 + level * 0.18;
+      if (spectrum[i] >= spectrumPeak[i]) {
+        spectrumPeak[i] = spectrum[i];
+        _peakHold[i] = 14; // about 0.7 s at 50 ms per tick
+      } else if (_peakHold[i] > 0) {
+        _peakHold[i]--;
+      } else {
+        spectrumPeak[i] = math.max(0.0, spectrumPeak[i] - 0.03);
+      }
+    }
+  }
+
   DeckState deck(int i) {
     switch (i) {
       case 0:
@@ -145,6 +205,10 @@ class DjController extends ChangeNotifier {
 
   void _tick() {
     var dirty = false;
+    if (spectrumOn || effectsOn) {
+      _updateSpectrum();
+      dirty = true;
+    }
     for (var i = 0; i < deckCount; i++) {
       final d = deck(i);
       if (!d.loaded || !d.playing) continue;

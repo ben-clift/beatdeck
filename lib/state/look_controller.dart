@@ -98,6 +98,13 @@ class LookController extends ChangeNotifier {
 
   LookStyle style = LookStyle.matte;
   LookShape particleShape = LookShape.mixed;
+
+  /// Smoke when the sound hits the red, and streamers on the hardest peaks.
+  bool smokeOn = true;
+  bool streamersOn = true;
+
+  /// Bumped to fire the effects once, for trying them out.
+  final ValueNotifier<int> testTrigger = ValueNotifier<int>(0);
   int backgroundIndex = 0;
   int bodyIndex = 0;
   final List<int> deckAccent = List<int>.of(_defaultAccents);
@@ -184,6 +191,8 @@ class LookController extends ChangeNotifier {
           _clamp(prefs.getInt('look_bg') ?? 0, backgrounds.length);
       bodyIndex = _clamp(prefs.getInt('look_body') ?? 0, bodies.length);
       particleShape = LookShape.values[_clamp(prefs.getInt('look_shape') ?? 5, LookShape.values.length)];
+      smokeOn = prefs.getBool('look_smoke') ?? true;
+      streamersOn = prefs.getBool('look_streamers') ?? true;
       style = LookStyle.values[_clamp(prefs.getInt('look_style') ?? 0, LookStyle.values.length)];
       final saved = prefs.getStringList('look_decks');
       if (saved != null && saved.length == deckAccent.length) {
@@ -205,6 +214,8 @@ class LookController extends ChangeNotifier {
       await prefs.setInt('look_body', bodyIndex);
       await prefs.setInt('look_style', style.index);
       await prefs.setInt('look_shape', particleShape.index);
+      await prefs.setBool('look_smoke', smokeOn);
+      await prefs.setBool('look_streamers', streamersOn);
       await prefs.setStringList('look_decks', [for (final a in deckAccent) '$a']);
     } catch (_) {}
   }
@@ -214,6 +225,20 @@ class LookController extends ChangeNotifier {
     notifyListeners();
     _save();
   }
+
+  void setSmoke(bool on) {
+    smokeOn = on;
+    notifyListeners();
+    _save();
+  }
+
+  void setStreamers(bool on) {
+    streamersOn = on;
+    notifyListeners();
+    _save();
+  }
+
+  void testEffects() => testTrigger.value++;
 
   void setStyle(LookStyle value) {
     style = value;
@@ -242,6 +267,8 @@ class LookController extends ChangeNotifier {
   void reset() {
     style = LookStyle.matte;
     particleShape = LookShape.mixed;
+    smokeOn = true;
+    streamersOn = true;
     backgroundIndex = 0;
     bodyIndex = 0;
     for (var i = 0; i < deckAccent.length; i++) {

@@ -43,6 +43,33 @@ struct Biquad {
     a2 = a2n / a0n;
   }
 
+  // Bell filter: boosts or cuts around freq by gainDb.
+  void peaking(float sampleRate, float freq, float q, float gainDb) {
+    const float a = std::pow(10.0f, gainDb / 40.0f);
+    const float w0 = 2.0f * 3.14159265358979323846f * freq / sampleRate;
+    const float cosw = std::cos(w0);
+    const float alpha = std::sin(w0) / (2.0f * q);
+    const float a0n = 1.0f + alpha / a;
+    b0 = (1.0f + alpha * a) / a0n;
+    b1 = (-2.0f * cosw) / a0n;
+    b2 = (1.0f - alpha * a) / a0n;
+    a1 = (-2.0f * cosw) / a0n;
+    a2 = (1.0f - alpha / a) / a0n;
+  }
+
+  // Band pass with 0 dB gain at the centre frequency.
+  void bandPass(float sampleRate, float freq, float q) {
+    const float w0 = 2.0f * 3.14159265358979323846f * freq / sampleRate;
+    const float cosw = std::cos(w0);
+    const float alpha = std::sin(w0) / (2.0f * q);
+    const float a0n = 1.0f + alpha;
+    b0 = alpha / a0n;
+    b1 = 0.0f;
+    b2 = -alpha / a0n;
+    a1 = (-2.0f * cosw) / a0n;
+    a2 = (1.0f - alpha) / a0n;
+  }
+
   void highPass(float sampleRate, float freq, float q) {
     const float w0 = 2.0f * 3.14159265358979323846f * freq / sampleRate;
     const float cosw = std::cos(w0);

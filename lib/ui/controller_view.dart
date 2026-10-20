@@ -7,6 +7,7 @@ import 'package:sidedeck/state/library_controller.dart';
 import 'package:sidedeck/state/look_controller.dart';
 import 'package:sidedeck/theme/sidedeck_theme.dart';
 import 'package:sidedeck/ui/controller_widgets.dart';
+import 'package:sidedeck/ui/equaliser_view.dart';
 import 'package:sidedeck/ui/library_drawer.dart';
 import 'package:sidedeck/ui/waveform.dart';
 
@@ -41,7 +42,7 @@ class _ControllerViewState extends State<ControllerView> {
     super.dispose();
   }
 
-  static const _titles = ['LIBRARY', 'DECKS 1 · 2', 'DECKS 3 · 4'];
+  static const _titles = ['LIBRARY', 'DECKS 1 · 2', 'DECKS 3 · 4', 'EQUALISER'];
 
   @override
   Widget build(BuildContext context) {
@@ -52,7 +53,7 @@ class _ControllerViewState extends State<ControllerView> {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              for (var i = 0; i < 3; i++)
+              for (var i = 0; i < _titles.length; i++)
                 GestureDetector(
                   onTap: () => _pages.animateToPage(
                     i,
@@ -92,6 +93,7 @@ class _ControllerViewState extends State<ControllerView> {
               ),
               _DeckPair(dj: widget.dj, left: 0, right: 1),
               _DeckPair(dj: widget.dj, left: 2, right: 3),
+              EqualiserView(dj: widget.dj),
             ],
           ),
         ),
