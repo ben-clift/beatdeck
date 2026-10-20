@@ -128,6 +128,70 @@ class AutoFetch extends ChangeNotifier {
     }
   }
 
+  /// Picks by genre and tempo alone, no seed track. With [endless] it keeps
+  /// going until stopped; otherwise it stops after [count] downloads.
+  Future<void> startByGenre({
+    required String genre,
+    required double bpmMin,
+    required double bpmMax,
+    required LibraryController library,
+    required int count,
+    bool endless = false,
+  }) async {
+    if (running) return;
+    if (!soulseek.online) {
+      _say('Sign in to Soulseek first');
+      return;
+    }
+    running = true;
+    _stop = false;
+    fetched = 0;
+    limit = endless ? 0 : count;
+    log.clear();
+    final tried = <String>{};
+    var empties = 0;
+    try {
+      while (!_stop && (endless || fetched < limit)) {
+        _say('Looking for $genre at ${bpmMin.round()}-${bpmMax.round()} BPM');
+        final found = await _service.byGenre(genre, bpmMin, bpmMax, skip: tried);
+        final queue = found.where((c) => !_inLibrary(library, c)).toList();
+        if (queue.isEmpty) {
+          if (++empties >= 3) {
+            _say('Could not find more $genre in that tempo range');
+            break;
+          }
+          continue;
+        }
+        var gotOne = false;
+        for (final s in queue) {
+          if (_stop || (!endless && fetched >= limit)) break;
+          tried.add(s.query.toLowerCase());
+          final saved = await _fetchOne(s, null);
+          if (saved != null) {
+            fetched++;
+            gotOne = true;
+            log.add('${s.artist} - ${s.title}  (${s.bpm.round()} BPM)');
+          }
+        }
+        empties = gotOne ? 0 : empties + 1;
+        if (empties >= 3) {
+          _say('Nothing more found on Soulseek');
+          break;
+        }
+      }
+      if (_stop) {
+        _say('Stopped after $fetched');
+      } else if (!endless && fetched >= limit) {
+        _say('Done: fetched $fetched');
+      }
+    } catch (e) {
+      _say('Stopped: $e');
+    } finally {
+      running = false;
+      notifyListeners();
+    }
+  }
+
   bool _inLibrary(LibraryController lib, Suggestion s) {
     final t = s.title.toLowerCase();
     return lib.tracks.any((x) => x.title.toLowerCase() == t);

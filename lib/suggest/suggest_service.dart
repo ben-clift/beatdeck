@@ -97,6 +97,56 @@ class SuggestService {
     );
   }
 
+  /// Tracks for a genre inside a tempo range: Deezer playlists matching the
+  /// genre name, then each track's tempo checked. [skip] hides names already
+  /// tried. Returns at most [want] tracks.
+  Future<List<Suggestion>> byGenre(
+    String genre,
+    double bpmMin,
+    double bpmMax, {
+    Set<String> skip = const {},
+    int want = 12,
+  }) async {
+    final out = <Suggestion>[];
+    final raw = <(int, String, String)>[];
+    try {
+      final q = Uri.encodeQueryComponent(genre);
+      final pl = await _get('https://api.deezer.com/search/playlist?q=$q&limit=12');
+      final lists = [...((pl['data'] as List?) ?? const [])]..shuffle();
+      for (final l in lists.take(3)) {
+        final id = (l as Map)['id'];
+        try {
+          final tr = await _get('https://api.deezer.com/playlist/$id/tracks?limit=60');
+          for (final t in ((tr['data'] as List?) ?? const [])) {
+            final m = t as Map;
+            final artist = ((m['artist'] as Map?)?['name'] ?? '') as String;
+            final title = (m['title'] ?? '') as String;
+            if (skip.contains('$artist $title'.toLowerCase())) continue;
+            raw.add((m['id'] as int, title, artist));
+          }
+        } catch (_) {}
+      }
+    } catch (_) {}
+    raw.shuffle();
+    final seen = <int>{};
+    final todo = raw.where((r) => seen.add(r.$1)).take(90).toList();
+    for (var i = 0; i < todo.length && out.length < want; i += 6) {
+      final got = await Future.wait(todo.skip(i).take(6).map((r) async {
+        double bpm = 0;
+        try {
+          final tr = await _get('https://api.deezer.com/track/${r.$1}');
+          bpm = ((tr['bpm'] as num?) ?? 0).toDouble();
+        } catch (_) {}
+        return Suggestion(r.$3, r.$2, bpm, genre);
+      }));
+      for (final s in got) {
+        if (s.bpm >= bpmMin && s.bpm <= bpmMax) out.add(s);
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 400));
+    }
+    return out;
+  }
+
   /// Top tracks from the seed artist and from artists listeners pair with it,
   /// each with its tempo so the list can be filtered.
   Future<List<Suggestion>> candidates(int artistId, String seedArtist) async {

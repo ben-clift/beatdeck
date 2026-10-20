@@ -6,6 +6,7 @@ import 'package:sidedeck/soulseek/soulseek_client.dart';
 import 'package:sidedeck/state/library_controller.dart';
 import 'package:sidedeck/suggest/harmony.dart';
 import 'package:sidedeck/theme/sidedeck_theme.dart';
+import 'package:sidedeck/ui/auto_fetch_page.dart';
 import 'package:sidedeck/ui/suggest_page.dart';
 
 /// Search the Soulseek network and download straight into the library folder.
@@ -88,6 +89,13 @@ class _SoulseekPageState extends State<SoulseekPage> {
       appBar: AppBar(
         title: const Text('Soulseek'),
         actions: [
+          IconButton(
+            tooltip: 'Auto-fetch by genre and tempo',
+            icon: const Icon(Icons.auto_mode),
+            onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(
+              builder: (_) => AutoFetchPage(library: widget.library),
+            )),
+          ),
           ListenableBuilder(
             listenable: soulseek,
             builder: (context, _) => soulseek.online
