@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:sidedeck/soulseek/soulseek_client.dart';
 import 'package:sidedeck/state/library_controller.dart';
@@ -33,7 +35,18 @@ class _AutoFetchPageState extends State<AutoFetchPage> {
     af.save();
   }
 
-  int _group = 2;
+  bool _fits(GenreInfo g) =>
+      math.min(g.max, _bpm.end) - math.max(g.min, _bpm.start) > 0;
+
+  List<GenreInfo> _sortedGenres() {
+    final all = [for (final grp in genreGroups) ...grp.$2];
+    all.sort((a, b) {
+      final fa = _fits(a) ? 0 : 1;
+      final fb = _fits(b) ? 0 : 1;
+      return fa != fb ? fa.compareTo(fb) : a.min.compareTo(b.min);
+    });
+    return all;
+  }
 
   @override
   void dispose() {
@@ -66,41 +79,39 @@ class _AutoFetchPageState extends State<AutoFetchPage> {
               decoration: const InputDecoration(labelText: 'Genre'),
             ),
             const SizedBox(height: 8),
-            Wrap(
-              spacing: 8,
-              children: [
-                for (var i = 0; i < genreGroups.length; i++)
-                  ChoiceChip(
-                    label: Text(genreGroups[i].$1),
-                    selected: _group == i,
-                    onSelected: (_) => setState(() => _group = i),
-                  ),
-              ],
+            Text(
+              'Genres that fit ${_bpm.start.round()}-${_bpm.end.round()} BPM are lit. '
+              'Move the tempo and the list follows.',
+              style: const TextStyle(fontSize: 11, color: SideDeckTheme.muted),
             ),
             const SizedBox(height: 6),
             Wrap(
               spacing: 6,
               runSpacing: 2,
               children: [
-                for (final g in genreGroups[_group].$2)
-                  ActionChip(
+                for (final g in _sortedGenres())
+                  ChoiceChip(
                     label: Text('${g.name}  ${g.min.round()}-${g.max.round()}'),
                     visualDensity: VisualDensity.compact,
-                    onPressed: af.running
+                    selected: _genre.text.trim().toLowerCase() == g.name,
+                    selectedColor: const Color(0xFFFF9F1C),
+                    backgroundColor: _fits(g)
+                        ? const Color(0xFF2E7D32)
+                        : Colors.transparent,
+                    labelStyle: TextStyle(
+                      color: _genre.text.trim().toLowerCase() == g.name
+                          ? Colors.black
+                          : (_fits(g) ? Colors.white : SideDeckTheme.muted),
+                      fontWeight: _fits(g) ? FontWeight.w700 : FontWeight.w400,
+                    ),
+                    onSelected: af.running
                         ? null
-                        : () => setState(() {
+                        : (_) => setState(() {
                               _genre.text = g.name;
                               _bpm = RangeValues(g.min, g.max.clamp(g.min + 1, 250).toDouble());
                             }),
                   ),
               ],
-            ),
-            const Padding(
-              padding: EdgeInsets.only(top: 6),
-              child: Text(
-                'Tap a genre to fill in its usual tempo, then adjust the slider if you like.',
-                style: TextStyle(fontSize: 11, color: SideDeckTheme.muted),
-              ),
             ),
             const SizedBox(height: 14),
             Text('Tempo  ${_bpm.start.round()} to ${_bpm.end.round()} BPM',
