@@ -697,7 +697,11 @@ class _DeckPanelState extends State<_DeckPanel> {
   Widget _jog(DeckState d, double size) {
     // 33 1/3 rpm look: one turn every 1.8 seconds of track.
     final angle = d.position / 1.8 * 2 * math.pi;
-    return GestureDetector(
+    return Listener(
+      onPointerDown: (_) => widget.dj.jogTouch(widget.index),
+      onPointerUp: (_) => widget.dj.jogRelease(widget.index),
+      onPointerCancel: (_) => widget.dj.jogRelease(widget.index),
+      child: GestureDetector(
       onPanUpdate: (u) {
         if (!d.loaded) return;
         final c = Offset(size / 2, size / 2);
@@ -720,6 +724,7 @@ class _DeckPanelState extends State<_DeckPanel> {
           inactive: look.controlHigh,
           face: look.body,
         ),
+      ),
       ),
     );
   }

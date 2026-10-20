@@ -682,6 +682,34 @@ class DjController extends ChangeNotifier {
     notifyListeners();
   }
 
+  final List<bool> _jogResume = [false, false, false, false];
+
+  /// Finger down on the jog platter: the track stops dead, like a vinyl-mode
+  /// controller. Turning the platter then moves the playhead.
+  void jogTouch(int deckIndex) {
+    final d = deck(deckIndex);
+    if (!d.loaded) return;
+    _jogResume[deckIndex] = d.playing;
+    if (d.playing) {
+      _engine.play(deckIndex, false);
+      d.playing = false;
+      notifyListeners();
+    }
+  }
+
+  /// Finger up: if the track was playing, it carries on from where the
+  /// platter was left (and finds the master's beat again if synced).
+  void jogRelease(int deckIndex) {
+    final d = deck(deckIndex);
+    if (!_jogResume[deckIndex]) return;
+    _jogResume[deckIndex] = false;
+    if (!d.loaded || d.playing) return;
+    _engine.play(deckIndex, true);
+    d.playing = true;
+    if (d.synced) _alignPhase(deckIndex);
+    notifyListeners();
+  }
+
   /// Waveform tap: jump exactly 4 beats toward the tap. No grid snap —
   /// integer beat jumps keep relative phase.
   void seek(int deckIndex, double seconds) {
