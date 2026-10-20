@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sidedeck/engine/analysis_cache.dart';
@@ -170,7 +171,7 @@ class LibraryController extends ChangeNotifier {
       for (final f in result.files) {
         final path = f.path;
         if (path == null) continue;
-        await _addPath(path);
+        await _addPath(await _keepPermanently(path));
       }
       await _persist();
     } catch (e) {
@@ -178,6 +179,30 @@ class LibraryController extends ChangeNotifier {
     }
     loading = false;
     _emit();
+  }
+
+  /// Files picked from cloud storage (Drive, Dropbox, OneDrive...) arrive as
+  /// temporary copies that Android may delete. Keep our own copy so the track
+  /// stays in the library. Files from normal storage are used where they are.
+  Future<String> _keepPermanently(String path) async {
+    try {
+      final temp = (await getTemporaryDirectory()).path;
+      if (!p.isWithin(temp, path)) return path;
+      final support = await getApplicationSupportDirectory();
+      final dir = Directory(p.join(support.path, 'cloud'));
+      await dir.create(recursive: true);
+      var target = p.join(dir.path, p.basename(path));
+      var n = 1;
+      while (await File(target).exists()) {
+        final stem = p.basenameWithoutExtension(path);
+        target = p.join(dir.path, '$stem ($n)${p.extension(path)}');
+        n++;
+      }
+      await File(path).copy(target);
+      return target;
+    } catch (_) {
+      return path;
+    }
   }
 
   Future<void> pickFolder() async {

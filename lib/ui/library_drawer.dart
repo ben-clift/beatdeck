@@ -424,7 +424,7 @@ class _LibraryOverlayState extends State<LibraryOverlay> {
                       icon: const Icon(Icons.cloud_download, size: 22),
                     ),
                     IconButton(
-                      tooltip: 'Pick files',
+                      tooltip: 'Add files (phone, Drive or other cloud)',
                       visualDensity: VisualDensity.compact,
                       onPressed: lib.loading || lib.analyzing ? null : lib.pickFiles,
                       icon: const Icon(Icons.audio_file, size: 22),
