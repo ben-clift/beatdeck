@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:sidedeck/engine/music_utils.dart';
 import 'package:sidedeck/state/dj_controller.dart';
 import 'package:sidedeck/state/library_controller.dart';
+import 'package:sidedeck/suggest/auto_fetch.dart';
 import 'package:sidedeck/suggest/harmony.dart';
 import 'package:sidedeck/suggest/suggest_service.dart';
 import 'package:sidedeck/theme/sidedeck_theme.dart';
@@ -32,6 +33,7 @@ class _SuggestPageState extends State<SuggestPage> {
   List<Suggestion>? _online;
   bool _busy = false;
   double _range = 8;
+  int _count = 5;
 
   @override
   void initState() {
@@ -240,6 +242,81 @@ class _SuggestPageState extends State<SuggestPage> {
                     onPressed: () => _loadTo(t),
                   ),
                 ),
+              const SizedBox(height: 14),
+              ListenableBuilder(
+                listenable: AutoFetch.instance,
+                builder: (context, _) {
+                  final af = AutoFetch.instance;
+                  return Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      border: Border.all(color: SideDeckTheme.muted),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text('Auto-fetch from Soulseek',
+                            style: TextStyle(fontWeight: FontWeight.w700)),
+                        const SizedBox(height: 4),
+                        const Text(
+                          'Looks up what goes with this track, downloads the best '
+                          'match, then carries on from that one, each as soon as '
+                          'the last has finished. Only fetch music you have the '
+                          'right to have.',
+                          style: TextStyle(fontSize: 12, color: SideDeckTheme.muted),
+                        ),
+                        Row(
+                          children: [
+                            const Text('How many'),
+                            Expanded(
+                              child: Slider(
+                                value: _count.toDouble(),
+                                min: 1,
+                                max: 20,
+                                divisions: 19,
+                                label: '$_count',
+                                onChanged: af.running
+                                    ? null
+                                    : (v) => setState(() => _count = v.round()),
+                              ),
+                            ),
+                            Text('$_count'),
+                          ],
+                        ),
+                        Row(
+                          children: [
+                            FilledButton(
+                              onPressed: af.running
+                                  ? af.stop
+                                  : () => af.start(
+                                        artist: _d.artist,
+                                        title: _d.title,
+                                        seedBpm: _d.bpm,
+                                        seedKey: _key,
+                                        library: widget.library,
+                                        count: _count,
+                                        tempoRange: _range,
+                                      ),
+                              child: Text(af.running ? 'Stop' : 'Start'),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Text(
+                                af.status.isEmpty
+                                    ? ''
+                                    : '${af.status}  (${af.fetched}/${af.limit})',
+                                style: const TextStyle(fontSize: 12),
+                              ),
+                            ),
+                          ],
+                        ),
+                        for (final l in af.log)
+                          Text('✓ $l', style: const TextStyle(fontSize: 12)),
+                      ],
+                    ),
+                  );
+                },
+              ),
               const SizedBox(height: 14),
               Row(
                 children: [
