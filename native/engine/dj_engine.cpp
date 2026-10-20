@@ -5,6 +5,7 @@
 #include "fx.hpp"
 #include "id3_meta.hpp"
 #include "last_error.hpp"
+#include "recorder.hpp"
 
 #include "signalsmith-stretch.h"
 #include <oboe/Oboe.h>
@@ -458,6 +459,8 @@ struct Engine : public oboe::AudioStreamDataCallback,
   int eqSeenSr = 0;
   bool eqActive = false;
 
+  Recorder recorder;
+
   // Master effect (echo / reverb / flanger).
   std::atomic<int> fxType{0};
   std::atomic<float> fxAmount{0.0f};
@@ -855,6 +858,8 @@ struct Engine : public oboe::AudioStreamDataCallback,
 
     if (split) {
       for (int i = 0; i < n; ++i) {
+        recorder.push(std::max(-1.0f, std::min(1.0f, (mixAL[i] * gainA + mixBL[i] * gainB) * m)),
+                      std::max(-1.0f, std::min(1.0f, (mixAR[i] * gainA + mixBR[i] * gainB) * m)));
         const int base = i * channels;
         out[base + 0] = std::max(-1.0f, std::min(1.0f, mixAL[i] * m));
         out[base + 1] = std::max(-1.0f, std::min(1.0f, mixAR[i] * m));
@@ -888,6 +893,7 @@ struct Engine : public oboe::AudioStreamDataCallback,
         }
         l = std::max(-1.0f, std::min(1.0f, l));
         r = std::max(-1.0f, std::min(1.0f, r));
+        recorder.push(l, r);
         out[i * channels + 0] = l;
         out[i * channels + 1] = r;
         for (int c = 2; c < channels; ++c) {
@@ -1340,6 +1346,18 @@ void dj_set_deck_fx(DjEngine engine, int deck, int mask, float amount, float tim
   d.fxTime.store(std::max(0.1f, std::min(2.5f, time_sec)));
   d.fxMask.store(mask & 0xFF);
 }
+
+int dj_record_start(DjEngine engine, const char* path) {
+  Engine* e = asEngine(engine);
+  if (!path) {
+    return 0;
+  }
+  return e->recorder.start(path, std::max(8000, e->engineSampleRate.load())) ? 1 : 0;
+}
+
+void dj_record_stop(DjEngine engine) { asEngine(engine)->recorder.stop(); }
+
+double dj_record_seconds(DjEngine engine) { return asEngine(engine)->recorder.seconds(); }
 
 void dj_get_spectrum(DjEngine engine, float* out, int n) {
   if (!out || n <= 0) {

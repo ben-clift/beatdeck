@@ -1,6 +1,8 @@
+import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:sidedeck/engine/music_utils.dart';
 import 'package:sidedeck/state/dj_controller.dart';
 import 'package:sidedeck/state/library_controller.dart';
@@ -47,6 +49,39 @@ class _ControllerViewState extends State<ControllerView> {
     super.dispose();
   }
 
+  String _mmss(double s) {
+    final m = (s ~/ 60).toString().padLeft(2, '0');
+    final sec = (s.floor() % 60).toString().padLeft(2, '0');
+    return '$m:$sec';
+  }
+
+  Future<void> _toggleRecord() async {
+    final dj = widget.dj;
+    final messenger = ScaffoldMessenger.of(context);
+    if (dj.recording) {
+      final path = dj.stopRecording();
+      messenger.showSnackBar(SnackBar(
+        content: Text(path == null ? 'Recording stopped' : 'Saved $path'),
+      ));
+      final f = widget.library.folderPath;
+      if (f != null && f.isNotEmpty) widget.library.scanDirectory(f, persist: false);
+      return;
+    }
+    var dir = widget.library.folderPath;
+    if (dir == null || dir.isEmpty) {
+      final ext = await getExternalStorageDirectory();
+      final d = Directory('${ext?.path ?? (await getTemporaryDirectory()).path}/recordings');
+      await d.create(recursive: true);
+      dir = d.path;
+    }
+    final path = dj.startRecording(dir);
+    if (path == null) {
+      messenger.showSnackBar(
+        const SnackBar(content: Text('Could not start recording')),
+      );
+    }
+  }
+
   static const _titles = ['LIBRARY', 'DECKS 1 · 2', 'DECKS 3 · 4', 'EQUALISER'];
 
   @override
@@ -84,6 +119,30 @@ class _ControllerViewState extends State<ControllerView> {
                     ),
                   ),
                 ),
+              GestureDetector(
+                onTap: _toggleRecord,
+                child: Container(
+                  margin: const EdgeInsets.only(left: 8),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                  color: widget.dj.recording
+                      ? const Color(0xFFE5392C)
+                      : Colors.transparent,
+                  child: Text(
+                    widget.dj.recording
+                        ? 'REC ${_mmss(widget.dj.recordSeconds)}'
+                        : 'REC',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 1.5,
+                      color: widget.dj.recording
+                          ? Colors.white
+                          : SideDeckTheme.muted,
+                    ),
+                  ),
+                ),
+              ),
               GestureDetector(
                 onTap: () {
                   setState(() => _strip = !_strip);

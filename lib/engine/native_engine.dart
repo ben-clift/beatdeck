@@ -130,6 +130,13 @@ class NativeEngine {
   late final _setDeckFx = _lib.lookupFunction<
       Void Function(Pointer<Void>, Int32, Int32, Float, Float),
       void Function(Pointer<Void>, int, int, double, double)>('dj_set_deck_fx');
+  late final _recStart = _lib.lookupFunction<
+      Int32 Function(Pointer<Void>, Pointer<Utf8>),
+      int Function(Pointer<Void>, Pointer<Utf8>)>('dj_record_start');
+  late final _recStop = _lib.lookupFunction<Void Function(Pointer<Void>),
+      void Function(Pointer<Void>)>('dj_record_stop');
+  late final _recSeconds = _lib.lookupFunction<Double Function(Pointer<Void>),
+      double Function(Pointer<Void>)>('dj_record_seconds');
   late final _getSpectrum = _lib.lookupFunction<
       Void Function(Pointer<Void>, Pointer<Float>, Int32),
       void Function(Pointer<Void>, Pointer<Float>, int)>('dj_get_spectrum');
@@ -284,6 +291,20 @@ class NativeEngine {
   /// Effect pads on one deck. [mask] bit 0..7 = effect on or off.
   void setDeckFx(int deck, int mask, double amount, double timeSec) =>
       _setDeckFx(_handle, deck, mask, amount, timeSec);
+
+  /// Records the master output to a WAV file.
+  bool recordStart(String path) {
+    final p = path.toNativeUtf8();
+    try {
+      return _recStart(_handle, p) == 1;
+    } finally {
+      malloc.free(p);
+    }
+  }
+
+  void recordStop() => _recStop(_handle);
+
+  double recordSeconds() => _recSeconds(_handle);
 
   static const int spectrumBands = 14;
 

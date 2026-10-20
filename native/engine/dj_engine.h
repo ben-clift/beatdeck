@@ -42,6 +42,10 @@ void dj_set_rate(DjEngine engine, int deck, float rate);
 // Master graphic equaliser: band 0..9 (31 Hz to 16 kHz), gain -12..+12 dB.
 void dj_set_master_eq(DjEngine engine, int band, float db);
 // Master effect: type 0 off, 1 echo, 2 reverb, 3 flanger.
+// Records the master output to a WAV file. Returns 1 on success.
+int dj_record_start(DjEngine engine, const char* path);
+void dj_record_stop(DjEngine engine);
+double dj_record_seconds(DjEngine engine);
 void dj_set_fx(DjEngine engine, int type, float amount, float time_sec);
 // Effect pads on one deck: mask bits 0..7 = echo, reverb, flanger, phaser,
 // filter, crush, noise sweep, roll.

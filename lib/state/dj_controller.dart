@@ -104,6 +104,72 @@ class DjController extends ChangeNotifier {
     return 120;
   }
 
+  // ---- Mix recording and tracklist.
+  bool recording = false;
+  double recordSeconds = 0;
+  String? lastRecordingPath;
+  final List<(double, String)> _trackLog = [];
+  final List<String> _loggedFor = ['', '', '', ''];
+  String? recordDirectory;
+
+  /// Starts recording the master output into [dir]. Returns the file path,
+  /// or null if it could not start.
+  String? startRecording(String dir) {
+    if (recording) return null;
+    final now = DateTime.now();
+    String two(int v) => v.toString().padLeft(2, '0');
+    final path = '$dir/BeatDeck mix ${now.year}-${two(now.month)}-${two(now.day)} '
+        '${two(now.hour)}.${two(now.minute)}.wav';
+    if (!_engine.recordStart(path)) return null;
+    recording = true;
+    recordSeconds = 0;
+    lastRecordingPath = path;
+    _trackLog.clear();
+    for (var i = 0; i < 4; i++) {
+      _loggedFor[i] = '';
+    }
+    // Anything already playing starts the list.
+    for (var i = 0; i < deckCount; i++) {
+      if (deck(i).playing) _logTrack(i);
+    }
+    notifyListeners();
+    return path;
+  }
+
+  /// Stops recording and writes a tracklist text file next to the audio.
+  String? stopRecording() {
+    if (!recording) return null;
+    _engine.recordStop();
+    recording = false;
+    final path = lastRecordingPath;
+    if (path != null && _trackLog.isNotEmpty) {
+      String ts(double s) {
+        final m = (s ~/ 60).toString().padLeft(2, '0');
+        final sec = (s.floor() % 60).toString().padLeft(2, '0');
+        return '$m:$sec';
+      }
+      final text = [
+        for (final e in _trackLog) '${ts(e.$1)}  ${e.$2}',
+      ].join('\n');
+      try {
+        File(path.replaceFirst(RegExp(r'\.wav$'), '.txt'))
+            .writeAsStringSync('$text\n');
+      } catch (_) {}
+    }
+    notifyListeners();
+    return path;
+  }
+
+  void _logTrack(int deckIndex) {
+    if (!recording) return;
+    final d = deck(deckIndex);
+    final id = d.path ?? d.title;
+    if (_loggedFor[deckIndex] == id) return;
+    _loggedFor[deckIndex] = id;
+    final name = d.artist.isEmpty ? d.title : '${d.artist} - ${d.title}';
+    _trackLog.add((_engine.recordSeconds(), name));
+  }
+
   /// The eight effect pads. Each pad holds one effect; any pad can be given
   /// any effect.
   static const fxNames = [
@@ -278,6 +344,10 @@ class DjController extends ChangeNotifier {
       if (deckFxOn[i].isNotEmpty) _applyDeckFx(i);
     }
     var dirty = false;
+    if (recording) {
+      recordSeconds = _engine.recordSeconds();
+      dirty = true;
+    }
     if (spectrumOn || effectsOn || stripOn) {
       _updateSpectrum();
       dirty = true;
@@ -592,6 +662,7 @@ class DjController extends ChangeNotifier {
     d.playing = next;
     // A synced deck finds the master's beat again every time it starts.
     if (next && d.synced) _alignPhase(deckIndex);
+    if (next) _logTrack(deckIndex);
     notifyListeners();
   }
 
