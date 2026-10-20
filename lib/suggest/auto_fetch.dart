@@ -6,6 +6,7 @@ import 'package:sidedeck/engine/music_utils.dart';
 import 'package:sidedeck/soulseek/soulseek_client.dart';
 import 'package:sidedeck/state/library_controller.dart';
 import 'package:sidedeck/suggest/harmony.dart';
+import 'package:sidedeck/wishlist/wishlist.dart';
 import 'package:sidedeck/suggest/suggest_service.dart';
 
 /// Fetches tracks that suit a seed track, one after another: look up what
@@ -28,6 +29,11 @@ class AutoFetch extends ChangeNotifier {
   Future<void> load() async {
     try {
       final prefs = await SharedPreferences.getInstance();
+      source = prefs.getString('af_source') ?? source;
+      chartId = prefs.getInt('af_chart_id') ?? chartId;
+      chartName = prefs.getString('af_chart_name') ?? chartName;
+      chartTempo = prefs.getBool('af_chart_tempo') ?? chartTempo;
+      pasted = prefs.getString('af_pasted') ?? pasted;
       genre = prefs.getString('af_genre') ?? genre;
       bpmMin = prefs.getDouble('af_bpm_min') ?? bpmMin;
       bpmMax = prefs.getDouble('af_bpm_max') ?? bpmMax;
@@ -40,6 +46,11 @@ class AutoFetch extends ChangeNotifier {
   Future<void> save() async {
     try {
       final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('af_source', source);
+      await prefs.setInt('af_chart_id', chartId);
+      await prefs.setString('af_chart_name', chartName);
+      await prefs.setBool('af_chart_tempo', chartTempo);
+      await prefs.setString('af_pasted', pasted);
       await prefs.setString('af_genre', genre);
       await prefs.setDouble('af_bpm_min', bpmMin);
       await prefs.setDouble('af_bpm_max', bpmMax);
@@ -50,7 +61,20 @@ class AutoFetch extends ChangeNotifier {
 
   /// The AUTO switch: on starts fetching with the saved settings, off stops.
   void toggle(bool on, LibraryController library) {
-    if (on) {
+    if (on && source == 'chart') {
+      startChart(
+        id: chartId,
+        name: chartName,
+        matchTempo: chartTempo,
+        bpmMin: bpmMin,
+        bpmMax: bpmMax,
+        library: library,
+        count: count,
+        endless: endless,
+      );
+    } else if (on && source == 'list') {
+      startList(text: pasted, library: library);
+    } else if (on) {
       startByGenre(
         genre: genre,
         bpmMin: bpmMin,
@@ -173,6 +197,131 @@ class AutoFetch extends ChangeNotifier {
       running = false;
       notifyListeners();
     }
+  }
+
+  // Where the AUTO switch gets its tracks: 'genre', 'chart' or 'list'.
+  String source = 'genre';
+  int chartId = 113;
+  String chartName = 'Dance';
+  bool chartTempo = false;
+  String pasted = '';
+
+  /// Works through a ready-made list of tracks, or batches pulled from
+  /// [more] until it returns nothing new.
+  Future<void> _runSource({
+    required String label,
+    required Future<List<Suggestion>> Function(Set<String> tried) more,
+    required LibraryController library,
+    required int count,
+    required bool endless,
+    bool once = false,
+  }) async {
+    if (running) return;
+    if (!soulseek.online) {
+      _say('Sign in to Soulseek first');
+      return;
+    }
+    running = true;
+    _stop = false;
+    fetched = 0;
+    limit = endless ? 0 : count;
+    log.clear();
+    final tried = <String>{};
+    var empties = 0;
+    try {
+      while (!_stop && (endless || fetched < limit)) {
+        _say('Getting $label');
+        final found = await more(tried);
+        final queue = found.where((c) => !_inLibrary(library, c)).toList();
+        for (final f in found) {
+          tried.add(f.query.toLowerCase());
+        }
+        if (queue.isEmpty) {
+          if (once || ++empties >= 3) {
+            _say(once ? 'Reached the end of the list' : 'No more new tracks in $label');
+            break;
+          }
+          continue;
+        }
+        var gotOne = false;
+        for (final s in queue) {
+          if (_stop || (!endless && fetched >= limit)) break;
+          final saved = await _fetchOne(s, null);
+          if (saved != null) {
+            fetched++;
+            gotOne = true;
+            log.add('${s.artist} - ${s.title}');
+          }
+        }
+        if (once) {
+          _say('Finished the list: $fetched fetched');
+          break;
+        }
+        empties = gotOne ? 0 : empties + 1;
+        if (empties >= 3) {
+          _say('Nothing more found on Soulseek');
+          break;
+        }
+      }
+      if (_stop) _say('Stopped after $fetched');
+    } catch (e) {
+      _say('Stopped: $e');
+    } finally {
+      running = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> startChart({
+    required int id,
+    required String name,
+    required bool matchTempo,
+    required double bpmMin,
+    required double bpmMax,
+    required LibraryController library,
+    required int count,
+    required bool endless,
+  }) {
+    return _runSource(
+      label: '$name chart',
+      more: (tried) => _service.chart(
+        id,
+        name,
+        bpmMin: matchTempo ? bpmMin : null,
+        bpmMax: matchTempo ? bpmMax : null,
+        skip: tried,
+      ),
+      library: library,
+      count: count,
+      endless: endless,
+    );
+  }
+
+  Future<void> startList({
+    required String text,
+    required LibraryController library,
+  }) {
+    final cleaned = text
+        .split('\n')
+        .map((l) => l.replaceFirst(RegExp(r'^\s*\d+[.)]?\s+'), ''))
+        .join('\n');
+    final items = WishParser.parse(cleaned);
+    final list = [
+      for (final i in items) Suggestion(i.artist, i.title, 0, 'Your list'),
+    ];
+    var given = false;
+    return _runSource(
+      label: 'your list (${list.length} tracks)',
+      more: (tried) async {
+        if (given) return <Suggestion>[];
+        given = true;
+        return list;
+      },
+      library: library,
+      count: list.length,
+      endless: false,
+      once: true,
+    );
   }
 
   /// Picks by genre and tempo alone, no seed track. With [endless] it keeps

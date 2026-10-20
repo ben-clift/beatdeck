@@ -5,6 +5,7 @@ import 'package:sidedeck/soulseek/soulseek_client.dart';
 import 'package:sidedeck/state/library_controller.dart';
 import 'package:sidedeck/suggest/auto_fetch.dart';
 import 'package:sidedeck/suggest/genres.dart';
+import 'package:sidedeck/suggest/suggest_service.dart';
 import 'package:sidedeck/theme/sidedeck_theme.dart';
 
 /// Pick a genre and tempo, press start, and tracks keep arriving from
@@ -26,6 +27,18 @@ class _AutoFetchPageState extends State<AutoFetchPage> {
   );
   late double _count = AutoFetch.instance.count.toDouble();
   late bool _endless = AutoFetch.instance.endless;
+  late String _source = AutoFetch.instance.source;
+  late final _pasted = TextEditingController(text: AutoFetch.instance.pasted);
+  late bool _chartTempo = AutoFetch.instance.chartTempo;
+  List<(int, String)> _charts = const [];
+
+  @override
+  void initState() {
+    super.initState();
+    SuggestService().genres().then((g) {
+      if (mounted) setState(() => _charts = g);
+    });
+  }
 
   void _remember() {
     final af = AutoFetch.instance;
@@ -34,6 +47,9 @@ class _AutoFetchPageState extends State<AutoFetchPage> {
     af.bpmMax = _bpm.end;
     af.count = _count.round();
     af.endless = _endless;
+    af.source = _source;
+    af.pasted = _pasted.text;
+    af.chartTempo = _chartTempo;
     af.save();
   }
 
@@ -54,6 +70,7 @@ class _AutoFetchPageState extends State<AutoFetchPage> {
   void dispose() {
     _remember();
     _genre.dispose();
+    _pasted.dispose();
     super.dispose();
   }
 
@@ -75,6 +92,72 @@ class _AutoFetchPageState extends State<AutoFetchPage> {
               style: TextStyle(color: SideDeckTheme.muted, fontSize: 12),
             ),
             const SizedBox(height: 12),
+            SegmentedButton<String>(
+              segments: const [
+                ButtonSegment(value: 'genre', label: Text('Genre')),
+                ButtonSegment(value: 'chart', label: Text('Chart')),
+                ButtonSegment(value: 'list', label: Text('My list')),
+              ],
+              selected: {_source},
+              onSelectionChanged: af.running
+                  ? null
+                  : (v) => setState(() => _source = v.first),
+            ),
+            const SizedBox(height: 10),
+            if (_source == 'chart') ...[
+              const Text(
+                'The most played tracks of a genre right now, from Deezer\'s '
+                'charts. Dance and Electro are the dance floor ones.',
+                style: TextStyle(fontSize: 12, color: SideDeckTheme.muted),
+              ),
+              const SizedBox(height: 6),
+              if (_charts.isEmpty)
+                const Text('Loading charts…')
+              else
+                DropdownButton<int>(
+                  isExpanded: true,
+                  value: _charts.any((c) => c.$1 == AutoFetch.instance.chartId)
+                      ? AutoFetch.instance.chartId
+                      : _charts.first.$1,
+                  items: [
+                    for (final c in _charts)
+                      DropdownMenuItem(value: c.$1, child: Text(c.$2)),
+                  ],
+                  onChanged: af.running
+                      ? null
+                      : (v) => setState(() {
+                            final c = _charts.firstWhere((e) => e.$1 == v);
+                            af.chartId = c.$1;
+                            af.chartName = c.$2;
+                          }),
+                ),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Only tracks in the tempo range below'),
+                value: _chartTempo,
+                onChanged: af.running ? null : (v) => setState(() => _chartTempo = v),
+              ),
+            ],
+            if (_source == 'list') ...[
+              const Text(
+                'Paste a chart or any list, one track per line as "Artist - Title". '
+                'Copy a Beatport or Juno top 100 from their page and paste it here. '
+                'Leading numbers are ignored. It works down the list once.',
+                style: TextStyle(fontSize: 12, color: SideDeckTheme.muted),
+              ),
+              const SizedBox(height: 6),
+              TextField(
+                controller: _pasted,
+                enabled: !af.running,
+                minLines: 6,
+                maxLines: 12,
+                decoration: const InputDecoration(
+                  border: OutlineInputBorder(),
+                  hintText: '1. Artist - Title\n2. Artist - Title',
+                ),
+              ),
+            ],
+            if (_source == 'genre') ...[
             TextField(
               controller: _genre,
               enabled: !af.running,
@@ -116,6 +199,8 @@ class _AutoFetchPageState extends State<AutoFetchPage> {
                   ),
               ],
             ),
+            ],
+            if (_source != 'list') ...[
             const SizedBox(height: 14),
             Text('Tempo  ${_bpm.start.round()} to ${_bpm.end.round()} BPM',
                 style: const TextStyle(fontWeight: FontWeight.w700)),
@@ -133,7 +218,8 @@ class _AutoFetchPageState extends State<AutoFetchPage> {
               value: _endless,
               onChanged: af.running ? null : (v) => setState(() => _endless = v),
             ),
-            if (!_endless)
+            ],
+            if (_source != 'list' && !_endless)
               Row(
                 children: [
                   const Text('How many'),
@@ -158,14 +244,7 @@ class _AutoFetchPageState extends State<AutoFetchPage> {
                       ? af.stop
                       : () {
                           _remember();
-                          af.startByGenre(
-                            genre: _genre.text.trim().isEmpty ? 'house' : _genre.text.trim(),
-                            bpmMin: _bpm.start,
-                            bpmMax: _bpm.end,
-                            library: widget.library,
-                            count: _count.round(),
-                            endless: _endless,
-                          );
+                          af.toggle(true, widget.library);
                         },
                   child: Text(af.running ? 'Stop' : 'Start'),
                 ),

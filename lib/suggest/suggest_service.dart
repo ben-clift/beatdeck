@@ -147,6 +147,65 @@ class SuggestService {
     return out;
   }
 
+  /// Deezer's genres, as (id, name), for the chart picker.
+  Future<List<(int, String)>> genres() async {
+    try {
+      final g = await _get('https://api.deezer.com/genre');
+      return [
+        for (final e in ((g['data'] as List?) ?? const []))
+          if ((e as Map)['id'] != 0) ((e['id'] as num).toInt(), (e['name'] ?? '') as String),
+      ];
+    } catch (_) {
+      return const [];
+    }
+  }
+
+  /// Most-played tracks of a Deezer genre, in chart order. With [bpmMin] and
+  /// [bpmMax] set, only those in the tempo range are kept (each tempo is
+  /// looked up, so it is slower).
+  Future<List<Suggestion>> chart(
+    int genreId,
+    String genreName, {
+    double? bpmMin,
+    double? bpmMax,
+    Set<String> skip = const {},
+    int want = 12,
+  }) async {
+    final raw = <(int, String, String)>[];
+    try {
+      final c = await _get('https://api.deezer.com/chart/$genreId/tracks?limit=100');
+      for (final t in ((c['data'] as List?) ?? const [])) {
+        final m = t as Map;
+        final artist = ((m['artist'] as Map?)?['name'] ?? '') as String;
+        final title = (m['title'] ?? '') as String;
+        if (skip.contains('$artist $title'.toLowerCase())) continue;
+        raw.add((m['id'] as int, title, artist));
+      }
+    } catch (_) {}
+    final out = <Suggestion>[];
+    if (bpmMin == null || bpmMax == null) {
+      for (final r in raw.take(want)) {
+        out.add(Suggestion(r.$3, r.$2, 0, '$genreName chart'));
+      }
+      return out;
+    }
+    for (var i = 0; i < raw.length && out.length < want; i += 6) {
+      final got = await Future.wait(raw.skip(i).take(6).map((r) async {
+        double bpm = 0;
+        try {
+          final tr = await _get('https://api.deezer.com/track/${r.$1}');
+          bpm = ((tr['bpm'] as num?) ?? 0).toDouble();
+        } catch (_) {}
+        return Suggestion(r.$3, r.$2, bpm, '$genreName chart');
+      }));
+      for (final s in got) {
+        if (s.bpm >= bpmMin && s.bpm <= bpmMax) out.add(s);
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 400));
+    }
+    return out;
+  }
+
   /// Top tracks from the seed artist and from artists listeners pair with it,
   /// each with its tempo so the list can be filtered.
   Future<List<Suggestion>> candidates(int artistId, String seedArtist) async {
