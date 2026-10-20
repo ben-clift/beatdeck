@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sidedeck/state/dj_controller.dart';
 import 'package:sidedeck/state/library_controller.dart';
 import 'package:sidedeck/state/look_controller.dart';
@@ -20,12 +21,32 @@ class AutomixPullDown extends StatefulWidget {
 }
 
 class _AutomixPullDownState extends State<AutomixPullDown> {
-  static const _panelH = 170.0;
+  static const _panelH = 222.0;
   static const _tabH = 24.0;
 
   final _playlists = PlaylistController();
   bool _open = false;
-  double _fade = 12;
+  double _fade = 20;
+  double _offset = 10;
+
+  @override
+  void initState() {
+    super.initState();
+    SharedPreferences.getInstance().then((p) {
+      if (!mounted) return;
+      setState(() {
+        _fade = p.getDouble('automix_fade') ?? _fade;
+        _offset = p.getDouble('automix_offset') ?? _offset;
+      });
+    }).catchError((_) {});
+  }
+
+  void _saveTimes() {
+    SharedPreferences.getInstance().then((p) {
+      p.setDouble('automix_fade', _fade);
+      p.setDouble('automix_offset', _offset);
+    }).catchError((_) {});
+  }
   String? _selectedId;
 
   @override
@@ -203,7 +224,7 @@ class _AutomixPullDownState extends State<AutomixPullDown> {
                     onPressed: paths.isEmpty
                         ? null
                         : () {
-                            dj.startAutomix(paths, fadeSeconds: _fade);
+                            dj.startAutomix(paths, fadeSeconds: _fade, startOffsetSeconds: _offset);
                             setState(() => _open = false);
                           },
                     icon: const Icon(Icons.auto_mode, size: 18),
@@ -253,18 +274,58 @@ class _AutomixPullDownState extends State<AutomixPullDown> {
             ),
             Row(
               children: [
-                const Text('Fade', style: TextStyle(fontSize: 12)),
+                const SizedBox(
+                  width: 150,
+                  child: Text('Start mixing, seconds from the end',
+                      style: TextStyle(fontSize: 12)),
+                ),
                 Expanded(
                   child: Slider(
                     value: _fade,
                     min: 4,
-                    max: 30,
-                    divisions: 26,
+                    max: 60,
+                    divisions: 56,
                     label: '${_fade.round()} s',
-                    onChanged: on ? null : (v) => setState(() => _fade = v),
+                    onChanged: on
+                        ? null
+                        : (v) {
+                            setState(() => _fade = v);
+                            _saveTimes();
+                          },
                   ),
                 ),
-                Text('${_fade.round()} s', style: const TextStyle(fontSize: 12)),
+                SizedBox(
+                  width: 36,
+                  child: Text('${_fade.round()} s', style: const TextStyle(fontSize: 12)),
+                ),
+              ],
+            ),
+            Row(
+              children: [
+                const SizedBox(
+                  width: 150,
+                  child: Text('Next track starts this far in',
+                      style: TextStyle(fontSize: 12)),
+                ),
+                Expanded(
+                  child: Slider(
+                    value: _offset,
+                    min: 0,
+                    max: 60,
+                    divisions: 60,
+                    label: '${_offset.round()} s',
+                    onChanged: on
+                        ? null
+                        : (v) {
+                            setState(() => _offset = v);
+                            _saveTimes();
+                          },
+                  ),
+                ),
+                SizedBox(
+                  width: 36,
+                  child: Text('${_offset.round()} s', style: const TextStyle(fontSize: 12)),
+                ),
               ],
             ),
           ],

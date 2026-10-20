@@ -426,7 +426,11 @@ class DjController extends ChangeNotifier {
   // tempo, started on the same point in the beat, and crossfaded in.
 
   bool automixOn = false;
-  double automixFadeSeconds = 12;
+  /// How long before the end the mix starts (and how long it lasts).
+  double automixFadeSeconds = 20;
+
+  /// How far into the next track it starts playing, rounded to whole bars.
+  double automixStartOffset = 10;
   String? automixStatus;
   List<String> _automixQueue = [];
   int _automixIndex = -1; // queue index of the track on the current deck
@@ -443,12 +447,14 @@ class DjController extends ChangeNotifier {
 
   Future<void> startAutomix(
     List<String> paths, {
-    double fadeSeconds = 12,
+    double fadeSeconds = 20,
+    double startOffsetSeconds = 10,
   }) async {
     if (paths.isEmpty) return;
     stopAutomix();
     _automixQueue = List<String>.of(paths);
-    automixFadeSeconds = fadeSeconds.clamp(2.0, 30.0).toDouble();
+    automixFadeSeconds = fadeSeconds.clamp(4.0, 60.0).toDouble();
+    automixStartOffset = startOffsetSeconds.clamp(0.0, 90.0).toDouble();
     automixOn = true;
     automixStatus = 'Loading first track';
     _automixBusy = true;
@@ -555,13 +561,21 @@ class DjController extends ChangeNotifier {
     );
     inc.synced = false;
     _applyRate(other);
-    final start = incomingStartPosition(
+    final startRaw = incomingStartPosition(
       outPosition: outPosition,
       outBpm: out.bpm,
       outBeatOffset: out.beatOffset,
       inBpm: inc.bpm,
       inBeatOffset: inc.beatOffset,
-    ).clamp(0.0, math.max(0.0, inc.duration)).toDouble();
+    );
+    // Skip the first part of the next track, in whole bars so the beats still line up.
+    var offset = automixStartOffset;
+    if (inc.bpm > 1 && offset > 0) {
+      final bar = 4 * 60.0 / inc.bpm;
+      offset = (offset / bar).round() * bar;
+    }
+    final room = math.max(0.0, inc.duration - automixFadeSeconds - 5);
+    final start = math.min(startRaw + offset, room).clamp(0.0, math.max(0.0, inc.duration)).toDouble();
     _engine.seek(other, start);
     inc.position = start;
     _automixFadeFrom = crossfaderEndFor(cur);
