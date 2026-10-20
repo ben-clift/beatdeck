@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
@@ -224,6 +225,16 @@ class LibraryController extends ChangeNotifier {
     }
     loading = false;
     _emit();
+  }
+
+  /// Adds one finished download (or any file) to the library at once, keeps
+  /// it across restarts and works out its tempo and key.
+  Future<void> addFile(String path) async {
+    if (!isNativeAudioExtension(p.extension(path))) return;
+    await _addPath(path);
+    await _persist();
+    _emit();
+    unawaited(analyzePath(path));
   }
 
   Future<void> scanDirectory(String dirPath, {bool persist = true}) async {

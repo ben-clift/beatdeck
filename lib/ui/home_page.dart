@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:sidedeck/soulseek/slsk_setup.dart';
 import 'package:flutter/services.dart';
 import 'package:sidedeck/engine/music_utils.dart';
 import 'package:sidedeck/engine/usb_output.dart';
@@ -43,6 +44,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     LookController.instance.load();
     _dj = DjController();
     _library = LibraryController();
+    SlskSetup.load().then((_) => SlskSetup.wire(_library));
+    SlskSetup.wire(_library);
     _dj.addListener(_onDjChanged);
   }
 

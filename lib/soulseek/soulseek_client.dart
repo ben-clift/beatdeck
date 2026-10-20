@@ -96,7 +96,7 @@ class SoulseekClient extends ChangeNotifier {
   String Function()? downloadDir;
 
   /// Called after a file finishes so the library can pick it up.
-  VoidCallback? onFileSaved;
+  void Function(String path)? onFileSaved;
 
   Socket? _server;
   ServerSocket? _listener;
@@ -688,7 +688,8 @@ class SoulseekClient extends ChangeNotifier {
     d.state = DlState.done;
     d.message = 'Saved';
     _changed();
-    onFileSaved?.call();
+    final saved = d.savedPath;
+    if (saved != null) onFileSaved?.call(saved);
   }
 
   @override

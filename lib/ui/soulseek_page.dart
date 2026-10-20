@@ -1,8 +1,7 @@
-import 'dart:io';
 
 import 'package:flutter/material.dart';
-import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:sidedeck/soulseek/slsk_setup.dart';
 import 'package:sidedeck/soulseek/soulseek_client.dart';
 import 'package:sidedeck/state/library_controller.dart';
 import 'package:sidedeck/suggest/harmony.dart';
@@ -27,13 +26,11 @@ class _SoulseekPageState extends State<SoulseekPage> {
   final _pass = TextEditingController();
   final _query = TextEditingController();
   bool _hide = true;
-  String _fallbackDir = '';
 
   @override
   void initState() {
     super.initState();
-    soulseek.downloadDir = () => widget.library.folderPath ?? _fallbackDir;
-    soulseek.onFileSaved = () => widget.library.refresh();
+    SlskSetup.wire(widget.library);
     _loadSaved();
     final q = widget.initialQuery;
     if (q != null && q.isNotEmpty) {
@@ -59,12 +56,7 @@ class _SoulseekPageState extends State<SoulseekPage> {
       final prefs = await SharedPreferences.getInstance();
       _user.text = prefs.getString('slsk_user') ?? '';
       _pass.text = prefs.getString('slsk_pass') ?? '';
-      final dir = await getExternalStorageDirectory();
-      if (dir != null) {
-        final d = Directory('${dir.path}/soulseek');
-        await d.create(recursive: true);
-        _fallbackDir = d.path;
-      }
+      await SlskSetup.load();
     } catch (_) {}
     if (mounted) setState(() {});
   }
@@ -200,6 +192,26 @@ class _SoulseekPageState extends State<SoulseekPage> {
               ),
             ),
           ),
+          ListTile(
+            dense: true,
+            leading: const Icon(Icons.folder_open),
+            title: Text(
+              'Saving to ${SlskSetup.dirFor(widget.library)}',
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontSize: 12),
+            ),
+            subtitle: const Text(
+              'Finished downloads are added to your library automatically.',
+              style: TextStyle(fontSize: 11),
+            ),
+            trailing: TextButton(
+              onPressed: () async {
+                if (await SlskSetup.choose(widget.library)) setState(() {});
+              },
+              child: const Text('Change'),
+            ),
+          ),
           TabBar(
             tabs: [
               Tab(text: 'Results (${results.length})'),
@@ -298,7 +310,7 @@ class _SoulseekPageState extends State<SoulseekPage> {
       itemBuilder: (context, i) {
         final d = list[i];
         final status = switch (d.state) {
-          DlState.done => 'Saved to your library folder',
+          DlState.done => 'In your library  ·  ${d.savedPath ?? ''}',
           DlState.downloading =>
             '${(d.progress * 100).round()}%  of ${(d.size / 1048576).toStringAsFixed(1)} MB',
           _ => d.message,
