@@ -57,7 +57,7 @@ class Traxsource {
         jsonEncode({
           't': DateTime.now().millisecondsSinceEpoch,
           'items': [
-            for (final s in items) [s.artist, s.title, s.bpm, s.genre],
+            for (final s in items) [s.artist, s.title, s.bpm, s.reason],
           ],
         }),
       );
@@ -179,7 +179,7 @@ class Traxsource {
     final list = await all();
     return [
       for (final s in list)
-        if ((genre.isEmpty || genresSimilar(genre, s.genre)) &&
+        if ((genre.isEmpty || genresSimilar(genre, s.reason)) &&
             (bpmMin == null || bpmMax == null || (s.bpm >= bpmMin && s.bpm <= bpmMax)))
           s,
     ];
