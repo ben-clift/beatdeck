@@ -57,7 +57,14 @@ double incomingRate({
   required double inBpm,
 }) {
   if (outBpm <= 1 || inBpm <= 1) return 1.0;
-  return (outBpm * outRate / inBpm).clamp(0.5, 2.0).toDouble();
+  var r = outBpm * outRate / inBpm;
+  // A tempo read at half or double speed would otherwise drag the track to
+  // the very bottom or top of the range: match on the same beat instead.
+  if (r > 1.85 && r < 2.15) r /= 2;
+  if (r > 0.46 && r < 0.54) r *= 2;
+  // Never stretch a track further than 8 %; beyond that the mix is a blend
+  // at its own speed rather than a squashed track.
+  return r.clamp(0.92, 1.08).toDouble();
 }
 
 /// True when the incoming track should start now: the outgoing track has
