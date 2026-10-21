@@ -707,6 +707,12 @@ class AutoFetch extends ChangeNotifier {
   bool get pipelineBusy => _pipeline;
   static final Set<String> _triedThisSession = {};
 
+  // Genre the shop gave for a downloaded file (Traxsource lists one), used
+  // when the file itself carries no genre tag.
+  final Map<String, String> _genreHint = {};
+  String hintFor(String path) => _genreHint[path] ?? '';
+
+
   Future<List<Suggestion>> _shortlist(String g, double? lo, double? hi) async {
     final lib = _lib;
     final out = <Suggestion>[];
@@ -871,6 +877,12 @@ class AutoFetch extends ChangeNotifier {
       while (!_stop && winner == null) {
         for (final f in [...flights]) {
           if (f.dl.state == DlState.done && f.dl.savedPath != null) {
+            const generic = {'Hardwax', 'RA', 'You like'};
+            if (f.s.reason.isNotEmpty &&
+                !generic.contains(f.s.reason) &&
+                !f.s.reason.contains('underground')) {
+              _genreHint[f.dl.savedPath!] = f.s.reason;
+            }
             // Look at the file before it goes anywhere near a deck.
             final bad = await AudioCheck.problem(f.dl.savedPath!);
             if (bad == null) {

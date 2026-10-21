@@ -66,7 +66,10 @@ class SlskSetup {
     soulseek.storageCheck = (size) => StorageGuard.blockReason(dirFor(lib), size);
     dj?.onFileMissing = (_) => lib.removeMissing();
     dj?.fetchBusy = () => AutoFetch.instance.running || AutoFetch.instance.manualPending > 0;
-    dj?.genreOf = lib.genreOf;
+    dj?.genreOf = (path) {
+      final g = lib.genreOf(path);
+      return g.isNotEmpty ? g : AutoFetch.instance.hintFor(path);
+    };
     dj?.fetchStatus = () => AutoFetch.instance.status;
     AutoFetch.instance.addListener(() => dj?.refresh());
     // Starting automix switches AUTO on and makes sure Soulseek is signed in.
