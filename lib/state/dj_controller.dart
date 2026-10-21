@@ -441,7 +441,7 @@ class DjController extends ChangeNotifier {
       if (_wasPlayed(q)) continue;
       final c = _flowOf(q);
       if (c == null) continue;
-      if (!_suits(q)) continue;
+      if (_rejected.contains(q) || !_suits(q)) continue;
       if (cur.key != null && c.key != null && keyMatch(cur.key!, c.key!).score < 70) continue;
       fits++;
     }
@@ -611,7 +611,10 @@ class DjController extends ChangeNotifier {
     d.key = -1;
     loadedPaths.remove(path);
     automixDrop(path);
-    if (wasNext) _automixPreloaded = false;
+    if (wasNext) {
+      _upNext = null;
+      _automixPreloaded = false;
+    }
     if (wasCurrent) {
       // Same as a deck that ended: bring in the next suitable track.
       _automixDeckEnded(i, 1 - i);
@@ -679,24 +682,68 @@ class DjController extends ChangeNotifier {
 
   /// Does [path] suit the track now playing? Same or similar genre and a
   /// tempo within 8 %. Unknown genre or tempo does not rule it out.
-  bool _suits(String path) {
+  bool _suits(String path, {int tier = 0}) {
     final curPath = _automixIndex >= 0 && _automixIndex < _automixQueue.length
         ? _automixQueue[_automixIndex]
         : null;
-    if (curPath == null) return true;
+    if (curPath == null || tier >= 2) return true;
     final cur = _flowOf(curPath);
     final c = _flowOf(path);
-    if (cur != null && cur.bpm > 0) {
-      // A track not analysed yet is not picked until its tempo is known.
-      if (c == null || c.bpm <= 0) return false;
-      if (bpmGapPercent(cur.bpm, c.bpm).abs() > 8) return false;
+    final tol = tier == 0 ? 8.0 : 15.0;
+    // A tempo not known yet does not rule a track out: it is loaded, read by
+    // the engine, and checked before the mix (see _loadNext).
+    if (cur != null && cur.bpm > 0 && c != null && c.bpm > 0) {
+      if (bpmGapPercent(cur.bpm, c.bpm).abs() > tol) return false;
     }
-    final g = genreOf;
-    if (g != null && !genresSimilar(g(curPath), g(path))) return false;
+    if (tier == 0) {
+      final g = genreOf;
+      if (g != null && !genresSimilar(g(curPath), g(path))) return false;
+    }
     return true;
   }
 
-  int? _nextUnplayed({bool strict = true}) {
+  // ---- Up next ------------------------------------------------------------
+  // The track committed to follow the playing one. It is chosen once, loaded
+  // on the idle deck, checked against the playing track and then mixed in;
+  // it does not change under the mix.
+  String? _upNext;
+  // Tracks tried and turned down for the track now playing (tempo too far).
+  final Set<String> _rejected = {};
+  int _busyTicks = 0;
+
+  int? _upNextIndex() {
+    final u = _upNext;
+    if (u == null) return null;
+    final i = _automixQueue.indexOf(u);
+    if (i <= _automixIndex || _wasPlayed(u)) {
+      _upNext = null;
+      _automixPreloaded = false;
+      return null;
+    }
+    return i;
+  }
+
+  void _clearUpNext() {
+    _upNext = null;
+    _automixPreloaded = false;
+    _flowNext = null;
+    _rejected.clear();
+  }
+
+  /// The committed next track, or a new pick for the given tier (0 = same
+  /// genre and tempo, 1 = tempo within 15 %, 2 = anything not played).
+  int? _nextUnplayed({int tier = 0}) {
+    final held = _upNextIndex();
+    if (held != null) return held;
+    final i = _pickNext(tier);
+    if (i != null) {
+      _upNext = _automixQueue[i];
+      _automixPreloaded = false;
+    }
+    return i;
+  }
+
+  int? _pickNext(int tier) {
     final flow = _flow;
     if (flow != null && flow.arc != FlowArc.off) {
       final held = _flowNext;
@@ -710,7 +757,8 @@ class DjController extends ChangeNotifier {
       for (var i = _automixIndex + 1; i < _automixQueue.length; i++) {
         final path = _automixQueue[i];
         if (_wasPlayed(path)) continue;
-        if (strict && !_suits(path)) continue;
+        if (tier < 2 && _rejected.contains(path)) continue;
+        if (!_suits(path, tier: tier)) continue;
         cands.add((i, _flowOf(path) ?? FlowTrack(path)));
       }
       if (cands.isEmpty) return null;
@@ -734,11 +782,13 @@ class DjController extends ChangeNotifier {
     for (var i = _automixIndex + 1; i < _automixQueue.length; i++) {
       final path = _automixQueue[i];
       if (_wasPlayed(path)) continue;
-      if (strict && !_suits(path)) continue;
+      if (tier < 2 && _rejected.contains(path)) continue;
+      if (!_suits(path, tier: tier)) continue;
       final c = _flowOf(path);
       var score = 0.0;
       if (cur != null && c != null) {
         if (cur.bpm > 0 && c.bpm > 0) score -= bpmGapPercent(cur.bpm, c.bpm).abs() * 4;
+        if (cur.bpm > 0 && c.bpm <= 0) score -= 12; // unknown tempo: after the known fits
         if (cur.key != null && c.key != null) score += keyMatch(cur.key!, c.key!).score * 0.3;
       }
       if (score > bestScore) {
@@ -829,7 +879,7 @@ class DjController extends ChangeNotifier {
     _markPlayed(_automixQueue.first);
     DebugLog.flow('Automix start', true);
     DebugLog.ok('automix', 'playing first track on deck 1: ${_automixQueue.first.split(RegExp(r'[\\/]')).last}');
-    _automixPreloaded = false;
+    _clearUpNext();
     _automixFading = false;
     automixStatus = null;
     notifyListeners();
@@ -848,8 +898,7 @@ class DjController extends ChangeNotifier {
         if (seen.add(_trackKey(p))) p,
     ];
     _automixIndex = 0;
-    _flowNext = null;
-    _automixPreloaded = false;
+    _clearUpNext();
     DebugLog.ok('automix', 'switched list, ${_automixQueue.length - 1} tracks follow');
     automixStatus = 'Switched: new list plays after this track';
     notifyListeners();
@@ -863,10 +912,9 @@ class DjController extends ChangeNotifier {
     }
     automixOn = false;
     _automixFading = false;
-    _automixPreloaded = false;
+    _clearUpNext();
     _automixDeck = -1;
     _automixIndex = -1;
-    _flowNext = null;
     _flow = null;
     if (wasOn) {
       automixStatus = null;
@@ -876,7 +924,19 @@ class DjController extends ChangeNotifier {
 
   /// Returns true if something on screen changed.
   bool _automixTick() {
-    if (!automixOn || _automixBusy || _automixDeck < 0) return false;
+    if (!automixOn || _automixDeck < 0) return false;
+    if (_automixBusy) {
+      // A load that never finishes must not freeze automix: give it a minute.
+      if (++_busyTicks > 1200) {
+        DebugLog.fail('automix', 'a track load took over a minute, carrying on');
+        _automixBusy = false;
+        _busyTicks = 0;
+        _upNext = null;
+        _automixPreloaded = false;
+      }
+      return false;
+    }
+    _busyTicks = 0;
     if (_automixFading) {
       final jump = _skipJump(_automixDeck);
       if (jump != 0) {
@@ -890,13 +950,12 @@ class DjController extends ChangeNotifier {
     final cur = _automixDeck;
     final other = 1 - cur;
     final d = deck(cur);
-    // The playing deck ran to its end without a mix: carry on at once.
+    // The playing deck ran to its end (or its track was removed): carry on.
     if (!d.loaded ||
         (!d.playing && d.duration > 0 && _engine.position(cur) >= d.duration - 0.6)) {
-      // Ended, or the track was removed from the deck.
       return _automixDeckEnded(cur, other);
     }
-    if (!d.loaded || !d.playing) return false; // paused by the DJ: wait
+    if (!d.playing) return false; // paused by the DJ: wait
     final jump = _skipJump(cur);
     if (jump != 0) {
       DebugLog.add('automix', 'you moved the playing track ${jump > 0 ? 'forward' : 'back'} ${jump.abs().toStringAsFixed(0)} s, timing worked out again');
@@ -907,37 +966,20 @@ class DjController extends ChangeNotifier {
       rate: d.rate,
     );
     _checkNeedTrack();
-    // Only tracks that suit; with under 45 s left, take the nearest rather than stop.
-    final next = _nextUnplayed() ?? (remaining <= 45 ? _nextUnplayed(strict: false) : null);
+    // The fit relaxes as the end gets close, so something always plays:
+    // same genre and tempo, then tempo within 15 %, then anything unplayed.
+    final tier = remaining > 45 ? 0 : (remaining > 20 ? 1 : 2);
+    final next = _nextUnplayed(tier: tier);
     if (next == null) {
-      // Nothing suitable left: stay on and let the helper find one.
-      if (remaining <= 45) {
-        automixStatus = (fetchBusy?.call() ?? false)
-            ? 'Finding a matching track…'
-            : 'No suitable track left. Looking for one.';
-      }
+      automixStatus = (fetchBusy?.call() ?? false)
+          ? 'Finding a matching track…'
+          : (remaining <= 45 ? 'No suitable track left. Looking for one.' : automixStatus);
       return remaining <= 45;
     }
     if (!_automixPreloaded) {
-      if (shouldPreload(remaining: remaining, fadeSeconds: automixFadeSeconds)) {
+      if (shouldPreload(remaining: remaining, fadeSeconds: automixFadeSeconds) || tier > 0) {
         _automixBusy = true;
-        final path = _automixQueue[next];
-        loadFile(other, path).then((ok) {
-          _automixBusy = false;
-          if (!automixOn) return;
-          if (ok) {
-            DebugLog.ok('automix', 'next track ready on deck ${other + 1}');
-            _automixPreloaded = true;
-          } else {
-            // Skip a track that will not load.
-            DebugLog.flow('Automix mix to next deck', false, 'next track would not load');
-            DebugLog.fail('automix', 'next track would not load, skipped: ${_automixQueue[next].split(RegExp(r'[\\/]')).last}');
-            _automixQueue.removeAt(next);
-            _flowNext = null;
-            automixStatus = 'Skipped a track that would not load';
-          }
-          notifyListeners();
-        });
+        _loadNext(other, _automixQueue[next], tier);
       }
       return false;
     }
@@ -975,6 +1017,50 @@ class DjController extends ChangeNotifier {
     return false;
   }
 
+  /// Loads the committed next track on the idle deck, reads its real tempo
+  /// and turns it down if it is too far from the playing track.
+  Future<void> _loadNext(int other, String path, int tier) async {
+    try {
+      final ok = await loadFile(other, path);
+      if (!automixOn || _automixDeck != 1 - other) return;
+      if (!ok) {
+        DebugLog.flow('Automix mix to next deck', false, 'next track would not load');
+        DebugLog.fail('automix', 'next track would not load, skipped: ${path.split(RegExp(r'[\\/]')).last}');
+        _automixQueue.remove(path);
+        _upNext = null;
+        _flowNext = null;
+        automixStatus = 'Skipped a track that would not load';
+        return;
+      }
+      final out = deck(1 - other);
+      final inc = deck(other);
+      final old = _flowInfo[path];
+      _flowInfo[path] = FlowTrack(path,
+          bpm: inc.bpm > 1 ? inc.bpm : (old?.bpm ?? 0),
+          key: inc.key >= 0 ? CamelotKey.fromIndex(inc.key) : old?.key,
+          artist: old?.artist ?? '');
+      final tol = tier == 0 ? 10.0 : (tier == 1 ? 16.0 : 1e9);
+      if (out.bpm > 1 && inc.bpm > 1 && bpmGapPercent(out.bpm, inc.bpm).abs() > tol) {
+        DebugLog.add('automix',
+            'turned down ${path.split(RegExp(r'[\\/]')).last}: ${inc.bpm.round()} BPM against ${out.bpm.round()}, choosing another');
+        _rejected.add(path);
+        _upNext = null;
+        _flowNext = null;
+        _automixPreloaded = false;
+        return;
+      }
+      DebugLog.ok('automix', 'next track ready on deck ${other + 1} (${inc.bpm.round()} BPM)');
+      _automixPreloaded = true;
+    } catch (e) {
+      DebugLog.fail('automix', 'loading the next track failed: $e');
+      _upNext = null;
+      _automixPreloaded = false;
+    } finally {
+      _automixBusy = false;
+      notifyListeners();
+    }
+  }
+
   /// True while tracks are still being downloaded for automix.
   bool Function()? fetchBusy;
 
@@ -983,7 +1069,7 @@ class DjController extends ChangeNotifier {
   /// other deck if needed and start it straight away.
   bool _automixDeckEnded(int cur, int other) {
     final waiting = fetchBusy?.call() ?? false;
-    final next = _nextUnplayed() ?? (waiting ? null : _nextUnplayed(strict: false));
+    final next = _nextUnplayed(tier: 0) ?? (waiting ? null : _nextUnplayed(tier: 2));
     if (next == null) {
       // The deck ended and nothing suitable is queued: stay on, ask for a
       // match, and start it the moment it arrives.
@@ -1033,8 +1119,7 @@ class DjController extends ChangeNotifier {
         _automixIndex = next;
         _markPlayed(_automixQueue[next]);
         if (prevTrack != null) _flow?.played(prevTrack, _flowMove);
-        _flowNext = null;
-        _automixPreloaded = false;
+        _clearUpNext();
         automixStatus = null;
       } finally {
         _automixBusy = false;
@@ -1238,8 +1323,7 @@ class DjController extends ChangeNotifier {
       _automixIndex = _automixNextTarget;
       _markPlayed(_automixQueue[_automixIndex]);
       if (prevTrack != null) _flow?.played(prevTrack, _flowMove);
-      _flowNext = null;
-      _automixPreloaded = false;
+      _clearUpNext();
       _automixFading = false;
     }
   }
