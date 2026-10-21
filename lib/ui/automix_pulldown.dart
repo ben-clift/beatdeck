@@ -8,6 +8,7 @@ import 'package:sidedeck/soulseek/slsk_keeper.dart';
 import 'package:sidedeck/soulseek/slsk_setup.dart';
 import 'package:sidedeck/soulseek/soulseek_client.dart';
 import 'package:sidedeck/suggest/auto_fetch.dart';
+import 'package:sidedeck/ui/genre_picker.dart';
 import 'package:sidedeck/ui/soulseek_page.dart';
 import 'package:sidedeck/state/dj_controller.dart';
 import 'package:sidedeck/state/library_controller.dart';
@@ -400,6 +401,13 @@ class _AutomixPullDownState extends State<AutomixPullDown> {
                   ],
                 ),
               ),
+              _step(
+                '3',
+                'Pick a genre and shop',
+                'Choose a genre, tempo and where to look. The track is downloaded '
+                    'right away and plays next.',
+                GenrePicker(library: widget.library),
+              ),
               Theme(
                 data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
                 child: ExpansionTile(
@@ -411,7 +419,7 @@ class _AutomixPullDownState extends State<AutomixPullDown> {
                       style: TextStyle(fontSize: 12, color: SideDeckTheme.muted)),
                   children: [
                     _step(
-                      '3',
+                      '4',
                       'How tracks blend',
                       _style.blurb,
                       Wrap(
@@ -432,7 +440,7 @@ class _AutomixPullDownState extends State<AutomixPullDown> {
                       ),
                     ),
                     _step(
-                      '4',
+                      '5',
                       'Order of the set',
                       _arc.blurb,
                       Column(
@@ -461,7 +469,7 @@ class _AutomixPullDownState extends State<AutomixPullDown> {
                       ),
                     ),
                     _step(
-                      '5',
+                      '6',
                       'Timing',
                       'When the blend starts, and where the next track begins.',
                       Column(
