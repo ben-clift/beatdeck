@@ -376,6 +376,56 @@ class AutoFetch extends ChangeNotifier {
     );
   }
 
+  // Tracks picked by hand (DJ Charts): fetched right away, one after another,
+  // without the "enough waiting" pause.
+  final List<Suggestion> _manual = [];
+  bool _kicking = false;
+  bool _manualRun = false;
+
+  int get manualPending => _manual.length;
+
+  void enqueueTracks(List<Suggestion> tracks, LibraryController library) {
+    _manual.addAll(tracks);
+    _lib = library;
+    notifyListeners();
+    _kick(library);
+  }
+
+  Future<void> _kick(LibraryController library) async {
+    if (_kicking) return;
+    _kicking = true;
+    try {
+      while (_manual.isNotEmpty) {
+        while (running) {
+          await Future<void>.delayed(const Duration(seconds: 2));
+        }
+        final batch = [..._manual];
+        _manual.clear();
+        var given = false;
+        _manualRun = true;
+        try {
+          await _runSource(
+            label: 'your picks (${batch.length} tracks)',
+            more: (tried) async {
+              if (given) return <Suggestion>[];
+              given = true;
+              return batch;
+            },
+            library: library,
+            count: batch.length,
+            endless: false,
+            once: true,
+            useYears: false,
+          );
+        } finally {
+          _manualRun = false;
+        }
+      }
+    } finally {
+      _kicking = false;
+    }
+  }
+
   // Fetched this session, to know how many are waiting to be played.
   final List<String> _fetched = [];
 
@@ -393,7 +443,7 @@ class AutoFetch extends ChangeNotifier {
 
   /// Holds off while enough good tracks are queued up.
   Future<void> _waitForRoom() async {
-    while (!_stop && _waiting() >= buffer) {
+    while (!_stop && !_manualRun && _waiting() >= buffer) {
       _say('Paused: ${_waiting()} tracks waiting to be played');
       await Future<void>.delayed(const Duration(seconds: 3));
     }

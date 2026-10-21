@@ -33,12 +33,59 @@ class _AutoFetchPageState extends State<AutoFetchPage> {
   late final _pasted = TextEditingController(text: AutoFetch.instance.pasted);
   late bool _chartTempo = AutoFetch.instance.chartTempo;
   List<(int, String)> _charts = const [];
+  List<Suggestion> _tracks = const [];
+  bool _loadingTracks = false;
+  int _loadedFor = -1;
+  final Set<int> _picked = {};
+
+  Future<void> _loadTracks() async {
+    final af = AutoFetch.instance;
+    final id = _charts.any((c) => c.$1 == af.chartId) ? af.chartId : (_charts.isEmpty ? -1 : _charts.first.$1);
+    if (id < 0 || _loadingTracks) return;
+    final name = _charts.firstWhere((c) => c.$1 == id).$2;
+    setState(() {
+      _loadingTracks = true;
+      _loadedFor = id;
+      _picked.clear();
+    });
+    final t = await SuggestService().chart(
+      id,
+      name,
+      bpmMin: _chartTempo ? _bpm.start : null,
+      bpmMax: _chartTempo ? _bpm.end : null,
+      want: 50,
+      needDetails: true,
+    );
+    if (!mounted) return;
+    setState(() {
+      _tracks = t;
+      _loadingTracks = false;
+    });
+  }
+
+  void _download(List<Suggestion> list) {
+    if (list.isEmpty) return;
+    if (!soulseek.online) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Sign in to Soulseek first')),
+      );
+      return;
+    }
+    AutoFetch.instance.enqueueTracks(list, widget.library);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Added ${list.length} to download')),
+    );
+    setState(_picked.clear);
+  }
 
   @override
   void initState() {
     super.initState();
     SuggestService().genres().then((g) {
-      if (mounted) setState(() => _charts = g);
+      if (mounted) {
+        setState(() => _charts = g);
+        if (_source == 'chart') _loadTracks();
+      }
     });
   }
 
@@ -80,7 +127,7 @@ class _AutoFetchPageState extends State<AutoFetchPage> {
   Widget build(BuildContext context) {
     final af = AutoFetch.instance;
     return Scaffold(
-      appBar: AppBar(title: const Text('Auto-fetch')),
+      appBar: AppBar(title: const Text('DJ Charts')),
       body: ListenableBuilder(
         listenable: Listenable.merge([af, soulseek]),
         builder: (context, _) => ListView(
@@ -96,14 +143,15 @@ class _AutoFetchPageState extends State<AutoFetchPage> {
             const SizedBox(height: 12),
             SegmentedButton<String>(
               segments: const [
+                ButtonSegment(value: 'chart', label: Text('Charts')),
                 ButtonSegment(value: 'genre', label: Text('Genre')),
-                ButtonSegment(value: 'chart', label: Text('Chart')),
                 ButtonSegment(value: 'list', label: Text('My list')),
               ],
               selected: {_source},
-              onSelectionChanged: af.running
-                  ? null
-                  : (v) => setState(() => _source = v.first),
+              onSelectionChanged: (v) {
+                setState(() => _source = v.first);
+                if (v.first == 'chart' && _tracks.isEmpty) _loadTracks();
+              },
             ),
             const SizedBox(height: 10),
             if (_source == 'chart') ...[
@@ -125,20 +173,83 @@ class _AutoFetchPageState extends State<AutoFetchPage> {
                     for (final c in _charts)
                       DropdownMenuItem(value: c.$1, child: Text(c.$2)),
                   ],
-                  onChanged: af.running
-                      ? null
-                      : (v) => setState(() {
-                            final c = _charts.firstWhere((e) => e.$1 == v);
-                            af.chartId = c.$1;
-                            af.chartName = c.$2;
-                          }),
+                  onChanged: (v) {
+                    setState(() {
+                      final c = _charts.firstWhere((e) => e.$1 == v);
+                      af.chartId = c.$1;
+                      af.chartName = c.$2;
+                      _tracks = const [];
+                    });
+                    _loadTracks();
+                  },
                 ),
               SwitchListTile(
                 contentPadding: EdgeInsets.zero,
                 title: const Text('Only tracks in the tempo range below'),
                 value: _chartTempo,
-                onChanged: af.running ? null : (v) => setState(() => _chartTempo = v),
+                onChanged: (v) {
+                  setState(() => _chartTempo = v);
+                  _loadTracks();
+                },
               ),
+              Row(
+                children: [
+                  OutlinedButton.icon(
+                    onPressed: _loadingTracks ? null : _loadTracks,
+                    icon: const Icon(Icons.refresh, size: 18),
+                    label: Text(_tracks.isEmpty ? 'Show tracks' : 'Reload'),
+                  ),
+                  const Spacer(),
+                  if (_picked.isNotEmpty)
+                    FilledButton.icon(
+                      onPressed: () => _download([for (final i in _picked) _tracks[i]]),
+                      icon: const Icon(Icons.download, size: 18),
+                      label: Text('Download ${_picked.length}'),
+                    )
+                  else if (_tracks.isNotEmpty)
+                    TextButton(
+                      onPressed: () => setState(() => _picked.addAll(
+                          [for (var i = 0; i < _tracks.length; i++) i])),
+                      child: const Text('Select all'),
+                    ),
+                ],
+              ),
+              if (_loadingTracks)
+                const Padding(
+                  padding: EdgeInsets.all(12),
+                  child: Center(child: CircularProgressIndicator()),
+                ),
+              if (!_loadingTracks && _loadedFor >= 0 && _tracks.isEmpty)
+                const Text('No tracks found for this chart and tempo.',
+                    style: TextStyle(fontSize: 12, color: SideDeckTheme.muted)),
+              for (var i = 0; i < _tracks.length; i++)
+                CheckboxListTile(
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  controlAffinity: ListTileControlAffinity.leading,
+                  value: _picked.contains(i),
+                  onChanged: (v) => setState(() {
+                    if (v == true) {
+                      _picked.add(i);
+                    } else {
+                      _picked.remove(i);
+                    }
+                  }),
+                  title: Text('${_tracks[i].artist} - ${_tracks[i].title}',
+                      maxLines: 1, overflow: TextOverflow.ellipsis),
+                  subtitle: Text(
+                    [
+                      if (_tracks[i].bpm > 0) '${_tracks[i].bpm.round()} BPM',
+                      if (_tracks[i].year > 0) '${_tracks[i].year}',
+                    ].join('  ·  '),
+                    style: const TextStyle(fontSize: 11),
+                  ),
+                  secondary: IconButton(
+                    icon: const Icon(Icons.download),
+                    tooltip: 'Download now',
+                    onPressed: () => _download([_tracks[i]]),
+                  ),
+                ),
             ],
             if (_source == 'list') ...[
               const Text(
@@ -150,7 +261,7 @@ class _AutoFetchPageState extends State<AutoFetchPage> {
               const SizedBox(height: 6),
               TextField(
                 controller: _pasted,
-                enabled: !af.running,
+                enabled: true,
                 minLines: 6,
                 maxLines: 12,
                 decoration: const InputDecoration(
@@ -162,7 +273,7 @@ class _AutoFetchPageState extends State<AutoFetchPage> {
             if (_source == 'genre') ...[
             TextField(
               controller: _genre,
-              enabled: !af.running,
+              enabled: true,
               decoration: const InputDecoration(labelText: 'Genre'),
             ),
             const SizedBox(height: 8),
@@ -191,9 +302,7 @@ class _AutoFetchPageState extends State<AutoFetchPage> {
                           : (_fits(g) ? Colors.white : SideDeckTheme.muted),
                       fontWeight: _fits(g) ? FontWeight.w700 : FontWeight.w400,
                     ),
-                    onSelected: af.running
-                        ? null
-                        : (_) => setState(() {
+                    onSelected: (_) => setState(() {
                               _genre.text = g.name;
                               final lo = g.min.clamp(70.0, 179.0).toDouble();
                               _bpm = RangeValues(lo, g.max.clamp(lo + 1, 180.0).toDouble());
@@ -212,13 +321,13 @@ class _AutoFetchPageState extends State<AutoFetchPage> {
               max: 180,
               divisions: 110,
               labels: RangeLabels('${_bpm.start.round()}', '${_bpm.end.round()}'),
-              onChanged: af.running ? null : (v) => setState(() => _bpm = v),
+              onChanged: (v) => setState(() => _bpm = v),
             ),
             SwitchListTile(
               contentPadding: EdgeInsets.zero,
               title: const Text('Keep going until I stop it'),
               value: _endless,
-              onChanged: af.running ? null : (v) => setState(() => _endless = v),
+              onChanged: (v) => setState(() => _endless = v),
             ),
             ],
             if (_source != 'list' && !_endless)
@@ -232,7 +341,7 @@ class _AutoFetchPageState extends State<AutoFetchPage> {
                       max: 30,
                       divisions: 29,
                       label: '${_count.round()}',
-                      onChanged: af.running ? null : (v) => setState(() => _count = v),
+                      onChanged: (v) => setState(() => _count = v),
                     ),
                   ),
                   Text('${_count.round()}'),
@@ -249,9 +358,7 @@ class _AutoFetchPageState extends State<AutoFetchPage> {
                 style: const TextStyle(fontSize: 12),
               ),
               value: af.similarYears,
-              onChanged: af.running
-                  ? null
-                  : (v) {
+              onChanged: (v) {
                       af.similarYears = v;
                       af.save();
                       setState(() {});
@@ -268,9 +375,7 @@ class _AutoFetchPageState extends State<AutoFetchPage> {
                       max: 15,
                       divisions: 14,
                       label: '${af.yearSpan} years',
-                      onChanged: af.running
-                          ? null
-                          : (v) {
+                      onChanged: (v) {
                               af.yearSpan = v.round();
                               af.save();
                               setState(() {});
