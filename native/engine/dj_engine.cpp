@@ -1090,6 +1090,27 @@ struct Engine : public oboe::AudioStreamDataCallback,
     return resampleMono(interleavedToMono(stereo, 2, got), (int)dec.sampleRate, targetSr);
   }
 
+  // Decodes the whole file (nothing kept) and returns how many seconds of
+  // audio really came out: a truncated download decodes far less than its
+  // header promises.
+  static double fileDecodedSec(const char* path) {
+    StreamingDecoder dec;
+    if (!dec.open(path) || dec.sampleRate < 1) {
+      return 0.0;
+    }
+    dec.seek(0);
+    std::vector<float> buf(4096 * 2);
+    uint64_t got = 0;
+    for (;;) {
+      const uint64_t n = dec.readStereo(buf.data(), 4096);
+      if (n == 0) {
+        break;
+      }
+      got += n;
+    }
+    return (double)got / (double)dec.sampleRate;
+  }
+
   static double fileDurationSec(const char* path) {
     StreamingDecoder dec;
     if (!dec.open(path) || dec.sampleRate < 1) {
@@ -1270,6 +1291,13 @@ int dj_analyze_file(const char* path, float* bpm, int* key, float* beat_offset) 
     *beat_offset = analysis.beatOffsetSec;
   }
   return 1;
+}
+
+double dj_file_decoded_seconds(const char* path) {
+  if (!path) {
+    return 0.0;
+  }
+  return Engine::fileDecodedSec(path);
 }
 
 double dj_file_duration(const char* path) {

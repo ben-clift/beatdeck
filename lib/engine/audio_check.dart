@@ -1,4 +1,7 @@
 import 'dart:io';
+import 'dart:isolate';
+
+import 'package:sidedeck/engine/track_analyzer.dart';
 
 /// A quick look at a file before it goes on a deck: right extension, a
 /// believable size and the right first bytes for the format. It cannot prove
@@ -47,6 +50,29 @@ class AudioCheck {
       return null;
     } catch (e) {
       return 'could not read it ($e)';
+    }
+  }
+
+  static final Map<String, bool> _complete = {};
+
+  /// Null when the whole track decodes (about as long as its header says),
+  /// otherwise the reason it is incomplete. Decodes the file once, off the
+  /// UI thread, and remembers the answer for the file as it is now.
+  static Future<String?> incomplete(String path) async {
+    try {
+      final f = File(path);
+      final st = await f.stat();
+      final key = '$path|${st.size}|${st.modified.millisecondsSinceEpoch}';
+      if (_complete[key] == true) return null;
+      final (header, real) = await Isolate.run(() => (fileDurationSec(path), fileDecodedSec(path)));
+      if (header <= 0) return null; // unknown length: the other checks decide
+      if (real >= header * 0.985 - 1.0) {
+        _complete[key] = true;
+        return null;
+      }
+      return 'incomplete: only ${real.round()} s of ${header.round()} s plays';
+    } catch (_) {
+      return null; // could not check: do not throw a good track away
     }
   }
 }

@@ -67,6 +67,20 @@ Future<TrackAnalysis?> analyzeTrackFileOffUi(String path) async {
   }
 }
 
+/// Seconds of audio that really decode from the file (decodes all of it).
+double fileDecodedSec(String path) {
+  final lib = _openLib();
+  final fn = lib.lookupFunction<Double Function(Pointer<Utf8>), double Function(Pointer<Utf8>)>(
+    'dj_file_decoded_seconds',
+  );
+  final p = path.toNativeUtf8();
+  try {
+    return fn(p);
+  } finally {
+    malloc.free(p);
+  }
+}
+
 double fileDurationSec(String path) {
   final lib = _openLib();
   final fn = lib.lookupFunction<Double Function(Pointer<Utf8>), double Function(Pointer<Utf8>)>(

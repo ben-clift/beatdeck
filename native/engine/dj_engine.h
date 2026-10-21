@@ -86,6 +86,9 @@ int dj_analyze_file(const char* path, float* bpm, int* key, float* beat_offset);
 /** Length in seconds from the file header / decoder. Does not decode PCM. */
 double dj_file_duration(const char* path);
 
+/** Decodes the whole file and returns the seconds of audio that really decoded. */
+double dj_file_decoded_seconds(const char* path);
+
 /** Load PCM and apply previously cached analysis (skips BPM/key). bpm<=0 runs a full analyze. */
 int dj_load_with_analysis(DjEngine engine, int deck, const char* path, float bpm, int key,
                           float beat_offset);

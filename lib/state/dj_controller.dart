@@ -2034,6 +2034,28 @@ class DjController extends ChangeNotifier {
     notifyListeners();
     await Future<void>.delayed(const Duration(milliseconds: 16));
 
+    // Never put half a track on a deck: decode it through first. Automix
+    // deletes a cut-off file and finds another; a hand-picked one is refused.
+    final cut = await AudioCheck.incomplete(path);
+    if (cut != null) {
+      loadingDeck = null;
+      loadingTitle = null;
+      loadingPath = null;
+      failedPaths.add(path);
+      DebugLog.add('load', 'REFUSED ${path.split(RegExp(r'[\\/]')).last}: $cut');
+      if (_quietLoad) {
+        try {
+          await File(path).delete();
+        } catch (_) {}
+        onFileMissing?.call(path);
+        DebugLog.add('automix', 'deleted a cut-off track and choosing another: ${path.split(RegExp(r'[\\/]')).last}');
+      } else {
+        engineError = 'Not loaded: this track is $cut. Remove it (bin) and choose "Remove and get it again".';
+      }
+      notifyListeners();
+      return false;
+    }
+
     TrackAnalysis? cached;
     try {
       final stat = await File(path).stat();

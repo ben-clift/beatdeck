@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:sidedeck/engine/audio_check.dart';
 import 'package:sidedeck/engine/track_analyzer.dart';
 
 /// Checks a finished download before it is allowed to count: the file is
@@ -15,6 +16,8 @@ Future<String?> verifyDownload(String path, int expectedSize) async {
       return 'Incomplete: $len of $expectedSize bytes saved';
     }
     if (fileDurationSec(path) <= 0) return 'The decoder cannot open this file';
+    final cut = await AudioCheck.incomplete(path);
+    if (cut != null) return 'The file is $cut';
   } catch (e) {
     return 'Could not check the file: $e';
   }
