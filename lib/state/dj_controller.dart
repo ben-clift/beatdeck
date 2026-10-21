@@ -470,7 +470,20 @@ class DjController extends ChangeNotifier {
     if (!automixOn || _automixQueue.contains(path)) return;
     if (_automixQueue.any((q) => _trackKey(q) == _trackKey(path))) return;
     _automixQueue.add(path);
-    _flowLearn(path);
+    _learnAfterAnalysis(path);
+    notifyListeners();
+  }
+
+  /// A new download is analysed a little after it arrives; look again until
+  /// its tempo and key are known so it can be matched.
+  Future<void> _learnAfterAnalysis(String path) async {
+    for (var i = 0; i < 15; i++) {
+      _flowInfo.remove(path);
+      await _flowLearn(path);
+      if ((_flowInfo[path]?.bpm ?? 0) > 0) break;
+      await Future<void>.delayed(const Duration(seconds: 3));
+      if (!automixOn) return;
+    }
     notifyListeners();
   }
 
@@ -637,7 +650,9 @@ class DjController extends ChangeNotifier {
     if (curPath == null) return true;
     final cur = _flowOf(curPath);
     final c = _flowOf(path);
-    if (cur != null && c != null && cur.bpm > 0 && c.bpm > 0) {
+    if (cur != null && cur.bpm > 0) {
+      // A track not analysed yet is not picked until its tempo is known.
+      if (c == null || c.bpm <= 0) return false;
       if (bpmGapPercent(cur.bpm, c.bpm).abs() > 8) return false;
     }
     final g = genreOf;
