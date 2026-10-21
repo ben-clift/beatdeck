@@ -54,7 +54,7 @@ class _AutoFetchPageState extends State<AutoFetchPage> {
   // Tracks already shown this session, so a reload brings only new ones.
   static final Set<String> _seen = {};
 
-  Future<void> _loadTracks() async {
+  Future<void> _loadTracks({bool onlyNew = false}) async {
     final af = AutoFetch.instance;
     final id = _charts.any((c) => c.$1 == af.chartId) ? af.chartId : (_charts.isEmpty ? -1 : _charts.first.$1);
     if (id < 0 && !_hardwax) return;
@@ -71,14 +71,18 @@ class _AutoFetchPageState extends State<AutoFetchPage> {
     List<Suggestion> t;
     if (_hardwax) {
       try {
-        t = await Hardwax.fetch(_hwTag, skip: _seen);
-        if (t.isEmpty) _loadError = 'No releases found on that Hardwax page.';
+        t = await Hardwax.fetch(_hwTag, skip: onlyNew ? _seen : const {});
+        if (t.isEmpty) {
+          _loadError = onlyNew
+              ? 'No new releases left on this page this session. Try another tag.'
+              : 'No releases found on that Hardwax page.';
+        }
       } catch (e) {
         t = const [];
         _loadError = 'Could not read Hardwax: $e';
       }
     } else {
-      t = await _loadOther(svc, id, name);
+      t = await _loadOther(svc, id, name, onlyNew);
     }
     if (!mounted || seq != _loadSeq) return;
     for (final s in t) {
@@ -90,20 +94,22 @@ class _AutoFetchPageState extends State<AutoFetchPage> {
     });
   }
 
-  Future<List<Suggestion>> _loadOther(SuggestService svc, int id, String name) async {
+  Future<List<Suggestion>> _loadOther(
+      SuggestService svc, int id, String name, bool onlyNew) async {
+    final skip = onlyNew ? _seen : <String>{};
     final t = _classics
         ? await svc.classics(
             _era == 0 ? 1920 : _era,
             _era == 0 ? 1959 : _era + 9,
             style: _style.text,
-            skip: _seen,
+            skip: skip,
           )
         : _underground
         ? await svc.underground(
             name,
             bpmMin: _chartTempo ? _bpm.start : null,
             bpmMax: _chartTempo ? _bpm.end : null,
-            skip: _seen,
+            skip: skip,
           )
         : await svc.chart(
             id,
@@ -112,7 +118,7 @@ class _AutoFetchPageState extends State<AutoFetchPage> {
             bpmMax: _chartTempo ? _bpm.end : null,
             want: 50,
             needDetails: true,
-            skip: _seen,
+            skip: skip,
           );
     return t;
   }
@@ -368,7 +374,7 @@ class _AutoFetchPageState extends State<AutoFetchPage> {
               Row(
                 children: [
                   OutlinedButton.icon(
-                    onPressed: _loadTracks,
+                    onPressed: () => _loadTracks(onlyNew: true),
                     icon: const Icon(Icons.refresh, size: 18),
                     label: Text(_tracks.isEmpty ? 'Show tracks' : 'Reload'),
                   ),
