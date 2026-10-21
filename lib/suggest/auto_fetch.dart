@@ -119,15 +119,9 @@ class AutoFetch extends ChangeNotifier {
     } else if (on && source == 'list') {
       startList(text: pasted, library: library);
     } else if (on) {
-      startByGenre(
-        genre: genre,
-        bpmMin: bpmMin,
-        bpmMax: bpmMax,
-        library: library,
-        count: count,
-        endless: endless,
-      );
+      startGenreMode(library);
     } else {
+      genreMode = false;
       followAutomix = false;
       if (running) stop();
       notifyListeners();
@@ -139,7 +133,6 @@ class AutoFetch extends ChangeNotifier {
   /// AUTO is switched on by automix: nothing runs all the time, but a
   /// matching track is fetched whenever automix asks for one.
   bool followAutomix = false;
-  bool get active => running || followAutomix;
 
   void refresh() => notifyListeners();
   String status = '';
@@ -705,6 +698,15 @@ class AutoFetch extends ChangeNotifier {
   // through the normal download hook; the stage is shown on the empty deck.
   bool _pipeline = false;
   bool get pipelineBusy => _pipeline;
+
+  /// True when the last findNext brought a track in.
+  bool lastFound = false;
+
+  /// The Genre tab: keep fetching the chosen genre and tempo. The first track
+  /// plays next when automix is running.
+  bool genreMode = false;
+  bool get active => running || followAutomix || genreMode;
+
   static final Set<String> _triedThisSession = {};
 
   // Genre the shop gave for a downloaded file (Traxsource lists one), used
@@ -713,7 +715,7 @@ class AutoFetch extends ChangeNotifier {
   String hintFor(String path) => _genreHint[path] ?? '';
 
 
-  Future<List<Suggestion>> _shortlist(String g, double? lo, double? hi) async {
+  Future<List<Suggestion>> _shortlist(String g, double? lo, double? hi, {bool exact = false}) async {
     final lib = _lib;
     final out = <Suggestion>[];
     final seen = <String>{};
@@ -754,6 +756,16 @@ class AutoFetch extends ChangeNotifier {
     ra.shuffle();
     tx.shuffle();
     hw.shuffle();
+    if (exact) {
+      // The genre you chose: Traxsource genres sharing the most words with it
+      // come first ("funky tech house" prefers "Tech House" and "Funky House").
+      final words = RegExp(r'[a-z]{3,}').allMatches(g.toLowerCase()).map((m) => m.group(0)!).toSet();
+      int score(Suggestion x) => RegExp(r'[a-z]{3,}')
+          .allMatches(x.reason.toLowerCase())
+          .where((m) => words.contains(m.group(0)))
+          .length;
+      tx.sort((a, b) => score(b).compareTo(score(a)));
+    }
     // Traxsource first (it has the tempo), then Hardwax, alternating.
     final mixed = <Suggestion>[];
     for (var i = 0; i < tx.length || i < hw.length || i < ra.length; i++) {
@@ -831,8 +843,12 @@ class AutoFetch extends ChangeNotifier {
     required String title,
     required double bpm,
     required LibraryController library,
+    double? bpmLo,
+    double? bpmHi,
+    bool steer = false,
   }) async {
     if (running || _pipeline) return;
+    lastFound = false;
     _pipeline = true;
     running = true;
     _lib = library;
@@ -845,10 +861,12 @@ class AutoFetch extends ChangeNotifier {
     try {
       var g = genre.trim();
       if (g.isEmpty) g = genreForBpm(bpm);
-      final double? lo = bpm > 1 ? bpm * 0.93 : null;
-      final double? hi = bpm > 1 ? bpm * 1.07 : null;
+      final double? lo = bpmLo ?? (bpm > 1 ? bpm * 0.93 : null);
+      final double? hi = bpmHi ?? (bpm > 1 ? bpm * 1.07 : null);
+      // A genre you chose yourself: the download plays next.
+      if (steer) SlskSetup.dj?.armPlayNext();
       DebugLog.add('fetch',
-          'next track: genre "$g", ${lo == null ? 'any tempo' : '${lo.round()}-${hi!.round()} BPM'}');
+          'next track${steer ? ' (your choice, plays next)' : ''}: genre "$g", ${lo == null ? 'any tempo' : '${lo.round()}-${hi!.round()} BPM'}');
       if (!soulseek.online) {
         _say('Next track: waiting for Soulseek to sign in…');
         for (var i = 0; i < 60 && !_stop && !soulseek.online; i++) {
@@ -861,11 +879,11 @@ class AutoFetch extends ChangeNotifier {
       }
       await Taste.refresh(library);
       _say('Next track: building a shortlist for $g');
-      var list = await _shortlist(g, lo, hi);
+      var list = await _shortlist(g, lo, hi, exact: steer);
       if (list.isEmpty && _triedThisSession.isNotEmpty) {
         // Everything on the lists was tried: start over once.
         _triedThisSession.clear();
-        list = await _shortlist(g, lo, hi);
+        list = await _shortlist(g, lo, hi, exact: steer);
       }
       if (list.isEmpty) {
         _say('Next track: the shop lists have nothing for $g');
@@ -931,6 +949,7 @@ class AutoFetch extends ChangeNotifier {
       if (winner != null) {
         _fetched.add(winner);
         fetched = 1;
+        lastFound = true;
         DebugLog.ok('fetch', 'next track downloaded: $winner');
         _say('Next track: downloaded, checking it');
       } else if (!_stop) {
@@ -966,6 +985,48 @@ class AutoFetch extends ChangeNotifier {
         return 'new-global-styles';
       default:
         return 'this-week';
+    }
+  }
+
+  /// The Genre tab: fetch tracks of the chosen genre and tempo through the
+  /// same pipeline. With automix running, the first one plays next.
+  Future<void> startGenreMode(LibraryController library) async {
+    if (genreMode) return;
+    genreMode = true;
+    notifyListeners();
+    var got = 0;
+    try {
+      while (genreMode && (endless || got < count)) {
+        final dj = SlskSetup.dj;
+        // Enough already waiting: pause until automix needs more (not for the
+        // first one, which is wanted at once).
+        while (genreMode && got > 0 && dj != null && dj.automixOn && dj.automixWaiting >= buffer) {
+          _say('Genre: ${dj.automixWaiting} tracks waiting, holding on');
+          await Future<void>.delayed(const Duration(seconds: 3));
+        }
+        if (!genreMode) break;
+        await findNext(
+          genre: genre,
+          artist: '',
+          title: '',
+          bpm: (bpmMin + bpmMax) / 2,
+          bpmLo: bpmMin,
+          bpmHi: bpmMax,
+          library: library,
+          steer: got == 0 && (dj?.automixOn ?? false),
+        );
+        if (lastFound) {
+          got++;
+        } else {
+          // Nothing this time: wait a little, then try the next candidates.
+          for (var i = 0; i < 10 && genreMode; i++) {
+            await Future<void>.delayed(const Duration(seconds: 1));
+          }
+        }
+      }
+    } finally {
+      genreMode = false;
+      notifyListeners();
     }
   }
 

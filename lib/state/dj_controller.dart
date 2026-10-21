@@ -476,7 +476,29 @@ class DjController extends ChangeNotifier {
     if (_automixQueue.any((q) => _trackKey(q) == _trackKey(path))) return;
     _automixQueue.add(path);
     _learnAfterAnalysis(path);
+    // A genre you chose yourself: this download plays next.
+    final armed = _playNextArmed &&
+        DateTime.now().difference(_playNextAt).inMinutes < 10 &&
+        !_automixFading;
+    if (armed) {
+      _playNextArmed = false;
+      _forcePath = path;
+      _upNext = path;
+      _automixPreloaded = false;
+      _rejected.remove(path);
+      DebugLog.add('automix', 'your genre choice arrived, playing it next: ${path.split(RegExp(r'[\\/]')).last}');
+    }
     notifyListeners();
+  }
+
+  bool _playNextArmed = false;
+  DateTime _playNextAt = DateTime.fromMillisecondsSinceEpoch(0);
+  String? _forcePath;
+
+  /// The next download is one you asked for: it goes to the front.
+  void armPlayNext() {
+    _playNextArmed = true;
+    _playNextAt = DateTime.now();
   }
 
   /// A new download is analysed a little after it arrives; look again until
@@ -1158,7 +1180,8 @@ class DjController extends ChangeNotifier {
       // Genre check on the file's own tags (a new download is not in the
       // library tags yet): never dub after minimal house, except as a last
       // resort when time has run out.
-      if (tier < 2 && _automixIndex >= 0 && _automixIndex < _automixQueue.length) {
+      final forced = _forcePath == path;
+      if (!forced && tier < 2 && _automixIndex >= 0 && _automixIndex < _automixQueue.length) {
         final cg = await _genreFor(_automixQueue[_automixIndex]);
         final ng = await _genreFor(path);
         if (cg.isNotEmpty && ng.isNotEmpty && !genresSimilar(cg, ng)) {
@@ -1171,7 +1194,7 @@ class DjController extends ChangeNotifier {
           return;
         }
       }
-      final tol = tier == 0 ? 10.0 : (tier == 1 ? 16.0 : 1e9);
+      final tol = forced ? 16.0 : (tier == 0 ? 10.0 : (tier == 1 ? 16.0 : 1e9));
       if (out.bpm > 1 && inc.bpm > 1 && bpmGapPercent(out.bpm, inc.bpm).abs() > tol) {
         DebugLog.add('automix',
             'turned down ${path.split(RegExp(r'[\\/]')).last}: ${inc.bpm.round()} BPM against ${out.bpm.round()}, choosing another');
