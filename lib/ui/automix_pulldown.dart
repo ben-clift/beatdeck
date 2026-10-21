@@ -4,6 +4,11 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sidedeck/automix/transition_style.dart';
 import 'package:sidedeck/automix/set_flow.dart';
+import 'package:sidedeck/soulseek/slsk_keeper.dart';
+import 'package:sidedeck/soulseek/slsk_setup.dart';
+import 'package:sidedeck/soulseek/soulseek_client.dart';
+import 'package:sidedeck/suggest/auto_fetch.dart';
+import 'package:sidedeck/ui/soulseek_page.dart';
 import 'package:sidedeck/state/dj_controller.dart';
 import 'package:sidedeck/state/library_controller.dart';
 import 'package:sidedeck/state/look_controller.dart';
@@ -25,14 +30,14 @@ class AutomixPullDown extends StatefulWidget {
 }
 
 class _AutomixPullDownState extends State<AutomixPullDown> {
-  double get _panelH => math.min(MediaQuery.of(context).size.height * 0.85, 440.0);
+  double get _panelH => math.min(MediaQuery.of(context).size.height * 0.92, 560.0);
   static const _tabH = 24.0;
 
   final _playlists = PlaylistController();
   bool _open = false;
   double _fade = 120;
   double _offset = 10;
-  FlowArc _arc = FlowArc.off;
+  FlowArc _arc = FlowArc.journey;
   TransitionStyle _style = TransitionStyle.auto;
   double _len = 60;
 
@@ -50,7 +55,7 @@ class _AutomixPullDownState extends State<AutomixPullDown> {
         }
         _fade = p.getDouble('automix_fade') ?? _fade;
         _offset = p.getDouble('automix_offset') ?? _offset;
-        _arc = FlowArc.values[(p.getInt('automix_arc') ?? 0).clamp(0, FlowArc.values.length - 1)];
+        _arc = FlowArc.values[(p.getInt('automix_arc') ?? FlowArc.journey.index).clamp(0, FlowArc.values.length - 1)];
         _len = p.getDouble('automix_len') ?? _len;
         _style = TransitionStyle.values[(p.getInt('automix_style') ?? 0).clamp(0, TransitionStyle.values.length - 1)];
       });
@@ -126,6 +131,9 @@ class _AutomixPullDownState extends State<AutomixPullDown> {
           _playlists,
           widget.library,
           LookController.instance,
+          soulseek,
+          SlskKeeper.instance,
+          AutoFetch.instance,
         ]),
         builder: (context, _) {
           return Column(
@@ -188,6 +196,68 @@ class _AutomixPullDownState extends State<AutomixPullDown> {
     );
   }
 
+  void _start(List<String> paths) {
+    final dj = widget.dj;
+    // The Soulseek helper is part of Start: stay signed in, fetch matches.
+    if (_helper) {
+      SlskKeeper.instance.setEnabled(true);
+      SlskSetup.setAutoFetchForAutomix(true);
+    }
+    dj.startAutomix(paths,
+        fadeSeconds: _fade,
+        startOffsetSeconds: _offset,
+        arc: _arc,
+        lengthMinutes: _len,
+        style: _style);
+    setState(() => _open = false);
+  }
+
+  bool get _helper => SlskKeeper.instance.enabled && SlskSetup.autoFetchForAutomix;
+
+  Future<void> _setHelper(bool v) async {
+    await SlskKeeper.instance.setEnabled(v);
+    await SlskSetup.setAutoFetchForAutomix(v);
+    if (mounted) setState(() {});
+  }
+
+  String _soulseekLine() {
+    if (soulseek.online) {
+      final af = AutoFetch.instance;
+      if (af.running && af.status.isNotEmpty) return af.status;
+      return 'Connected to Soulseek';
+    }
+    if (soulseek.status == SlskStatus.connecting) return 'Connecting to Soulseek…';
+    final note = SlskKeeper.instance.note;
+    return note.isEmpty ? 'Not connected to Soulseek' : note;
+  }
+
+  Widget _step(String n, String title, String help, Widget child) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              CircleAvatar(
+                radius: 11,
+                backgroundColor: SideDeckTheme.muted.withOpacity(0.35),
+                child: Text(n, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
+              ),
+              const SizedBox(width: 8),
+              Text(title, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
+            ],
+          ),
+          Padding(
+            padding: const EdgeInsets.only(left: 30, top: 2, bottom: 6),
+            child: Text(help, style: const TextStyle(fontSize: 12, color: SideDeckTheme.muted)),
+          ),
+          child,
+        ],
+      ),
+    );
+  }
+
   Widget _panel() {
     final dj = widget.dj;
     final look = LookController.instance;
@@ -195,242 +265,245 @@ class _AutomixPullDownState extends State<AutomixPullDown> {
     final choice = _choice(lists);
     final paths = _pathsFor(choice, lists);
     final on = dj.automixOn;
+    final signedIn = soulseek.online || soulseek.status == SlskStatus.connecting;
     return GestureDetector(
       onVerticalDragEnd: (d) {
         if ((d.primaryVelocity ?? 0) < -120) setState(() => _open = false);
       },
       child: Container(
-        padding: const EdgeInsets.fromLTRB(14, 10, 14, 8),
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
         decoration: BoxDecoration(
           color: Color.lerp(look.body, Colors.black, 0.15),
           border: Border(bottom: BorderSide(color: look.accent(0), width: 3)),
         ),
         child: SingleChildScrollView(
           child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                const Text(
-                  'AUTOMIX',
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: 2,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    on
-                        ? 'Track ${dj.automixIndex + 1} of ${dj.automixQueueLength}'
-                        : (dj.automixStatus ?? 'Fades your playlist together on the beat'),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontSize: 12,
-                      color: SideDeckTheme.muted,
-                    ),
-                  ),
-                ),
-                if (on)
-                  FilledButton.icon(
-                    onPressed: dj.stopAutomix,
-                    icon: const Icon(Icons.stop, size: 18),
-                    label: const Text('Stop'),
-                  )
-                else
-                  FilledButton.icon(
-                    onPressed: paths.isEmpty
-                        ? null
-                        : () {
-                            dj.startAutomix(paths, fadeSeconds: _fade, startOffsetSeconds: _offset, arc: _arc, lengthMinutes: _len, style: _style);
-                            setState(() => _open = false);
-                          },
-                    icon: const Icon(Icons.auto_mode, size: 18),
-                    label: const Text('Start'),
-                  ),
-              ],
-            ),
-            const SizedBox(height: 6),
-            if (paths.isEmpty)
-              const Padding(
-                padding: EdgeInsets.symmetric(vertical: 6),
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // The one thing most people need: a big start button.
+              SizedBox(
+                width: double.infinity,
+                height: 52,
+                child: on
+                    ? FilledButton.icon(
+                        onPressed: dj.stopAutomix,
+                        icon: const Icon(Icons.stop),
+                        label: Text(
+                          'Stop Auto DJ  ·  track ${dj.automixIndex + 1} of ${dj.automixQueueLength}',
+                          style: const TextStyle(fontSize: 16),
+                        ),
+                      )
+                    : FilledButton.icon(
+                        onPressed: paths.isEmpty ? null : () => _start(paths),
+                        icon: const Icon(Icons.auto_mode),
+                        label: const Text('Start Auto DJ', style: TextStyle(fontSize: 18)),
+                      ),
+              ),
+              Padding(
+                padding: const EdgeInsets.only(top: 6, bottom: 12),
                 child: Text(
-                  'Nothing to play yet. Add music to the library, or for tempo '
-                  'order analyse it first.',
-                  style: TextStyle(color: SideDeckTheme.muted),
+                  on
+                      ? (dj.automixStatus ?? 'Mixing for you. Deck 1 and 2 swap over automatically.')
+                      : paths.isEmpty
+                          ? 'Add music to your library first (folder icon in the Library), then come back.'
+                          : (dj.automixStatus ??
+                              'It plays your music and mixes each track into the next, all by itself.'),
+                  style: const TextStyle(fontSize: 12, color: SideDeckTheme.muted),
                 ),
               ),
-            SizedBox(
-              height: 40,
-              child: ListView(
-                scrollDirection: Axis.horizontal,
-                children: [
-                  for (final (id, label) in [
-                    (_libShuffle, 'Library · shuffle'),
-                    (_libTempo, 'Library · slow to fast'),
-                    (_libAz, 'Library · A to Z'),
-                  ])
-                    Padding(
-                      padding: const EdgeInsets.only(right: 8),
-                      child: ChoiceChip(
-                        label: Text(label),
-                        selected: choice == id,
-                        onSelected: (_) {
-                          setState(() => _selectedId = id);
-                          if (on) widget.dj.automixSwitchTo(_pathsFor(id, lists));
-                        },
+              _step(
+                '1',
+                'Play from',
+                'Pick what it plays. You can change this while it is running.',
+                SizedBox(
+                  height: 40,
+                  child: ListView(
+                    scrollDirection: Axis.horizontal,
+                    children: [
+                      for (final (id, label) in [
+                        (_libShuffle, 'Whole library, shuffled'),
+                        (_libTempo, 'Slow to fast'),
+                        (_libAz, 'A to Z'),
+                      ])
+                        Padding(
+                          padding: const EdgeInsets.only(right: 8),
+                          child: ChoiceChip(
+                            label: Text(label),
+                            selected: choice == id,
+                            onSelected: (_) {
+                              setState(() => _selectedId = id);
+                              if (on) widget.dj.automixSwitchTo(_pathsFor(id, lists));
+                            },
+                          ),
+                        ),
+                      for (final pl in lists)
+                        Padding(
+                          padding: const EdgeInsets.only(right: 8),
+                          child: ChoiceChip(
+                            label: Text('${pl.name} · ${pl.paths.length}'),
+                            selected: choice == pl.id,
+                            onSelected: (_) {
+                              setState(() => _selectedId = pl.id);
+                              if (on) widget.dj.automixSwitchTo(_pathsFor(pl.id, lists));
+                            },
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+              _step(
+                '2',
+                'Find new tracks for me',
+                'Stays signed in to Soulseek and downloads a matching track '
+                    'whenever nothing left in the list fits. Needs a free Soulseek account.',
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    SwitchListTile(
+                      contentPadding: EdgeInsets.zero,
+                      dense: true,
+                      title: const Text('Keep me connected and fetch matches'),
+                      value: _helper,
+                      onChanged: _setHelper,
+                    ),
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.circle,
+                          size: 10,
+                          color: soulseek.online
+                              ? Colors.greenAccent
+                              : (soulseek.status == SlskStatus.connecting
+                                  ? Colors.amber
+                                  : Colors.redAccent),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(_soulseekLine(),
+                              style: const TextStyle(fontSize: 12),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis),
+                        ),
+                        if (!signedIn)
+                          TextButton(
+                            onPressed: () => Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) => SoulseekPage(library: widget.library),
+                              ),
+                            ),
+                            child: const Text('Sign in'),
+                          ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              Theme(
+                data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+                child: ExpansionTile(
+                  tilePadding: EdgeInsets.zero,
+                  childrenPadding: EdgeInsets.zero,
+                  title: const Text('More options',
+                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
+                  subtitle: const Text('Optional. The defaults work well.',
+                      style: TextStyle(fontSize: 12, color: SideDeckTheme.muted)),
+                  children: [
+                    _step(
+                      '3',
+                      'How tracks blend',
+                      _style.blurb,
+                      Wrap(
+                        spacing: 6,
+                        children: [
+                          for (final t in TransitionStyle.values)
+                            ChoiceChip(
+                              label: Text(t == TransitionStyle.auto ? 'Auto (recommended)' : t.label,
+                                  style: const TextStyle(fontSize: 12)),
+                              selected: _style == t,
+                              onSelected: (_) {
+                                setState(() => _style = t);
+                                widget.dj.automixStyle = t;
+                                _saveTimes();
+                              },
+                            ),
+                        ],
                       ),
                     ),
-                  for (final pl in lists)
-                    Padding(
-                      padding: const EdgeInsets.only(right: 8),
-                      child: ChoiceChip(
-                        label: Text('${pl.name} · ${pl.paths.length}'),
-                        selected: choice == pl.id,
-                        onSelected: (_) {
-                          setState(() => _selectedId = pl.id);
-                          if (on) widget.dj.automixSwitchTo(_pathsFor(pl.id, lists));
-                        },
+                    _step(
+                      '4',
+                      'Order of the set',
+                      _arc.blurb,
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Wrap(
+                            spacing: 6,
+                            children: [
+                              for (final a in FlowArc.values)
+                                ChoiceChip(
+                                  label: Text(a.label, style: const TextStyle(fontSize: 12)),
+                                  selected: _arc == a,
+                                  onSelected: on
+                                      ? null
+                                      : (_) {
+                                          setState(() => _arc = a);
+                                          _saveTimes();
+                                        },
+                                ),
+                            ],
+                          ),
+                          if (_arc != FlowArc.off)
+                            _slider('Set length', _len, 20, 180, 32, '${_len.round()} min', on,
+                                (v) => setState(() => _len = v)),
+                        ],
                       ),
                     ),
-                ],
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.only(bottom: 4),
-              child: Wrap(
-                spacing: 6,
-                crossAxisAlignment: WrapCrossAlignment.center,
-                children: [
-                  const Text('Transition', style: TextStyle(fontSize: 12)),
-                  for (final t in TransitionStyle.values)
-                    ChoiceChip(
-                      label: Text(t.label, style: const TextStyle(fontSize: 12)),
-                      selected: _style == t,
-                      onSelected: (_) {
-                        setState(() => _style = t);
-                        widget.dj.automixStyle = t;
-                        _saveTimes();
-                      },
+                    _step(
+                      '5',
+                      'Timing',
+                      'When the blend starts, and where the next track begins.',
+                      Column(
+                        children: [
+                          _slider('Start blending this long before the end', _fade, 4, 180, 176,
+                              '${_fade.round()} s', on, (v) => setState(() => _fade = v)),
+                          _slider('Next track starts this far in', _offset, 0, 60, 60,
+                              '${_offset.round()} s', on, (v) => setState(() => _offset = v)),
+                        ],
+                      ),
                     ),
-                ],
+                  ],
+                ),
               ),
-            ),
-            Text(_style.blurb,
-                style: const TextStyle(fontSize: 11, color: SideDeckTheme.muted)),
-            Padding(
-              padding: const EdgeInsets.only(bottom: 4),
-              child: Wrap(
-                spacing: 6,
-                crossAxisAlignment: WrapCrossAlignment.center,
-                children: [
-                  const Text('Set flow', style: TextStyle(fontSize: 12)),
-                  for (final a in FlowArc.values)
-                    ChoiceChip(
-                      label: Text(a.label, style: const TextStyle(fontSize: 12)),
-                      selected: _arc == a,
-                      onSelected: on
-                          ? null
-                          : (_) {
-                              setState(() => _arc = a);
-                              _saveTimes();
-                            },
-                    ),
-                ],
-              ),
-            ),
-            Text(_arc.blurb,
-                style: const TextStyle(fontSize: 11, color: SideDeckTheme.muted)),
-            if (_arc != FlowArc.off)
-              Row(
-                children: [
-                  const SizedBox(
-                    width: 150,
-                    child: Text('Set length', style: TextStyle(fontSize: 12)),
-                  ),
-                  Expanded(
-                    child: Slider(
-                      value: _len,
-                      min: 20,
-                      max: 180,
-                      divisions: 32,
-                      label: '${_len.round()} min',
-                      onChanged: on
-                          ? null
-                          : (v) {
-                              setState(() => _len = v);
-                              _saveTimes();
-                            },
-                    ),
-                  ),
-                  SizedBox(
-                    width: 48,
-                    child: Text('${_len.round()} min', style: const TextStyle(fontSize: 12)),
-                  ),
-                ],
-              ),
-            Row(
-              children: [
-                const SizedBox(
-                  width: 150,
-                  child: Text('Start mixing, seconds from the end',
-                      style: TextStyle(fontSize: 12)),
-                ),
-                Expanded(
-                  child: Slider(
-                    value: _fade,
-                    min: 4,
-                    max: 180,
-                    divisions: 176,
-                    label: '${_fade.round()} s',
-                    onChanged: on
-                        ? null
-                        : (v) {
-                            setState(() => _fade = v);
-                            _saveTimes();
-                          },
-                  ),
-                ),
-                SizedBox(
-                  width: 36,
-                  child: Text('${_fade.round()} s', style: const TextStyle(fontSize: 12)),
-                ),
-              ],
-            ),
-            Row(
-              children: [
-                const SizedBox(
-                  width: 150,
-                  child: Text('Next track starts this far in',
-                      style: TextStyle(fontSize: 12)),
-                ),
-                Expanded(
-                  child: Slider(
-                    value: _offset,
-                    min: 0,
-                    max: 60,
-                    divisions: 60,
-                    label: '${_offset.round()} s',
-                    onChanged: on
-                        ? null
-                        : (v) {
-                            setState(() => _offset = v);
-                            _saveTimes();
-                          },
-                  ),
-                ),
-                SizedBox(
-                  width: 36,
-                  child: Text('${_offset.round()} s', style: const TextStyle(fontSize: 12)),
-                ),
-              ],
-            ),
-          ],
-        ),
+            ],
+          ),
         ),
       ),
+    );
+  }
+
+  Widget _slider(String label, double value, double min, double max, int divisions,
+      String shown, bool locked, ValueChanged<double> onChanged) {
+    return Row(
+      children: [
+        SizedBox(width: 130, child: Text(label, style: const TextStyle(fontSize: 12))),
+        Expanded(
+          child: Slider(
+            value: value,
+            min: min,
+            max: max,
+            divisions: divisions,
+            label: shown,
+            onChanged: locked
+                ? null
+                : (v) {
+                    onChanged(v);
+                    _saveTimes();
+                  },
+          ),
+        ),
+        SizedBox(width: 46, child: Text(shown, style: const TextStyle(fontSize: 12))),
+      ],
     );
   }
 }

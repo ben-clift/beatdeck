@@ -24,10 +24,21 @@ class SlskSetup {
   /// Used when nothing else is set.
   static String fallback = '';
 
+  /// Automix fetches a matching track from Soulseek when none in the queue fit.
+  static bool autoFetchForAutomix = true;
+
+  static Future<void> setAutoFetchForAutomix(bool v) async {
+    autoFetchForAutomix = v;
+    try {
+      (await SharedPreferences.getInstance()).setBool('automix_autofetch', v);
+    } catch (_) {}
+  }
+
   static Future<void> load() async {
     try {
       await StorageGuard.load();
       final prefs = await SharedPreferences.getInstance();
+      autoFetchForAutomix = prefs.getBool('automix_autofetch') ?? true;
       // Older versions shared a folder with other apps and lost files there.
       // Only a folder picked on this version (slsk_dir2) is used.
       chosen = prefs.getString('slsk_dir2');
@@ -56,6 +67,7 @@ class SlskSetup {
     dj?.fetchBusy = () => AutoFetch.instance.running || AutoFetch.instance.manualPending > 0;
     dj?.onNeedTrack = (artist, bpm, key, title) {
       final af = AutoFetch.instance;
+      if (!autoFetchForAutomix) return;
       if (af.running || !soulseek.online || artist.isEmpty) {
         DebugLog.add('automix',
             'cannot fetch a match: ${af.running ? 'auto-fetch is busy' : !soulseek.online ? 'not signed in to Soulseek' : 'no artist name for this track'}');
