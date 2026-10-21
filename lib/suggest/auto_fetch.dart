@@ -99,19 +99,8 @@ class AutoFetch extends ChangeNotifier {
   /// The AUTO switch: on starts fetching with the saved settings, off stops.
   void toggle(bool on, LibraryController library) {
     DebugLog.add('fetch', 'AUTO ${on ? 'ON' : 'OFF'} (source $source)');
-    if (on && source == 'chart' && hardwax) {
+    if (on && source == 'chart') {
       startHardwax(tag: hwTag, library: library, count: count, endless: endless);
-    } else if (on && source == 'chart') {
-      startChart(
-        id: chartId,
-        name: chartName,
-        matchTempo: chartTempo,
-        bpmMin: bpmMin,
-        bpmMax: bpmMax,
-        library: library,
-        count: count,
-        endless: endless,
-      );
     } else if (on && source == 'list') {
       startList(text: pasted, library: library);
     } else if (on) {

@@ -42,7 +42,7 @@ class _AutoFetchPageState extends State<AutoFetchPage> {
   final Set<int> _picked = {};
   bool _underground = false;
   bool _classics = false;
-  late bool _hardwax = AutoFetch.instance.hardwax; // Hardwax is the default source
+  final bool _hardwax = true; // Hardwax is the only chart source
   late String _hwTag = AutoFetch.instance.hwTag; // empty = whole shop
   String? _loadError;
   int _loadSeq = 0;
@@ -237,7 +237,7 @@ class _AutoFetchPageState extends State<AutoFetchPage> {
             const SizedBox(height: 12),
             SegmentedButton<String>(
               segments: const [
-                ButtonSegment(value: 'chart', label: Text('Charts')),
+                ButtonSegment(value: 'chart', label: Text('Hardwax')),
                 ButtonSegment(value: 'genre', label: Text('Genre')),
                 ButtonSegment(value: 'list', label: Text('My list')),
               ],
@@ -258,49 +258,6 @@ class _AutoFetchPageState extends State<AutoFetchPage> {
                 style: TextStyle(fontSize: 12, color: SideDeckTheme.muted),
               ),
               const SizedBox(height: 6),
-              if (_hardwax)
-                const SizedBox.shrink()
-              else if (_charts.isEmpty)
-                const Text('Loading charts…')
-              else
-                DropdownButton<int>(
-                  isExpanded: true,
-                  value: _charts.any((c) => c.$1 == AutoFetch.instance.chartId)
-                      ? AutoFetch.instance.chartId
-                      : _charts.first.$1,
-                  items: [
-                    for (final c in _charts)
-                      DropdownMenuItem(value: c.$1, child: Text(c.$2)),
-                  ],
-                  onChanged: (v) {
-                    setState(() {
-                      final c = _charts.firstWhere((e) => e.$1 == v);
-                      af.chartId = c.$1;
-                      af.chartName = c.$2;
-                      _tracks = const [];
-                    });
-                    _loadTracks();
-                  },
-                ),
-              SwitchListTile(
-                contentPadding: EdgeInsets.zero,
-                title: const Text('Hardwax (Berlin record shop)'),
-                subtitle: const Text(
-                    'Release names from their tag pages. Names only, nothing is taken from the shop.',
-                    style: TextStyle(fontSize: 12)),
-                value: _hardwax,
-                onChanged: (v) {
-                  setState(() {
-                    _hardwax = v;
-                    if (v) {
-                      _classics = false;
-                      _underground = false;
-                    }
-                    _tracks = const [];
-                  });
-                  _loadTracks();
-                },
-              ),
               if (_hardwax)
                 Wrap(
                   spacing: 6,
