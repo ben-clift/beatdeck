@@ -1,6 +1,7 @@
 import 'package:sidedeck/debug/debug_log.dart';
 import 'dart:async';
 import 'dart:convert';
+import 'package:sidedeck/state/ratings.dart';
 import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
@@ -326,6 +327,8 @@ class LibraryController extends ChangeNotifier {
   Future<int> deleteTracks(List<LibraryTrack> list) async {
     var done = 0;
     for (final t in list) {
+      // A starred track is kept.
+      if (Ratings.instance.starsOf(t.path) > 0) continue;
       try {
         await File(t.path).delete();
         tracks.removeWhere((x) => x.path == t.path);
@@ -427,7 +430,7 @@ class LibraryController extends ChangeNotifier {
   }
 
   /// Sets (or with an empty [genre], clears) a track's genre by hand.
-  Future<void> setGenre(String path, String genre) async {
+  Future<void> setTrackGenre(String path, String genre) async {
     await _loadOverrides();
     final g = genre.trim();
     if (g.isEmpty) {
@@ -541,7 +544,16 @@ class LibraryController extends ChangeNotifier {
   int Function(String path)? playsOf;
   int Function(int deck)? deckKey;
 
+  /// Star counts to show (0 = unstarred); empty shows everything.
+  final Set<int> starFilter = {};
+
+  void toggleStarFilter(int n) {
+    if (!starFilter.remove(n)) starFilter.add(n);
+    _emit();
+  }
+
   bool get hasFilters =>
+      starFilter.isNotEmpty ||
       bpmMin != null ||
       bpmMax != null ||
       keyDeck >= 0 ||
@@ -583,6 +595,7 @@ class LibraryController extends ChangeNotifier {
     onlyUnanalyzed = false;
     hidePlayed = false;
     decades.clear();
+    starFilter.clear();
     genreFilter = '';
     _emit();
   }
@@ -624,6 +637,7 @@ class LibraryController extends ChangeNotifier {
       if (hidePlayed && (playedCheck?.call(t.path) ?? false)) return false;
       if (decades.isNotEmpty && !decades.contains(decadeOf(t.year))) return false;
       if (genreFilter.isNotEmpty && t.genre.toLowerCase() != genreFilter.toLowerCase()) return false;
+      if (starFilter.isNotEmpty && !starFilter.contains(Ratings.instance.starsOf(t.path))) return false;
       return true;
     }).toList();
     list.sort((a, b) {

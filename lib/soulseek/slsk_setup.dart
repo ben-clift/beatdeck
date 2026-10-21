@@ -3,6 +3,7 @@ import 'package:sidedeck/suggest/genres.dart';
 import 'dart:math' as math;
 import 'dart:io';
 import 'package:sidedeck/state/backup_tracks.dart';
+import 'package:sidedeck/state/ratings.dart';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:sidedeck/debug/debug_log.dart';
@@ -70,6 +71,8 @@ class SlskSetup {
     final own = fallback.isNotEmpty && path.startsWith(fallback);
     if (!own && !AutoFetch.instance.wasFetched(path)) return;
     if ((await BackupTracks.paths()).contains(path)) return; // kept for another day
+    await Ratings.instance.load();
+    if (Ratings.instance.starsOf(path) > 0) return; // starred: never deleted
     try {
       final f = File(path);
       if (await f.exists()) {

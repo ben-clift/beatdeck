@@ -14,6 +14,7 @@ import 'package:sidedeck/ui/automix_pulldown.dart';
 import 'package:sidedeck/ui/controller_widgets.dart';
 import 'package:sidedeck/ui/equaliser_view.dart';
 import 'package:sidedeck/state/backup_tracks.dart';
+import 'package:sidedeck/state/ratings.dart';
 import 'package:sidedeck/ui/fx_pulldown.dart';
 import 'package:sidedeck/ui/library_drawer.dart';
 import 'package:sidedeck/ui/track_picker.dart';
@@ -543,6 +544,13 @@ class _DeckPanelState extends State<_DeckPanel> {
   }
 
   Future<void> _confirmRemove(DeckState d) async {
+    final starPath = d.path;
+    if (starPath != null && Ratings.instance.starsOf(starPath) > 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('It has stars, so it is kept. Take the stars off first to remove it.')),
+      );
+      return;
+    }
     final path = d.path;
     final name = d.title;
     final ok = await showDialog<bool>(
@@ -734,6 +742,34 @@ class _DeckPanelState extends State<_DeckPanel> {
         ),
         const SizedBox(height: 4),
         _wave(d),
+        if (d.loaded && d.path != null)
+          AnimatedBuilder(
+            animation: Ratings.instance,
+            builder: (context, _) {
+              final path = d.path!;
+              final n = Ratings.instance.starsOf(path);
+              return SizedBox(
+                height: 26,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    Text(n > 0 ? 'Kept  ' : 'Star to keep  ',
+                        style: const TextStyle(fontSize: 10, color: SideDeckTheme.muted)),
+                    for (var i = 1; i <= 3; i++)
+                      GestureDetector(
+                        onTap: () => Ratings.instance.tap(path, i),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 4),
+                          child: Icon(i <= n ? Icons.star : Icons.star_border,
+                              size: 20,
+                              color: i <= n ? const Color(0xFFFFC107) : SideDeckTheme.muted),
+                        ),
+                      ),
+                  ],
+                ),
+              );
+            },
+          ),
         const SizedBox(height: 4),
         _transport(d),
         const SizedBox(height: 4),

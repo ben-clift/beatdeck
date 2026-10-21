@@ -17,6 +17,7 @@ import 'package:sidedeck/ui/suggest_page.dart';
 import 'package:sidedeck/ui/wishlist_page.dart';
 import 'package:sidedeck/subsonic/subsonic_client.dart';
 import 'package:sidedeck/state/backup_tracks.dart';
+import 'package:sidedeck/state/ratings.dart';
 import 'package:sidedeck/suggest/auto_fetch.dart';
 import 'package:sidedeck/suggest/genres.dart';
 import 'package:sidedeck/theme/sidedeck_theme.dart';
@@ -694,6 +695,22 @@ class _LibraryOverlayState extends State<LibraryOverlay> {
                     ],
                   ),
                   const SizedBox(height: 12),
+                  const Text('Stars', style: TextStyle(fontSize: 13)),
+                  Wrap(
+                    spacing: 6,
+                    children: [
+                      for (final n in const [3, 2, 1, 0])
+                        FilterChip(
+                          label: Text(n == 0 ? 'No stars' : '★' * n, style: const TextStyle(fontSize: 12)),
+                          selected: lib.starFilter.contains(n),
+                          onSelected: (_) {
+                            lib.toggleStarFilter(n);
+                            setSheet(() {});
+                          },
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
                   const Text('Decade', style: TextStyle(fontSize: 13)),
                   Wrap(
                     spacing: 6,
@@ -801,7 +818,7 @@ class _LibraryOverlayState extends State<LibraryOverlay> {
       builder: (ctx) {
         Future<void> pick(String g) async {
           Navigator.pop(ctx);
-          await widget.library.setGenre(t.path, g);
+          await widget.library.setTrackGenre(t.path, g);
         }
 
         return SafeArea(
@@ -914,6 +931,12 @@ class _LibraryOverlayState extends State<LibraryOverlay> {
   }
 
   Future<void> _deleteTrack(LibraryTrack t) async {
+    if (Ratings.instance.starsOf(t.path) > 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('It has stars, so it is kept. Take the stars off first to delete it.')),
+      );
+      return;
+    }
     for (var i = 0; i < widget.dj.visibleDecks; i++) {
       final d = widget.dj.deck(i);
       if (d.loaded && d.path == t.path) {
@@ -1121,6 +1144,8 @@ class _LibraryOverlayState extends State<LibraryOverlay> {
     VoidCallback? onLongPress,
     String? genre,
     VoidCallback? onGenreTap,
+    int stars = 0,
+    VoidCallback? onStarTap,
   }) {
     return InkWell(
       onLongPress: onLongPress,
@@ -1156,6 +1181,21 @@ class _LibraryOverlayState extends State<LibraryOverlay> {
                   children: [
                     if (_trackArtist(artist, status: status) != null)
                       Flexible(child: _trackArtist(artist, status: status)!),
+                    if (onStarTap != null) ...[
+                      const SizedBox(width: 6),
+                      InkWell(
+                        onTap: onStarTap,
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            for (var i = 1; i <= 3; i++)
+                              Icon(i <= stars ? Icons.star : Icons.star_border,
+                                  size: 15,
+                                  color: i <= stars ? const Color(0xFFFFC107) : SideDeckTheme.muted),
+                          ],
+                        ),
+                      ),
+                    ],
                     if (onGenreTap != null) ...[
                       const SizedBox(width: 6),
                       InkWell(
@@ -1230,6 +1270,11 @@ class _LibraryOverlayState extends State<LibraryOverlay> {
           onLongPress: () => _trackMenu(t),
           genre: t.genre,
           onGenreTap: () => _genreMenu(t),
+          stars: Ratings.instance.starsOf(t.path),
+          onStarTap: () async {
+            await Ratings.instance.set(t.path, (Ratings.instance.starsOf(t.path) + 1) % 4);
+            if (mounted) setState(() {});
+          },
           title: t.title,
           artist: t.artist,
           bpm: t.bpm,
