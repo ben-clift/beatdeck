@@ -101,6 +101,7 @@ class _AutomixPullDownState extends State<AutomixPullDown> {
     }).catchError((_) {});
   }
   String? _selectedId;
+  bool _wasOn = false;
 
   @override
   void dispose() {
@@ -117,7 +118,14 @@ class _AutomixPullDownState extends State<AutomixPullDown> {
 
   /// What automix will play: the chosen option, else the whole library shuffled.
   String _choice(List<Playlist> lists) {
-    final id = _selectedId;
+    var id = _selectedId;
+    // Backup tracks is a one-off choice: once Auto DJ stops, the choice goes
+    // back to the whole library, shuffled.
+    final onNow = widget.dj.automixOn;
+    if (_wasOn && !onNow && id != null && lists.any((p) => p.id == id && p.name == BackupTracks.name)) {
+      _selectedId = id = null;
+    }
+    _wasOn = onNow;
     if (id != null &&
         (id.startsWith('lib:') || lists.any((p) => p.id == id))) {
       return id;
