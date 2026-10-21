@@ -707,6 +707,35 @@ class DjController extends ChangeNotifier {
     return null;
   }
 
+  /// The very last resort so the music never stops: every track still in the
+  /// queue is playable again, the one heard longest ago first (never one on a
+  /// deck, a deleted file or a disliked track).
+  int? _lastResortPick() {
+    final onDeck = <String>{
+      for (var i = 0; i < 2; i++) if ((deck(i).path ?? '').isNotEmpty) _trackKey(deck(i).path!),
+    };
+    String? best;
+    var bestAt = 1 << 62;
+    for (final q in _automixQueue) {
+      final k = _trackKey(q);
+      if (onDeck.contains(k) || Dislikes.instance.hasPath(q) || failedPaths.contains(q)) continue;
+      if (!File(q).existsSync()) continue;
+      final at = _recentPlayed[k] ?? 0;
+      if (at < bestAt) {
+        bestAt = at;
+        best = q;
+      }
+    }
+    if (best == null) return null;
+    final k = _trackKey(best);
+    _automixPlayed.remove(k);
+    _replayOk.add(k);
+    _rejected.remove(best);
+    _automixQueue.add(best);
+    DebugLog.add('automix', 'queue used up and nothing new yet: playing again ${best.split(RegExp(r'[\\/]')).last}');
+    return _automixQueue.length - 1;
+  }
+
   // ---- Play counts (for the "Most played" sort) ----------------------------
   final Map<String, int> _plays = {};
   final Map<String, int> _playCountedAt = {};
@@ -1191,6 +1220,9 @@ class DjController extends ChangeNotifier {
     if (next == null && remaining <= 25 && _replayPick() != null) {
       next = _nextUnplayed(tier: 2);
     }
+    if (next == null && remaining <= 25 && _lastResortPick() != null) {
+      next = _nextUnplayed(tier: 2);
+    }
     if (next == null) {
       // Nothing to put on the other deck yet: say so, and keep asking.
       final text = (fetchBusy?.call() ?? false)
@@ -1402,6 +1434,7 @@ class DjController extends ChangeNotifier {
     final waiting = fetchBusy?.call() ?? false;
     int? picked = _nextUnplayed(tier: 0) ?? (waiting ? null : _nextUnplayed(tier: 2));
     if (picked == null && _replayPick() != null) picked = _nextUnplayed(tier: 2);
+    if (picked == null && _lastResortPick() != null) picked = _nextUnplayed(tier: 2);
     if (picked == null) {
       // The deck ended and nothing suitable is queued: stay on, ask for a
       // match, and start it the moment it arrives.
