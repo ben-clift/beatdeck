@@ -72,7 +72,7 @@ jobs:
       - name: Build debug APK (arm64 phones)
         run: |
           set +e
-          flutter build apk --debug --target-platform=android-arm64 2>&1 | tee build.txt
+          flutter build apk --debug --target-platform=android-arm64 --build-name=1.2.${{ github.run_number }} --build-number=${{ github.run_number }} 2>&1 | tee build.txt
           code=${PIPESTATUS[0]}
           if [ "$code" != "0" ]; then
             grep -E 'Error:|error:|FAILURE|What went wrong' -A2 build.txt | head -60 | sed 's/%/%25/g' | awk 'BEGIN{ORS="%0A"}{print}' > errs.txt
@@ -93,8 +93,11 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          cp build/app/outputs/flutter-apk/app-debug.apk BeatDeck.apk
+          VER="1.2.${{ github.run_number }}"
+          STAMP=$(TZ=Europe/London date +"%Y-%m-%d %H:%M")
+          FILE="BeatDeck-v${VER}.apk"
+          cp build/app/outputs/flutter-apk/app-debug.apk "$FILE"
           gh release delete latest --cleanup-tag --yes || true
-          gh release create latest BeatDeck.apk --prerelease \
-            --title "Latest build ($(git rev-parse --short HEAD))" \
-            --notes "Newest BeatDeck debug build. Tap BeatDeck.apk to download."
+          gh release create latest "$FILE" --prerelease \
+            --title "BeatDeck v${VER} - ${STAMP} (UK time)" \
+            --notes "BeatDeck v${VER}, built ${STAMP} UK time, commit $(git rev-parse --short HEAD). Tap the APK to download."
