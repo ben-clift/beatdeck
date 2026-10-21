@@ -164,6 +164,73 @@ class SuggestService {
     return out;
   }
 
+  /// Less-played tracks for a genre: playlists with "underground" style
+  /// names, then only tracks whose Deezer play rank is low. [maxRank] is out
+  /// of about a million; hits sit above 600000.
+  Future<List<Suggestion>> underground(
+    String genre, {
+    double? bpmMin,
+    double? bpmMax,
+    Set<String> skip = const {},
+    int want = 30,
+    int maxRank = 250000,
+  }) async {
+    final raw = <(int, String, String)>[];
+    final seenIds = <int>{};
+    final queries = [
+      '$genre underground',
+      '$genre deep cuts',
+      '$genre rare',
+      '$genre white label',
+      '$genre promo',
+      '$genre b-sides',
+    ];
+    for (final q in queries) {
+      try {
+        final pl = await _get(
+            'https://api.deezer.com/search/playlist?q=${Uri.encodeQueryComponent(q)}&limit=8');
+        final lists = [...((pl['data'] as List?) ?? const [])]..shuffle();
+        for (final l in lists.take(3)) {
+          try {
+            final tr = await _get(
+                'https://api.deezer.com/playlist/${(l as Map)['id']}/tracks?limit=60');
+            for (final t in ((tr['data'] as List?) ?? const [])) {
+              final m = t as Map;
+              final artist = ((m['artist'] as Map?)?['name'] ?? '') as String;
+              final title = (m['title'] ?? '') as String;
+              final rank = (m['rank'] as num?)?.toInt() ?? 0;
+              if (rank > maxRank) continue;
+              if (skip.contains('$artist $title'.toLowerCase())) continue;
+              if (seenIds.add(m['id'] as int)) raw.add((m['id'] as int, title, artist));
+            }
+          } catch (_) {}
+        }
+      } catch (_) {}
+      if (raw.length >= want * 4) break;
+    }
+    raw.shuffle();
+    final out = <Suggestion>[];
+    for (var i = 0; i < raw.length && out.length < want; i += 6) {
+      final got = await Future.wait(raw.skip(i).take(6).map((r) async {
+        double bpm = 0;
+        var year = 0;
+        try {
+          final tr = await _get('https://api.deezer.com/track/${r.$1}');
+          bpm = ((tr['bpm'] as num?) ?? 0).toDouble();
+          year = yearOf(tr);
+        } catch (_) {}
+        return Suggestion(r.$3, r.$2, bpm, '$genre underground', year);
+      }));
+      for (final s in got) {
+        if (bpmMin == null || bpmMax == null || (s.bpm >= bpmMin && s.bpm <= bpmMax)) {
+          out.add(s);
+        }
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 400));
+    }
+    return out;
+  }
+
   /// Deezer's genres, as (id, name), for the chart picker.
   Future<List<(int, String)>> genres() async {
     try {

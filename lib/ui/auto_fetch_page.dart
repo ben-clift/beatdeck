@@ -37,6 +37,7 @@ class _AutoFetchPageState extends State<AutoFetchPage> {
   bool _loadingTracks = false;
   int _loadedFor = -1;
   final Set<int> _picked = {};
+  bool _underground = false;
   // Tracks already shown this session, so a reload brings only new ones.
   static final Set<String> _seen = {};
 
@@ -50,15 +51,23 @@ class _AutoFetchPageState extends State<AutoFetchPage> {
       _loadedFor = id;
       _picked.clear();
     });
-    final t = await SuggestService().chart(
-      id,
-      name,
-      bpmMin: _chartTempo ? _bpm.start : null,
-      bpmMax: _chartTempo ? _bpm.end : null,
-      want: 50,
-      needDetails: true,
-      skip: _seen,
-    );
+    final svc = SuggestService();
+    final t = _underground
+        ? await svc.underground(
+            name,
+            bpmMin: _chartTempo ? _bpm.start : null,
+            bpmMax: _chartTempo ? _bpm.end : null,
+            skip: _seen,
+          )
+        : await svc.chart(
+            id,
+            name,
+            bpmMin: _chartTempo ? _bpm.start : null,
+            bpmMax: _chartTempo ? _bpm.end : null,
+            want: 50,
+            needDetails: true,
+            skip: _seen,
+          );
     for (final s in t) {
       _seen.add('${s.artist} ${s.title}'.toLowerCase());
     }
@@ -189,6 +198,20 @@ class _AutoFetchPageState extends State<AutoFetchPage> {
                     _loadTracks();
                   },
                 ),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Underground'),
+                subtitle: const Text('Less-played tracks, not the big hits',
+                    style: TextStyle(fontSize: 12)),
+                value: _underground,
+                onChanged: (v) {
+                  setState(() {
+                    _underground = v;
+                    _tracks = const [];
+                  });
+                  _loadTracks();
+                },
+              ),
               SwitchListTile(
                 contentPadding: EdgeInsets.zero,
                 title: const Text('Only tracks in the tempo range below'),
