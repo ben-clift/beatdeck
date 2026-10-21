@@ -48,9 +48,15 @@ class SlskSetup {
     soulseek.downloadDir = () => dirFor(lib);
     soulseek.storageCheck = (size) => StorageGuard.blockReason(dirFor(lib), size);
     dj?.onFileMissing = (_) => lib.removeMissing();
-    soulseek.onFileSaved = (path) {
-      DebugLog.add('library', 'adding $path');
-      lib.addFile(path);
+    soulseek.onFileSaved = (path) async {
+      // One way in: library first, then automix, and only if it was kept.
+      DebugLog.add('pipeline', 'verified, adding to library: $path');
+      final added = await lib.addFile(path);
+      if (!added) {
+        DebugLog.add('pipeline', 'not added (duplicate or not audio): $path');
+        return;
+      }
+      DebugLog.add('pipeline', 'in library, offering to automix: $path');
       dj?.automixAppend(path);
     };
   }

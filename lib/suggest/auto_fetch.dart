@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
@@ -451,7 +452,10 @@ class AutoFetch extends ChangeNotifier {
     if (dj == null) return 0;
     if (dj.automixOn) return dj.automixWaiting;
     return _fetched
-        .where((p) => !dj.loadedPaths.contains(p) && !dj.failedPaths.contains(p))
+        .where((p) =>
+            !dj.loadedPaths.contains(p) &&
+            !dj.failedPaths.contains(p) &&
+            File(p).existsSync())
         .length;
   }
 

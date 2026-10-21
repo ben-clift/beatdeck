@@ -306,8 +306,10 @@ class LibraryController extends ChangeNotifier {
 
   /// Adds one finished download (or any file) to the library at once, keeps
   /// it across restarts and works out its tempo and key.
-  Future<void> addFile(String path) async {
-    if (!isNativeAudioExtension(p.extension(path))) return;
+  /// Returns true when the file joined the library (false: not audio, or a
+  /// copy of a track already there, which is deleted).
+  Future<bool> addFile(String path) async {
+    if (!isNativeAudioExtension(p.extension(path))) return false;
     // A copy of a track already in the library is not kept.
     final key = dupKey(path);
     final ms = (fileDurationSec(path) * 1000).round();
@@ -318,13 +320,14 @@ class LibraryController extends ChangeNotifier {
       try {
         await File(path).delete();
       } catch (_) {}
-      return;
+      return false;
     }
     await _addPath(path);
     DebugLog.add('library', 'added ${await DebugLog.describeFile(path)}');
     await _persist();
     _emit();
     unawaited(analyzePath(path));
+    return true;
   }
 
   Future<void> scanDirectory(String dirPath, {bool persist = true}) async {
