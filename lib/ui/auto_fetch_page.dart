@@ -76,7 +76,7 @@ class _AutoFetchPageState extends State<AutoFetchPage> {
         t = await Hardwax.fetch(_hwTag, skip: onlyNew ? _seen : const {});
         if (t.isEmpty) {
           _loadError = onlyNew
-              ? 'No new releases left on this page this session. Try another tag.'
+              ? 'No new releases left on this tag. Hardwax lists refresh once a day; try another tag.'
               : 'No releases found on that Hardwax page.';
         }
       } catch (e) {

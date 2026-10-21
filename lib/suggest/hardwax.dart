@@ -1,4 +1,7 @@
+import 'dart:convert';
+
 import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sidedeck/debug/debug_log.dart';
 import 'package:sidedeck/suggest/suggest_service.dart';
 import 'package:sidedeck/wishlist/wishlist.dart';
@@ -42,24 +45,80 @@ class Hardwax {
     return s;
   }
 
+  /// Each tag page is read from the shop at most once every 24 hours; in
+  /// between, the saved list is used.
+  static const _maxAge = Duration(hours: 24);
+
+  static Future<List<Suggestion>?> _cached(String slug, {bool stale = false}) async {
+    try {
+      final p = await SharedPreferences.getInstance();
+      final raw = p.getString('hardwax_$slug');
+      if (raw == null) return null;
+      final m = jsonDecode(raw) as Map<String, dynamic>;
+      final at = DateTime.fromMillisecondsSinceEpoch(m['t'] as int);
+      if (!stale && DateTime.now().difference(at) > _maxAge) return null;
+      return [
+        for (final e in (m['items'] as List))
+          Suggestion((e as List)[0] as String, e[1] as String, 0, 'Hardwax'),
+      ];
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static Future<void> _save(String slug, List<Suggestion> items) async {
+    try {
+      final p = await SharedPreferences.getInstance();
+      await p.setString(
+        'hardwax_$slug',
+        jsonEncode({
+          't': DateTime.now().millisecondsSinceEpoch,
+          'items': [for (final s in items) [s.artist, s.title]],
+        }),
+      );
+    } catch (_) {}
+  }
+
+  static List<Suggestion> _skip(List<Suggestion> l, Set<String> skip) => [
+        for (final s in l)
+          if (!skip.contains('${s.artist} ${s.title}'.toLowerCase())) s,
+      ];
+
   /// Releases on a tag page, as artist and title, newest first as listed.
   static Future<List<Suggestion>> fetch(String slug, {Set<String> skip = const {}}) async {
-    final r = await http.get(
-      Uri.parse('https://hardwax.com/$slug/'),
-      headers: const {'User-Agent': 'BeatDeck/1.0 (personal DJ app)'},
-    ).timeout(const Duration(seconds: 15));
-    if (r.statusCode != 200) throw Exception('Hardwax answered ${r.statusCode}');
+    final fresh = await _cached(slug);
+    if (fresh != null) {
+      DebugLog.add('hardwax', '$slug: using the list saved in the last 24 hours (${fresh.length})');
+      return _skip(fresh, skip);
+    }
+    http.Response r;
+    try {
+      r = await http.get(
+        Uri.parse('https://hardwax.com/$slug/'),
+        headers: const {'User-Agent': 'BeatDeck/1.0 (personal DJ app)'},
+      ).timeout(const Duration(seconds: 15));
+    } catch (e) {
+      final old = await _cached(slug, stale: true);
+      if (old != null) return _skip(old, skip);
+      rethrow;
+    }
+    if (r.statusCode != 200) {
+      final old = await _cached(slug, stale: true);
+      if (old != null) return _skip(old, skip);
+      throw Exception('Hardwax answered ${r.statusCode}');
+    }
     final text = _text(r.body);
     final items = WishParser.parse('€ Label Catalog MP3\n$text');
-    final out = <Suggestion>[];
+    final all = <Suggestion>[];
     for (final i in items) {
       if (i.artist.isEmpty) continue;
-      if (skip.contains('${i.artist} ${i.title}'.toLowerCase())) continue;
-      out.add(Suggestion(i.artist, i.title, 0, 'Hardwax'));
+      all.add(Suggestion(i.artist, i.title, 0, 'Hardwax'));
     }
+    final out = _skip(all, skip);
+    if (all.isNotEmpty) await _save(slug, all);
     DebugLog.add('hardwax',
-        '$slug: page ${r.body.length} bytes, ${items.length} parsed, ${out.length} usable'
-        '${out.isEmpty ? ', text starts: ${text.replaceAll(RegExp(r'\\s+'), ' ').trim().substring(0, text.trim().length < 300 ? text.trim().length : 300)}' : ', first: ${out.first.artist} - ${out.first.title}'}');
+        '$slug: read the shop page (${r.body.length} bytes), ${items.length} parsed, ${all.length} usable'
+        '${all.isEmpty ? ', text starts: ${text.replaceAll(RegExp(r'\\s+'), ' ').trim().substring(0, text.trim().length < 300 ? text.trim().length : 300)}' : ', first: ${all.first.artist} - ${all.first.title}'}');
     return out;
   }
 }
