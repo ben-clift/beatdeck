@@ -56,7 +56,7 @@ void main() {
   });
 
   test('incomingRate matches heard tempo, limited to 8 %', () {
-    expect(incomingRate(outBpm: 120, outRate: 1.0, inBpm: 110), closeTo(120 / 110, 1e-9));
+    expect(incomingRate(outBpm: 120, outRate: 1.0, inBpm: 112), closeTo(120 / 112, 1e-9));
     expect(incomingRate(outBpm: 120, outRate: 1.0, inBpm: 100), 1.08);
     expect(incomingRate(outBpm: 120, outRate: 1.05, inBpm: 126), closeTo(1.0, 1e-9));
     expect(incomingRate(outBpm: 0, outRate: 1.0, inBpm: 100), 1.0);
