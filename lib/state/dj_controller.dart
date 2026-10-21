@@ -824,11 +824,19 @@ class DjController extends ChangeNotifier {
         if (File(p).existsSync() && !_wasPlayed(p) && seen.add(_trackKey(p))) p,
     ];
     if (_automixQueue.isEmpty) {
-      automixStatus = paths.isNotEmpty && paths.any((q) => File(q).existsSync())
-          ? 'Everything in that list was already played in the last 24 hours'
-          : 'No playable files in that list';
-      notifyListeners();
-      return;
+      // Everything was played in the last 24 hours: start with the one played
+      // longest ago (never a deleted one) and let the helper find new tracks.
+      final again = <String>[
+        for (final p in paths)
+          if (File(p).existsSync() && !Dislikes.instance.hasPath(p)) p,
+      ]..sort((a, b) => (_recentPlayed[_trackKey(a)] ?? 0).compareTo(_recentPlayed[_trackKey(b)] ?? 0));
+      if (again.isEmpty) {
+        automixStatus = 'No playable files in that list';
+        notifyListeners();
+        return;
+      }
+      _automixQueue = [again.first];
+      DebugLog.add('automix', 'everything was played in the last 24 hours: starting with the oldest, new tracks will be fetched');
     }
     _automixPlayed.clear();
     automixFadeSeconds = fadeSeconds.clamp(4.0, 180.0).toDouble();

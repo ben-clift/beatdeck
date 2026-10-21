@@ -196,20 +196,21 @@ class _AutomixPullDownState extends State<AutomixPullDown> {
     );
   }
 
-  void _start(List<String> paths) {
+  Future<void> _start(List<String> paths) async {
     final dj = widget.dj;
     // The Soulseek helper is part of Start: stay signed in, fetch matches.
     if (_helper) {
       SlskKeeper.instance.setEnabled(true);
       SlskSetup.setAutoFetchForAutomix(true);
     }
-    dj.startAutomix(paths,
+    await dj.startAutomix(paths,
         fadeSeconds: _fade,
         startOffsetSeconds: _offset,
         arc: _arc,
         lengthMinutes: _len,
         style: _style);
-    setState(() => _open = false);
+    // Stay open when it could not start, so the reason stays visible.
+    if (mounted && dj.automixOn) setState(() => _open = false);
   }
 
   bool get _helper => SlskKeeper.instance.enabled && SlskSetup.autoFetchForAutomix;
