@@ -88,7 +88,7 @@ abstract class Discover {
           final m = jsonDecode(r.body) as Map<String, dynamic>;
           for (final e in (m['results'] as List? ?? const [])) {
             final n = (e as Map)['band_name'];
-            if (n is String) out.add(n);
+            if (n is String && !RegExp(r'records|recordings|label|music|audio|collective', caseSensitive: false).hasMatch(n)) out.add(n);
           }
           await Future<void>.delayed(const Duration(seconds: 2));
         }

@@ -852,6 +852,13 @@ class AutoFetch extends ChangeNotifier {
   /// Searches for [s], picks the best file and starts its download. Null when
   /// nothing usable was found.
   Future<_Flight?> _startFlight(Suggestion s) async {
+    // Not signed in right now: wait for the connection instead of using up
+    // the shortlist on searches that cannot run.
+    for (var w = 0; w < 90 && !_stop && !soulseek.online; w++) {
+      if (w == 0) _say('Next track: Soulseek is reconnecting, waiting…');
+      await Future<void>.delayed(const Duration(seconds: 1));
+    }
+    if (!soulseek.online) return null;
     _triedThisSession.add(s.query.toLowerCase());
     final dir = _lib == null ? null : SlskSetup.dirFor(_lib!);
     if (dir != null) {
@@ -909,7 +916,7 @@ class AutoFetch extends ChangeNotifier {
     notifyListeners();
     final flights = <_Flight>[];
     try {
-      var g = genre.trim();
+      var g = genre.trim().replaceAllMapped(RegExp(r'(?<=[a-z])(?=[A-Z])'), (_) => ' ').toLowerCase();
       if (g.isEmpty) g = genreForBpm(bpm);
       final double? lo = bpmLo ?? (bpm > 1 ? bpm * 0.93 : null);
       final double? hi = bpmHi ?? (bpm > 1 ? bpm * 1.07 : null);

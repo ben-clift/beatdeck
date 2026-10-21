@@ -174,8 +174,16 @@ class SoulseekClient extends ChangeNotifier {
     }
   }
 
+  /// The server said this account signed in somewhere else (message 41).
+  DateTime? kickedAt;
+  DateTime? _onlineSince;
+
   void _serverLost(String why) {
     if (status == SlskStatus.offline && error != null) return;
+    final up = _onlineSince == null ? null : DateTime.now().difference(_onlineSince!).inSeconds;
+    DebugLog.add('soulseek',
+        'connection ended: ${why.isEmpty ? 'signed out' : why}${up == null ? ' (never signed in)' : ' after $up s online'}');
+    _onlineSince = null;
     _ping?.cancel();
     _server?.destroy();
     _server = null;
@@ -229,6 +237,7 @@ class SoulseekClient extends ChangeNotifier {
           return;
         }
         status = SlskStatus.online;
+        _onlineSince = DateTime.now();
         error = null;
         _send((MsgWriter()..u32(_listener?.port ?? 0)).frame(2)); // wait port
         _send((MsgWriter()..u32(2)).frame(28)); // online
@@ -245,6 +254,10 @@ class SoulseekClient extends ChangeNotifier {
         final port = r.u32();
         final cb = _addrWaiters.remove(user);
         cb?.call(ip, port);
+      case 41: // signed in somewhere else
+        kickedAt = DateTime.now();
+        DebugLog.fail('soulseek', 'the server says this account signed in somewhere else');
+        _serverLost('This Soulseek account is signed in on another device or app');
       case 18: // server asks us to connect to a peer
         final user = r.str();
         final type = r.str();

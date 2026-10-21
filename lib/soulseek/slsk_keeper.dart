@@ -89,6 +89,14 @@ class SlskKeeper extends ChangeNotifier with WidgetsBindingObserver {
       notifyListeners();
       return;
     }
+    // Signed in somewhere else: reconnecting only kicks the other one off and
+    // they take turns forever. Wait a few minutes between tries.
+    final k = soulseek.kickedAt;
+    if (k != null && DateTime.now().difference(k).inMinutes < 5) {
+      note = 'This account is signed in on another device or app. Close it there.';
+      notifyListeners();
+      return;
+    }
     if (DateTime.now().isBefore(_next)) return;
     _trying = true;
     try {
