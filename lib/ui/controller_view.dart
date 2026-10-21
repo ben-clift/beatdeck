@@ -1065,10 +1065,24 @@ class _DeckPanelState extends State<_DeckPanel> {
           final b = _jumpBeats[k];
           pads.add(_pad(
             _jumpLabel(b),
-            false,
-            () => b.abs() >= 1
-                ? widget.dj.beatJump(widget.index, b.round())
-                : widget.dj.nudgeBeats(widget.index, b),
+            widget.dj.deckFxOn[widget.index].isNotEmpty && _lastJumpPad == k,
+            () {
+              void jump(double x) => x.abs() >= 1
+                  ? widget.dj.beatJump(widget.index, x.round())
+                  : widget.dj.nudgeBeats(widget.index, x);
+              final now = DateTime.now();
+              if (_lastJumpPad == k && now.difference(_lastJumpAt).inMilliseconds < 380) {
+                // Double tap: undo the first jump and switch the effects
+                // on or off, using this pad's length as the effect setting.
+                jump(-b);
+                _lastJumpAt = DateTime(2000);
+                widget.dj.toggleDeckFxAll(widget.index, beats: b.abs());
+              } else {
+                _lastJumpPad = k;
+                _lastJumpAt = now;
+                jump(b);
+              }
+            },
           ));
       }
     }
@@ -1123,6 +1137,9 @@ class _DeckPanelState extends State<_DeckPanel> {
     );
     if (picked != null) widget.dj.assignPadFx(widget.index, pad, picked);
   }
+
+  int _lastJumpPad = -1;
+  DateTime _lastJumpAt = DateTime(2000);
 
   Widget _pad(String label, bool on, VoidCallback onTap, {VoidCallback? onLong}) {
     return GestureDetector(

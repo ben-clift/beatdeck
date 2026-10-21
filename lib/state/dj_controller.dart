@@ -203,6 +203,23 @@ class DjController extends ChangeNotifier {
       List.generate(4, (_) => List<int>.generate(8, (i) => i));
   final List<Set<int>> deckFxOn = List.generate(4, (_) => <int>{});
 
+  final List<Set<int>> _deckFxLast = List.generate(4, (_) => <int>{});
+
+  /// Jump-pad double tap: switches this deck's effects off, or back on (the
+  /// ones last used, else echo). [beats] sets the effect length/speed.
+  void toggleDeckFxAll(int deckIndex, {double? beats}) {
+    final on = deckFxOn[deckIndex];
+    if (on.isNotEmpty) {
+      _deckFxLast[deckIndex] = {...on};
+      on.clear();
+    } else {
+      on.addAll(_deckFxLast[deckIndex].isEmpty ? {0} : _deckFxLast[deckIndex]);
+      if (beats != null) fxBeats = beats;
+    }
+    _applyDeckFx(deckIndex);
+    notifyListeners();
+  }
+
   void toggleDeckFx(int deckIndex, int pad) {
     final e = padFx[deckIndex][pad];
     final on = deckFxOn[deckIndex];
