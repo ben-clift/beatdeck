@@ -19,22 +19,70 @@ enum _A { lion, tiger, sheep, goat, cat, dog, snake, frog, beetle, ant, spider }
 class _Critter {
   _Critter({
     required this.kind,
-    required this.x,
-    required this.y,
-    required this.dir,
     required this.speed,
     required this.size,
     required this.hue,
+    required this.path,
   });
 
   final _A kind;
-  double x, y;
-  final double dir; // 1 walks right, -1 walks left
   final double speed;
   final double size;
   final double hue;
+  final _Path path;
+  double x = -1000, y = -1000;
+  double ang = 0; // heading in radians (0 = right, pi/2 = down)
   double age = 0;
-  double dist = 0; // distance walked, drives the legs
+  double dist = 0; // distance walked: drives the legs and the path
+}
+
+/// Where a critter walks: a straight line (any edge to any other, so across,
+/// up, down or diagonal), a line with a wave in it, or a loop or two in a
+/// circle before walking off.
+class _Path {
+  _Path.line(this.sx, this.sy, this.ux, this.uy, this.total, {this.amp = 0, this.wl = 1})
+      : circle = false,
+        cx = 0,
+        cy = 0,
+        r = 0,
+        sign = 1,
+        phi0 = 0,
+        lead = 0,
+        arc = 0;
+  _Path.circle(this.cx, this.cy, this.r, this.sign, this.phi0, this.lead, this.arc, this.total)
+      : circle = true,
+        sx = 0,
+        sy = 0,
+        ux = 0,
+        uy = 0,
+        amp = 0,
+        wl = 1;
+
+  final bool circle;
+  final double sx, sy, ux, uy; // line: start and unit direction
+  final double total; // distance after which it is off the screen
+  final double amp, wl; // wave
+  final double cx, cy, r, sign, phi0, lead, arc; // circle
+
+  Offset at(double s) {
+    if (!circle) {
+      final off = amp * math.sin(s / wl * 2 * math.pi);
+      return Offset(sx + ux * s - uy * off, sy + uy * s + ux * off);
+    }
+    // tangent direction at the entry point
+    final tx = -math.sin(phi0) * sign, ty = math.cos(phi0) * sign;
+    final ex = cx + r * math.cos(phi0), ey = cy + r * math.sin(phi0);
+    if (s < lead) return Offset(ex - tx * (lead - s), ey - ty * (lead - s));
+    if (s < lead + arc) {
+      final a = phi0 + sign * (s - lead) / r;
+      return Offset(cx + r * math.cos(a), cy + r * math.sin(a));
+    }
+    final a = phi0 + sign * arc / r;
+    final px = cx + r * math.cos(a), py = cy + r * math.sin(a);
+    final hx = -math.sin(a) * sign, hy = math.cos(a) * sign;
+    final d = s - lead - arc;
+    return Offset(px + hx * d, py + hy * d);
+  }
 }
 
 class _CritterEffectsState extends State<CritterEffects>
@@ -96,10 +144,10 @@ class _CritterEffectsState extends State<CritterEffects>
         final c = (t.age % 1.5) / 1.5;
         v = c > 0.55 ? t.speed * 2.2 : 0;
       }
-      t.x += t.dir * v * dt;
       t.dist += v * dt;
+      _place(t);
     }
-    _things.removeWhere((t) => t.dir > 0 ? t.x > w + t.size * 2 : t.x < -t.size * 2);
+    _things.removeWhere((t) => t.dist > t.path.total);
 
     _next -= dt;
     if (_next <= 0) {
@@ -115,12 +163,31 @@ class _CritterEffectsState extends State<CritterEffects>
     }
   }
 
+  void _place(_Critter t) {
+    final p = t.path.at(t.dist);
+    final q = t.path.at(t.dist + 3);
+    t.x = p.dx;
+    t.y = p.dy;
+    if ((q - p).distance > 0.01) t.ang = math.atan2(q.dy - p.dy, q.dx - p.dx);
+  }
+
+  /// A point just outside edge [e] (0 left, 1 right, 2 top, 3 bottom).
+  Offset _edgePoint(int e, double margin) {
+    final w = _size.width, h = _size.height;
+    final f = 0.1 + _rnd.nextDouble() * 0.8;
+    return switch (e) {
+      0 => Offset(-margin, h * f),
+      1 => Offset(w + margin, h * f),
+      2 => Offset(w * f, -margin),
+      _ => Offset(w * f, h + margin),
+    };
+  }
+
   void _spawn(List<_A> allowed) {
     final w = _size.width;
     final h = _size.height;
     final k = allowed[_rnd.nextInt(allowed.length)];
-    final dir = _rnd.nextBool() ? 1.0 : -1.0;
-    final (size, speed) = switch (k) {
+    final (size0, speed0) = switch (k) {
       _A.lion => (80.0, 70.0),
       _A.tiger => (84.0, 80.0),
       _A.sheep => (66.0, 38.0),
@@ -133,16 +200,55 @@ class _CritterEffectsState extends State<CritterEffects>
       _A.ant => (20.0, 32.0),
       _A.spider => (28.0, 46.0),
     };
-    final sc = 0.85 + _rnd.nextDouble() * 0.4;
-    _things.add(_Critter(
+    final size = size0 * (0.85 + _rnd.nextDouble() * 0.4);
+    final margin = size * 1.8;
+    final pick = _rnd.nextDouble();
+    _Path path;
+    if (pick < 0.3) {
+      // A loop or two in a circle somewhere on the screen, then off.
+      final r = math.max(size * 0.9, math.min(w, h) * (0.1 + _rnd.nextDouble() * 0.12));
+      final cx = w * (0.25 + _rnd.nextDouble() * 0.5);
+      final cy = h * (0.3 + _rnd.nextDouble() * 0.4);
+      final loops = 1 + _rnd.nextInt(2) + _rnd.nextDouble() * 0.5;
+      path = _Path.circle(
+        cx,
+        cy,
+        r,
+        _rnd.nextBool() ? 1 : -1,
+        _rnd.nextDouble() * 2 * math.pi,
+        math.sqrt(w * w + h * h) + margin,
+        loops * 2 * math.pi * r,
+        math.sqrt(w * w + h * h) * 2 + margin * 2 + loops * 2 * math.pi * r,
+      );
+    } else {
+      // Any edge to a different edge: across, up, down or diagonal.
+      final e1 = _rnd.nextInt(4);
+      var e2 = _rnd.nextInt(4);
+      if (e2 == e1) e2 = (e1 + 1 + _rnd.nextInt(3)) % 4;
+      final a = _edgePoint(e1, margin);
+      final b = _edgePoint(e2, margin);
+      final len = (b - a).distance;
+      final u = (b - a) / len;
+      final wave = pick < 0.5;
+      path = _Path.line(
+        a.dx,
+        a.dy,
+        u.dx,
+        u.dy,
+        len,
+        amp: wave ? 25 + _rnd.nextDouble() * 45 : 0,
+        wl: 160 + _rnd.nextDouble() * 160,
+      );
+    }
+    final c = _Critter(
       kind: k,
-      x: dir > 0 ? -size * 1.6 : w + size * 1.6,
-      y: h * (0.25 + _rnd.nextDouble() * 0.68),
-      dir: dir,
-      speed: speed * (0.8 + _rnd.nextDouble() * 0.4),
-      size: size * sc,
+      speed: speed0 * (0.8 + _rnd.nextDouble() * 0.4),
+      size: size,
       hue: _rnd.nextDouble() * 360,
-    ));
+      path: path,
+    );
+    _place(c);
+    _things.add(c);
   }
 
   @override
@@ -180,7 +286,13 @@ class _CritterPainter extends CustomPainter {
     for (final t in s._things) {
       canvas.save();
       canvas.translate(t.x, t.y);
-      canvas.scale(t.dir, 1);
+      // Face the way it walks; never upside down (the left half is mirrored).
+      if (math.cos(t.ang) >= 0) {
+        canvas.rotate(t.ang);
+      } else {
+        canvas.rotate(t.ang - math.pi);
+        canvas.scale(-1, 1);
+      }
       final u = t.size;
       // soft ground shadow
       canvas.drawOval(
