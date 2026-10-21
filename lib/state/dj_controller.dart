@@ -523,6 +523,31 @@ class DjController extends ChangeNotifier {
   /// Genres picked by the user are in force: fetch them, skip the genre gate.
   bool Function()? genrePinned;
   bool _mixNow = false;
+  DateTime? _skipAt;
+
+  /// Skip: on the playing deck, mix into the next track now; on the waiting
+  /// deck, drop that track and choose another.
+  String? automixSkip(int deckIndex) {
+    if (!automixOn || _automixDeck < 0) return 'Automix is not running.';
+    if (_automixFading) return 'Wait for the mix to finish.';
+    if (deckIndex == _automixDeck) {
+      _skipAt = DateTime.now();
+      DebugLog.add('automix', 'skip: mixing into the next track now');
+      automixStatus = 'Skipping…';
+      notifyListeners();
+      return null;
+    }
+    final path = deck(deckIndex).path;
+    if (path != null) {
+      _markPlayed(path);
+      _rejected.add(path);
+    }
+    DebugLog.add('automix', 'skip: choosing another track for deck ${deckIndex + 1}');
+    _clearUpNext();
+    _flowNext = null;
+    notifyListeners();
+    return null;
+  }
   DateTime _playNextAt = DateTime.fromMillisecondsSinceEpoch(0);
   String? _forcePath;
 
@@ -1105,7 +1130,9 @@ class DjController extends ChangeNotifier {
     _checkNeedTrack();
     // The fit relaxes as the end gets close, so something always plays:
     // same genre and tempo, then tempo within 15 %, then anything unplayed.
-    final tier = remaining > 45 ? 0 : (remaining > 20 ? 1 : 2);
+    final skipping = _skipAt != null && DateTime.now().difference(_skipAt!).inMinutes < 3;
+    if (!skipping) _skipAt = null;
+    final tier = skipping ? 1 : (remaining > 45 ? 0 : (remaining > 20 ? 1 : 2));
     var next = _nextUnplayed(tier: tier);
     // Never silent: with the end near and nothing new yet, replay the track
     // played longest ago (never a deleted one) while the helper keeps looking.
@@ -1130,7 +1157,7 @@ class DjController extends ChangeNotifier {
       _loadNext(other, _automixQueue[next], tier);
       return false;
     }
-    final mixNow = _mixNow && _forcePath != null && _forcePath == _automixQueue[next];
+    final mixNow = skipping || (_mixNow && _forcePath != null && _forcePath == _automixQueue[next]);
     if (mixNow || shouldStartFade(remaining: remaining, fadeSeconds: automixFadeSeconds)) {
       var breakLeft = 0.0;
       if (kindFor(automixStyle, d.bpm, deck(other).bpm) == TransitionKind.breakdown) {
@@ -1149,7 +1176,7 @@ class DjController extends ChangeNotifier {
         }
       }
       final plan = planFor(automixStyle,
-          outBpm: d.bpm, inBpm: deck(other).bpm, baseSeconds: automixFadeSeconds, breakSeconds: breakLeft);
+          outBpm: d.bpm, inBpm: deck(other).bpm, baseSeconds: skipping ? 8.0 : automixFadeSeconds, breakSeconds: breakLeft);
       // A cut lands on the first beat of a bar, so wait for the bar line
       // (unless the track is about to end).
       final bar = d.bpm > 1 ? 4 * 60.0 / d.bpm : 2.0;
@@ -1160,6 +1187,7 @@ class DjController extends ChangeNotifier {
       }
       _plan = plan;
       _mixNow = false;
+      _skipAt = null;
       _automixBeginFade(cur, other, next);
       return true;
     }

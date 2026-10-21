@@ -619,6 +619,20 @@ class _DeckPanelState extends State<_DeckPanel> {
                 ),
               ),
               const Icon(Icons.library_music, size: 18),
+              if (d.loaded && widget.dj.automixOn)
+                IconButton(
+                  tooltip: 'Skip this track',
+                  visualDensity: VisualDensity.compact,
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                  icon: const Icon(Icons.skip_next, size: 22),
+                  onPressed: () {
+                    final err = widget.dj.automixSkip(widget.index);
+                    if (err != null) {
+                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(err)));
+                    }
+                  },
+                ),
               if (d.loaded)
                 IconButton(
                   tooltip: 'Put in Backup tracks to come back to another time',
