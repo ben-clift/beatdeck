@@ -416,6 +416,42 @@ class DjController extends ChangeNotifier {
   int get automixWaiting =>
       automixOn ? math.max(0, _automixQueue.length - _automixIndex - 1) : 0;
 
+  /// Called when nothing left in the queue fits the playing track (tempo or
+  /// key); the app uses it to fetch a matching track from Soulseek.
+  void Function(String artist, double bpm, CamelotKey? key, String title)? onNeedTrack;
+  String? _needAsked;
+  DateTime _needCheck = DateTime.fromMillisecondsSinceEpoch(0);
+
+  void _checkNeedTrack() {
+    final cb = onNeedTrack;
+    if (cb == null || _automixIndex < 0 || _automixIndex >= _automixQueue.length) return;
+    final now = DateTime.now();
+    if (now.difference(_needCheck).inSeconds < 5) return;
+    _needCheck = now;
+    final path = _automixQueue[_automixIndex];
+    if (_needAsked == path) return;
+    final cur = _flowOf(path);
+    if (cur == null || cur.bpm <= 0) return;
+    var fits = 0;
+    for (var i = _automixIndex + 1; i < _automixQueue.length; i++) {
+      final q = _automixQueue[i];
+      if (_automixPlayed.contains(_trackKey(q))) continue;
+      final c = _flowOf(q);
+      if (c == null) continue;
+      if (c.bpm > 0 && bpmGapPercent(cur.bpm, c.bpm).abs() > 8) continue;
+      if (cur.key != null && c.key != null && keyMatch(cur.key!, c.key!).score < 70) continue;
+      fits++;
+    }
+    if (fits > 0) return;
+    _needAsked = path;
+    final name = path.split(RegExp(r'[\\/]')).last.replaceFirst(RegExp(r'\.[^.]+$'), '');
+    final dash = name.indexOf(' - ');
+    final artist = cur.artist;
+    final title = dash > 0 ? name.substring(dash + 3).trim() : name;
+    DebugLog.add('automix', 'nothing in the queue fits $name (${cur.bpm.round()} BPM), asking Soulseek for a match');
+    cb(artist, cur.bpm, cur.key, title);
+  }
+
   /// A new track (for example a finished Soulseek download) joins the end of
   /// the automix queue if automix is running.
   void automixAppend(String path) {
@@ -666,6 +702,7 @@ class DjController extends ChangeNotifier {
       duration: d.duration,
       rate: d.rate,
     );
+    _checkNeedTrack();
     final next = _nextUnplayed();
     if (next == null) {
       if (remaining <= 0.5) {

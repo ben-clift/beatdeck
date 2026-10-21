@@ -5,6 +5,7 @@ import 'package:sidedeck/debug/debug_log.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sidedeck/soulseek/soulseek_client.dart';
+import 'package:sidedeck/suggest/auto_fetch.dart';
 import 'package:sidedeck/soulseek/storage_guard.dart';
 import 'package:sidedeck/state/dj_controller.dart';
 import 'package:sidedeck/state/library_controller.dart';
@@ -52,6 +53,18 @@ class SlskSetup {
     soulseek.downloadDir = () => dirFor(lib);
     soulseek.storageCheck = (size) => StorageGuard.blockReason(dirFor(lib), size);
     dj?.onFileMissing = (_) => lib.removeMissing();
+    dj?.onNeedTrack = (artist, bpm, key, title) {
+      final af = AutoFetch.instance;
+      if (af.running || !soulseek.online || artist.isEmpty) return;
+      af.start(
+        artist: artist,
+        title: title,
+        seedBpm: bpm,
+        seedKey: key,
+        library: lib,
+        count: 2,
+      );
+    };
     soulseek.onFileSaved = (path) async {
       // One way in: library first, then automix, and only if it was kept.
       DebugLog.add('pipeline', 'verified, adding to library: $path');
