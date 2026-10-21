@@ -6,6 +6,7 @@ import 'package:sidedeck/suggest/auto_fetch.dart';
 import 'package:sidedeck/suggest/discover.dart';
 import 'package:sidedeck/suggest/genres.dart';
 import 'package:sidedeck/theme/sidedeck_theme.dart';
+import 'package:sidedeck/ui/soulseek_page.dart';
 
 /// Genre, tempo and shop choice with a button that fetches that genre now.
 /// Same controls as the Genre section of DJ Charts, for the Auto DJ panel.
@@ -144,6 +145,40 @@ class _GenrePickerState extends State<GenrePicker> {
           ],
         ),
         const SizedBox(height: 8),
+        Row(
+          children: [
+            const Text('Search Soulseek', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12)),
+            const Spacer(),
+            TextButton.icon(
+              onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => SoulseekPage(library: widget.library)),
+              ),
+              icon: const Icon(Icons.search, size: 18),
+              label: const Text('Open search'),
+            ),
+          ],
+        ),
+        const Text('Find it on', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12)),
+        Wrap(
+          spacing: 8,
+          children: [
+            _src('Hardwax', _af.useHardwax, (v) => _af.useHardwax = v),
+            _src('Traxsource', _af.useTrax, (v) => _af.useTrax = v),
+            _src('RA', _af.useRa, (v) => _af.useRa = v),
+            _src('Bandcamp', _af.useBandcamp, (v) => _af.useBandcamp = v),
+            _src('Discogs', _af.useDiscogs, (v) => _af.useDiscogs = v),
+          ],
+        ),
+        if (_af.useDiscogs)
+          TextField(
+            controller: _token,
+            onChanged: Discover.saveToken,
+            decoration: const InputDecoration(
+              labelText: 'Discogs token (free, discogs.com/settings/developers)',
+              isDense: true,
+            ),
+          ),
+        const SizedBox(height: 8),
         TextField(
           controller: _genre,
           onChanged: (_) => setState(() {}),
@@ -257,27 +292,6 @@ class _GenrePickerState extends State<GenrePicker> {
               ),
           ],
         ),
-        const SizedBox(height: 10),
-        const Text('Find it on', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12)),
-        Wrap(
-          spacing: 8,
-          children: [
-            _src('Hardwax', _af.useHardwax, (v) => _af.useHardwax = v),
-            _src('Traxsource', _af.useTrax, (v) => _af.useTrax = v),
-            _src('RA', _af.useRa, (v) => _af.useRa = v),
-            _src('Bandcamp', _af.useBandcamp, (v) => _af.useBandcamp = v),
-            _src('Discogs', _af.useDiscogs, (v) => _af.useDiscogs = v),
-          ],
-        ),
-        if (_af.useDiscogs)
-          TextField(
-            controller: _token,
-            onChanged: Discover.saveToken,
-            decoration: const InputDecoration(
-              labelText: 'Discogs token (free, discogs.com/settings/developers)',
-              isDense: true,
-            ),
-          ),
         const SizedBox(height: 8),
         Row(
           children: [

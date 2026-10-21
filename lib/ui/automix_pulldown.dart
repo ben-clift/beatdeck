@@ -430,8 +430,21 @@ class _AutomixPullDownState extends State<AutomixPullDown> {
                   ],
                 ),
               ),
+            _step(
+              '3',
+              'Timing',
+              'When the blend starts, and where the next track begins.',
+              Column(
+                children: [
+                  _slider('Start blending this long before the end', _fade, 4, 180, 176,
+                      '${_fade.round()} s', on, (v) => setState(() => _fade = v)),
+                  _slider('Next track starts this far in', _offset, 0, 60, 60,
+                      '${_offset.round()} s', on, (v) => setState(() => _offset = v)),
+                ],
+              ),
+            ),
               _step(
-                '3',
+                '4',
                 'Pick a genre and shop',
                 'Choose a genre, tempo and where to look. The track is downloaded '
                     'right away and plays next.',
@@ -448,7 +461,7 @@ class _AutomixPullDownState extends State<AutomixPullDown> {
                       style: TextStyle(fontSize: 12, color: SideDeckTheme.muted)),
                   children: [
                     _step(
-                      '4',
+                      '5',
                       'How tracks blend',
                       _style.blurb,
                       Wrap(
@@ -469,7 +482,7 @@ class _AutomixPullDownState extends State<AutomixPullDown> {
                       ),
                     ),
                     _step(
-                      '5',
+                      '6',
                       'Order of the set',
                       _arc.blurb,
                       Column(
@@ -492,19 +505,6 @@ class _AutomixPullDownState extends State<AutomixPullDown> {
                           if (_arc != FlowArc.off)
                             _slider('Set length', _len, 20, 180, 32, '${_len.round()} min', on,
                                 (v) => setState(() => _len = v)),
-                        ],
-                      ),
-                    ),
-                    _step(
-                      '6',
-                      'Timing',
-                      'When the blend starts, and where the next track begins.',
-                      Column(
-                        children: [
-                          _slider('Start blending this long before the end', _fade, 4, 180, 176,
-                              '${_fade.round()} s', on, (v) => setState(() => _fade = v)),
-                          _slider('Next track starts this far in', _offset, 0, 60, 60,
-                              '${_offset.round()} s', on, (v) => setState(() => _offset = v)),
                         ],
                       ),
                     ),
