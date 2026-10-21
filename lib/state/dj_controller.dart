@@ -422,6 +422,7 @@ class DjController extends ChangeNotifier {
   /// key); the app uses it to fetch a matching track from Soulseek.
   void Function(String artist, double bpm, CamelotKey? key, String title, String genre)? onNeedTrack;
   String? _needAsked;
+  DateTime _needAskedAt = DateTime.fromMillisecondsSinceEpoch(0);
   DateTime _needCheck = DateTime.fromMillisecondsSinceEpoch(0);
 
   void _checkNeedTrack() {
@@ -431,9 +432,9 @@ class DjController extends ChangeNotifier {
     if (now.difference(_needCheck).inSeconds < 5) return;
     _needCheck = now;
     final path = _automixQueue[_automixIndex];
-    if (_needAsked == path) return;
+    if (_needAsked == path && now.difference(_needAskedAt).inSeconds < 60) return;
     final cur = _flowOf(path);
-    if (cur == null || cur.bpm <= 0) return;
+    if (cur == null) return;
     var fits = 0;
     for (var i = _automixIndex + 1; i < _automixQueue.length; i++) {
       final q = _automixQueue[i];
@@ -446,6 +447,7 @@ class DjController extends ChangeNotifier {
     }
     if (fits > 0) return;
     _needAsked = path;
+    _needAskedAt = now;
     final name = path.split(RegExp(r'[\\/]')).last.replaceFirst(RegExp(r'\.[^.]+$'), '');
     final dash = name.indexOf(' - ');
     var artist = cur.artist;
@@ -875,13 +877,13 @@ class DjController extends ChangeNotifier {
     // Only tracks that suit; with under 45 s left, take the nearest rather than stop.
     final next = _nextUnplayed() ?? (remaining <= 45 ? _nextUnplayed(strict: false) : null);
     if (next == null) {
-      if (remaining <= 0.5) {
-        DebugLog.ok('automix', 'finished, no more tracks');
-        automixOn = false;
-        automixStatus = 'Automix finished';
-        return true;
+      // Nothing suitable left: stay on and let the helper find one.
+      if (remaining <= 45) {
+        automixStatus = (fetchBusy?.call() ?? false)
+            ? 'Finding a matching track…'
+            : 'No suitable track left. Looking for one.';
       }
-      return false;
+      return remaining <= 45;
     }
     if (!_automixPreloaded) {
       if (shouldPreload(remaining: remaining, fadeSeconds: automixFadeSeconds)) {
@@ -950,15 +952,18 @@ class DjController extends ChangeNotifier {
     final waiting = fetchBusy?.call() ?? false;
     final next = _nextUnplayed() ?? (waiting ? null : _nextUnplayed(strict: false));
     if (next == null) {
+      // The deck ended and nothing suitable is queued: stay on, ask for a
+      // match, and start it the moment it arrives.
       _checkNeedTrack();
-      if (fetchBusy?.call() ?? false) {
-        automixStatus = 'Waiting for the next track to download';
+      final busy = fetchBusy?.call() ?? false;
+      final text = busy
+          ? 'Finding a matching track…'
+          : 'No suitable track left. Looking for one (Soulseek helper), or add music.';
+      if (automixStatus != text) {
+        automixStatus = text;
         return true;
       }
-      DebugLog.ok('automix', 'finished, no more tracks');
-      automixOn = false;
-      automixStatus = 'Automix finished';
-      return true;
+      return false;
     }
     DebugLog.add('automix', 'deck ${cur + 1} finished on its own, starting deck ${other + 1} straight away');
     _automixBusy = true;

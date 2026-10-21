@@ -494,12 +494,12 @@ class AutoFetch extends ChangeNotifier {
       } catch (_) {}
     }
     if (g.isEmpty) g = genreForBpm(bpm);
-    final lo = bpm * 0.93;
-    final hi = bpm * 1.07;
+    final double? lo = bpm > 1 ? bpm * 0.93 : null;
+    final double? hi = bpm > 1 ? bpm * 1.07 : null;
     DebugLog.add('fetch',
-        'matching the playing track: genre "$g", ${lo.round()}-${hi.round()} BPM, underground only');
+        'matching the playing track: genre "$g", ${lo == null ? 'any tempo' : '${lo.round()}-${hi!.round()} BPM'}, underground only');
     await _runSource(
-      label: '$g, ${bpm.round()} BPM, underground',
+      label: '$g${bpm > 1 ? ', ${bpm.round()} BPM' : ''}, underground',
       more: (tried) => _service.underground(g, bpmMin: lo, bpmMax: hi, skip: tried, want: 12),
       library: library,
       count: count,
