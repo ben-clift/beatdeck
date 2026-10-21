@@ -453,7 +453,11 @@ class DjController extends ChangeNotifier {
     final pinned = genrePinned?.call() ?? false;
     final fp = _forcePath;
     final waitingPinned = fp != null && !_wasPlayed(fp) && _automixQueue.contains(fp);
-    if (pinned ? waitingPinned : fits > 0) return;
+    // Always keep one fresh download on the way, even when the playlist still
+    // has tracks that fit (when fetching is switched on).
+    final wantFresh = fetchWanted?.call() ?? false;
+    final waitingFresh = _fresh.any((f) => _automixQueue.contains(f) && !_wasPlayed(f) && !_rejected.contains(f));
+    if (pinned ? waitingPinned : (wantFresh ? waitingFresh : fits > 0)) return;
     _needAsked = path;
     _needAskedAt = now;
     final name = path.split(RegExp(r'[\\/]')).last.replaceFirst(RegExp(r'\.[^.]+$'), '');
@@ -494,10 +498,24 @@ class DjController extends ChangeNotifier {
       _rejected.remove(path);
       DebugLog.add('automix', 'your genre choice arrived, playing it next: ${path.split(RegExp(r'[\\/]')).last}');
     }
+    // A fresh download plays before the playlist's own tracks (the genre and
+    // tempo checks still apply when it loads).
+    _fresh.add(path);
+    if (!armed && !_automixFading && _upNext != path) {
+      _upNext = path;
+      _automixPreloaded = false;
+      _rejected.remove(path);
+    }
     notifyListeners();
   }
 
+  /// Downloads made for automix (not from the playlist you started with).
+  final Set<String> _fresh = {};
+
   bool _playNextArmed = false;
+
+  /// True when automix should bring in new downloads all the time.
+  bool Function()? fetchWanted;
 
   /// Genres picked by the user are in force: fetch them, skip the genre gate.
   bool Function()? genrePinned;
@@ -935,6 +953,7 @@ class DjController extends ChangeNotifier {
     }
     _automixPlayed.clear();
     _replayOk.clear();
+    _fresh.clear();
     _replayPool
       ..clear()
       ..addAll({

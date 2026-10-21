@@ -69,6 +69,7 @@ class SlskSetup {
     soulseek.storageCheck = (size) => StorageGuard.blockReason(dirFor(lib), size);
     dj?.onFileMissing = (_) => lib.removeMissing();
     dj?.fetchBusy = () => AutoFetch.instance.running || AutoFetch.instance.manualPending > 0;
+    dj?.fetchWanted = () => autoFetchForAutomix && AutoFetch.instance.followAutomix;
     dj?.genrePinned = () => AutoFetch.instance.pinned && AutoFetch.instance.genres.isNotEmpty;
     dj?.genreOf = (path) {
       final g = lib.genreOf(path);
