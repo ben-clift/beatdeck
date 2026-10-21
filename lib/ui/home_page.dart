@@ -211,6 +211,12 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
+                      IconButton(
+                        visualDensity: VisualDensity.compact,
+                        tooltip: 'Settings and debug log',
+                        onPressed: _openSettings,
+                        icon: const Icon(Icons.settings, size: 20),
+                      ),
                       if (_controllerMode)
                         IconButton(
                           visualDensity: VisualDensity.compact,
