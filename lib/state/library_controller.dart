@@ -1,5 +1,6 @@
 import 'package:sidedeck/debug/debug_log.dart';
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
@@ -10,6 +11,7 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sidedeck/engine/analysis_cache.dart';
 import 'package:sidedeck/engine/music_utils.dart';
+import 'package:sidedeck/engine/tags.dart';
 import 'package:sidedeck/engine/track_analyzer.dart';
 
 class LibraryTrack {
@@ -21,6 +23,9 @@ class LibraryTrack {
     this.bpm,
     this.key,
     this.modifiedMs = 0,
+    this.genre = '',
+    this.year = 0,
+    this.tagsRead = false,
   });
 
   final String path;
@@ -33,6 +38,11 @@ class LibraryTrack {
   /// File date, for sorting by newest.
   final int modifiedMs;
 
+  /// From the file's tags (empty / 0 when not known).
+  final String genre;
+  final int year;
+  final bool tagsRead;
+
   bool get hasAnalysis => bpm != null && bpm! > 0;
 
   LibraryTrack copyWith({double? bpm, int? key}) {
@@ -44,8 +54,24 @@ class LibraryTrack {
       bpm: bpm ?? this.bpm,
       key: key ?? this.key,
       modifiedMs: modifiedMs,
+      genre: genre,
+      year: year,
+      tagsRead: tagsRead,
     );
   }
+
+  LibraryTrack withTags(String genre, int year) => LibraryTrack(
+        path: path,
+        title: title,
+        artist: artist,
+        durationMs: durationMs,
+        bpm: bpm,
+        key: key,
+        modifiedMs: modifiedMs,
+        genre: genre,
+        year: year,
+        tagsRead: true,
+      );
 }
 
 class LibraryController extends ChangeNotifier {
@@ -119,6 +145,7 @@ class LibraryController extends ChangeNotifier {
     }
     loading = false;
     _emit();
+    unawaited(readTags());
   }
 
   /// Number of tracks the last [refresh] found.
@@ -140,6 +167,7 @@ class LibraryController extends ChangeNotifier {
     if (lastRefreshAdded > 0) {
       await _persist();
       _emit();
+      unawaited(readTags());
     }
     return lastRefreshAdded;
   }
@@ -331,6 +359,7 @@ class LibraryController extends ChangeNotifier {
     DebugLog.add('library', 'added ${await DebugLog.describeFile(path)}');
     await _persist();
     _emit();
+    unawaited(readTags());
     unawaited(analyzePath(path));
     return true;
   }
@@ -380,6 +409,56 @@ class LibraryController extends ChangeNotifier {
     ));
   }
 
+  bool _readingTags = false;
+
+  /// Reads genre and year for tracks that have not been read yet, a few at a
+  /// time in the background. Results are saved so the next start is instant.
+  Future<void> readTags() async {
+    if (_readingTags) return;
+    _readingTags = true;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      Map<String, dynamic> saved = {};
+      try {
+        saved = jsonDecode(prefs.getString('lib_tags_v1') ?? '{}') as Map<String, dynamic>;
+      } catch (_) {}
+      var changed = 0;
+      for (var i = 0; i < tracks.length && !_disposed; i++) {
+        final t = tracks[i];
+        if (t.tagsRead) continue;
+        var genre = '';
+        var year = 0;
+        final c = saved[t.path];
+        if (c is List && c.length == 2) {
+          genre = c[0] as String;
+          year = c[1] as int;
+        } else {
+          final tags = await readTrackTags(t.path);
+          genre = tags.genre;
+          year = tags.year;
+          if (year == 0) {
+            final m = RegExp(r'(?<!\d)(19[2-9]\d|20[0-2]\d)(?!\d)').firstMatch(p.basename(t.path));
+            if (m != null) year = int.parse(m.group(1)!);
+          }
+          saved[t.path] = [genre, year];
+        }
+        final at = tracks.indexWhere((x) => x.path == t.path);
+        if (at >= 0) tracks[at] = tracks[at].withTags(genre, year);
+        if (++changed % 25 == 0) {
+          _emit();
+          await Future<void>.delayed(Duration.zero);
+        }
+      }
+      if (changed > 0) {
+        await prefs.setString('lib_tags_v1', jsonEncode(saved));
+        _emit();
+      }
+    } catch (_) {
+    } finally {
+      _readingTags = false;
+    }
+  }
+
   void setQuery(String q) {
     query = q;
     _emit();
@@ -402,13 +481,23 @@ class LibraryController extends ChangeNotifier {
   bool onlyUnanalyzed = false;
   bool hidePlayed = false;
 
+  /// Decades to show (1990 = the 1990s, 0 = year not known). Empty = all.
+  final Set<int> decades = {};
+  String genreFilter = '';
+
   /// Set by the screen: whether automix played a track in the last 24 hours,
   /// and the key now on a deck (-1 when nothing is loaded).
   bool Function(String path)? playedCheck;
   int Function(int deck)? deckKey;
 
   bool get hasFilters =>
-      bpmMin != null || bpmMax != null || keyDeck >= 0 || onlyUnanalyzed || hidePlayed;
+      bpmMin != null ||
+      bpmMax != null ||
+      keyDeck >= 0 ||
+      onlyUnanalyzed ||
+      hidePlayed ||
+      decades.isNotEmpty ||
+      genreFilter.isNotEmpty;
 
   void setSortDesc(bool v) {
     sortDesc = v;
@@ -442,8 +531,34 @@ class LibraryController extends ChangeNotifier {
     keyDeck = -1;
     onlyUnanalyzed = false;
     hidePlayed = false;
+    decades.clear();
+    genreFilter = '';
     _emit();
   }
+
+  void toggleDecade(int d) {
+    if (!decades.remove(d)) decades.add(d);
+    _emit();
+  }
+
+  void setGenre(String g) {
+    genreFilter = genreFilter == g ? '' : g;
+    _emit();
+  }
+
+  /// Genres found in the library with how many tracks have each.
+  List<(String, int)> get genres {
+    final m = <String, int>{};
+    for (final t in tracks) {
+      if (t.genre.isEmpty) continue;
+      m[t.genre] = (m[t.genre] ?? 0) + 1;
+    }
+    final l = m.entries.map((e) => (e.key, e.value)).toList()
+      ..sort((a, b) => b.$2.compareTo(a.$2));
+    return l;
+  }
+
+  static int decadeOf(int year) => year <= 0 ? 0 : (year ~/ 10) * 10;
 
   /// The tracks shown: search text and filters applied, then sorted.
   List<LibraryTrack> get organised {
@@ -456,6 +571,8 @@ class LibraryController extends ChangeNotifier {
         if (t.key == null || t.key! < 0 || !keysCompatible(deckKeyNow, t.key!)) return false;
       }
       if (hidePlayed && (playedCheck?.call(t.path) ?? false)) return false;
+      if (decades.isNotEmpty && !decades.contains(decadeOf(t.year))) return false;
+      if (genreFilter.isNotEmpty && t.genre.toLowerCase() != genreFilter.toLowerCase()) return false;
       return true;
     }).toList();
     list.sort((a, b) {

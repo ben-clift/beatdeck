@@ -686,6 +686,48 @@ class _LibraryOverlayState extends State<LibraryOverlay> {
                     ],
                   ),
                   const SizedBox(height: 12),
+                  const Text('Decade', style: TextStyle(fontSize: 13)),
+                  Wrap(
+                    spacing: 6,
+                    children: [
+                      for (final d in const [1950, 1960, 1970, 1980, 1990, 2000, 2010, 2020])
+                        FilterChip(
+                          label: Text('${d}s', style: const TextStyle(fontSize: 12)),
+                          selected: lib.decades.contains(d),
+                          onSelected: (_) {
+                            lib.toggleDecade(d);
+                            setSheet(() {});
+                          },
+                        ),
+                      FilterChip(
+                        label: const Text('Unknown', style: TextStyle(fontSize: 12)),
+                        selected: lib.decades.contains(0),
+                        onSelected: (_) {
+                          lib.toggleDecade(0);
+                          setSheet(() {});
+                        },
+                      ),
+                    ],
+                  ),
+                  if (lib.genres.isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    const Text('Genre (from the file tags)', style: TextStyle(fontSize: 13)),
+                    Wrap(
+                      spacing: 6,
+                      children: [
+                        for (final g in lib.genres.take(24))
+                          ChoiceChip(
+                            label: Text('${g.$1} (${g.$2})', style: const TextStyle(fontSize: 12)),
+                            selected: lib.genreFilter.toLowerCase() == g.$1.toLowerCase(),
+                            onSelected: (_) {
+                              lib.setGenre(g.$1);
+                              setSheet(() {});
+                            },
+                          ),
+                      ],
+                    ),
+                  ],
+                  const SizedBox(height: 12),
                   const Text('Key', style: TextStyle(fontSize: 13)),
                   Wrap(
                     spacing: 6,
