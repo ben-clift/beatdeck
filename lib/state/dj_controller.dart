@@ -3,6 +3,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:sidedeck/engine/audio_check.dart';
+import 'package:sidedeck/engine/tags.dart';
 import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
@@ -1109,6 +1110,21 @@ class DjController extends ChangeNotifier {
     return false;
   }
 
+  final Map<String, String> _genreCache = {};
+
+  /// A track's genre: the library's, else read from the file's own tags.
+  Future<String> _genreFor(String path) async {
+    final known = genreOf?.call(path) ?? '';
+    if (known.isNotEmpty) return known;
+    final c = _genreCache[path];
+    if (c != null) return c;
+    var g = '';
+    try {
+      g = (await readTrackTags(path)).genre;
+    } catch (_) {}
+    return _genreCache[path] = g;
+  }
+
   /// Loads the committed next track on the idle deck, reads its real tempo
   /// and turns it down if it is too far from the playing track.
   Future<void> _loadNext(int other, String path, int tier) async {
@@ -1139,6 +1155,22 @@ class DjController extends ChangeNotifier {
           bpm: inc.bpm > 1 ? inc.bpm : (old?.bpm ?? 0),
           key: inc.key >= 0 ? CamelotKey.fromIndex(inc.key) : old?.key,
           artist: old?.artist ?? '');
+      // Genre check on the file's own tags (a new download is not in the
+      // library tags yet): never dub after minimal house, except as a last
+      // resort when time has run out.
+      if (tier < 2 && _automixIndex >= 0 && _automixIndex < _automixQueue.length) {
+        final cg = await _genreFor(_automixQueue[_automixIndex]);
+        final ng = await _genreFor(path);
+        if (cg.isNotEmpty && ng.isNotEmpty && !genresSimilar(cg, ng)) {
+          DebugLog.add('automix',
+              'turned down ${path.split(RegExp(r'[\\/]')).last}: "$ng" does not go with "$cg", choosing another');
+          _rejected.add(path);
+          _upNext = null;
+          _flowNext = null;
+          _automixPreloaded = false;
+          return;
+        }
+      }
       final tol = tier == 0 ? 10.0 : (tier == 1 ? 16.0 : 1e9);
       if (out.bpm > 1 && inc.bpm > 1 && bpmGapPercent(out.bpm, inc.bpm).abs() > tol) {
         DebugLog.add('automix',

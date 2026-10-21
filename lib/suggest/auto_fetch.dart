@@ -758,10 +758,14 @@ class AutoFetch extends ChangeNotifier {
     // Your playlists decide the order: tracks by artists or on labels you
     // have in them first, then a couple of other tracks by artists you like,
     // then the rest.
-    final liked = [for (final x in mixed) if (Taste.likesTrack(x.artist, x.label)) x];
-    final rest = [for (final x in mixed) if (!Taste.likesTrack(x.artist, x.label)) x];
+    // Liked only counts when the artist's music is the same kind as what is
+    // playing (a dub artist does not jump the queue after minimal house).
+    bool likedHere(Suggestion x) =>
+        Taste.likesTrack(x.artist, x.label) && genresSimilar(g, Taste.genreOf(x.artist));
+    final liked = [for (final x in mixed) if (likedHere(x)) x];
+    final rest = [for (final x in mixed) if (!likedHere(x)) x];
     add(liked.take(4));
-    final fav = Taste.pick(2);
+    final fav = Taste.pick(2, genre: g);
     add([for (final a in fav) Suggestion(a, '', 0, 'You like')]);
     add(rest);
     add(liked.skip(4));

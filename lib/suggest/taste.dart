@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 
+import 'package:sidedeck/automix/genre_family.dart';
 import 'package:sidedeck/engine/tags.dart';
 import 'package:sidedeck/state/library_controller.dart';
 import 'package:sidedeck/state/playlist_store.dart';
@@ -14,6 +15,7 @@ class Taste {
   static Set<String> artists = {};
   static Set<String> labels = {};
   static final Map<String, String> _display = {};
+  static final Map<String, String> _genre = {};
 
   static String _norm(String a) => a.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), ' ').trim();
 
@@ -43,11 +45,24 @@ class Taste {
     return m == null ? '' : m.group(1)!.trim();
   }
 
-  /// Up to [n] random liked artists, as they were written.
-  static List<String> pick(int n, {Set<String> except = const {}}) {
+  /// The genre of a liked artist's tracks in your library, '' when unknown.
+  static String genreOf(String artist) {
+    final n = _norm(artist);
+    for (final part in n.split(RegExp(r'\s(?:and|feat|ft|vs|x)\s|,'))) {
+      final g = _genre[part.trim()];
+      if (g != null && g.isNotEmpty) return g;
+    }
+    return _genre[n] ?? '';
+  }
+
+  /// Up to [n] random liked artists, as they were written. With [genre],
+  /// artists known to make a different kind of music are left out (a dub
+  /// artist is not offered after minimal house).
+  static List<String> pick(int n, {Set<String> except = const {}, String genre = ''}) {
     final all = [
       for (final a in artists)
-        if (!except.contains(a)) _display[a] ?? a,
+        if (!except.contains(a) && (genre.isEmpty || genresSimilar(genre, _genre[a] ?? '')))
+          _display[a] ?? a,
     ]..shuffle();
     return all.take(math.max(0, n)).toList();
   }
@@ -77,6 +92,8 @@ class Taste {
           if (n.length < 2) continue;
           found.add(n);
           _display[n] = artist.trim();
+          final tg = byPath[path]?.genre ?? '';
+          if (tg.isNotEmpty) _genre[n] = tg;
           // The record label: from the tags, else from the file name.
           var label = cache[path] as String?;
           if (label == null && reads < 150) {
