@@ -814,6 +814,7 @@ class DjController extends ChangeNotifier {
     final barReal = (inc.bpm > 1 ? 4 * 60.0 / inc.bpm : 2.0) / (inc.rate <= 0 ? 1 : inc.rate);
     _swapAt = bassSwapAt(_plan?.kind ?? TransitionKind.smooth, _fadeLen, barReal);
     _applyMixEq(cur, other, 0);
+    _phaseFixed = false;
     _engine.play(other, true);
     inc.playing = true;
     _automixFadeStart = DateTime.now();
@@ -827,6 +828,7 @@ class DjController extends ChangeNotifier {
   EqMove _eqBaseOut = EqMove.none;
   EqMove _eqBaseIn = EqMove.none;
   double _swapAt = 0.6;
+  bool _phaseFixed = false;
 
   void _applyMixEq(int cur, int other, double t) {
     final (inc, out) = eqMoves(_plan?.kind ?? TransitionKind.smooth, t, _swapAt);
@@ -838,6 +840,27 @@ class DjController extends ChangeNotifier {
       _engine.setFilter(other, fIn != 0 ? fIn : deck(other).filter);
       _engine.setFilter(cur, fOut != 0 ? fOut : deck(cur).filter);
     }
+  }
+
+  /// Starting a deck takes a moment, so the new track lands slightly late.
+  /// A fraction of a second in, measure how far its beats are from the old
+  /// track's and move it onto them (it is still very quiet).
+  void _fixMixPhase(int cur, int other) {
+    final out = deck(cur);
+    final inc = deck(other);
+    if (out.bpm <= 1 || inc.bpm <= 1) return;
+    final pOut = beatPhase(position: _engine.position(cur), bpm: out.bpm, beatOffset: out.beatOffset);
+    final pIn = beatPhase(position: _engine.position(other), bpm: inc.bpm, beatOffset: inc.beatOffset);
+    var delta = pOut - pIn;
+    if (delta > 0.5) delta -= 1;
+    if (delta < -0.5) delta += 1;
+    DebugLog.add('automix', 'beat check: new track is ${(-delta * 60000.0 / inc.bpm / (inc.rate <= 0 ? 1 : inc.rate)).round()} ms off the beat (grid out ${out.beatOffset.toStringAsFixed(3)} in ${inc.beatOffset.toStringAsFixed(3)})');
+    if (delta.abs() < 0.01) return;
+    final target = (_engine.position(other) + delta * 60.0 / inc.bpm)
+        .clamp(0.0, math.max(0.0, inc.duration))
+        .toDouble();
+    _engine.seek(other, target);
+    inc.position = target;
   }
 
   void _restoreMixEq(int cur, int other) {
@@ -867,6 +890,10 @@ class DjController extends ChangeNotifier {
     _engine.setFader(other, _fadeInBase * gIn);
     _engine.setFader(cur, _fadeOutBase * gOut);
     _applyMixEq(cur, other, t);
+    if (!_phaseFixed && elapsed >= 0.35) {
+      _phaseFixed = true;
+      _fixMixPhase(cur, other);
+    }
     if (elapsed >= _fadeLen) {
       _engine.play(cur, false);
       deck(cur).playing = false;
