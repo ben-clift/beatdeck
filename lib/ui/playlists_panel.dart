@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:path/path.dart' as p;
+import 'package:sidedeck/state/dislikes.dart';
 import 'package:sidedeck/state/dj_controller.dart';
 import 'package:sidedeck/state/library_controller.dart';
 import 'package:sidedeck/state/playlist_controller.dart';
@@ -354,7 +355,24 @@ class _PlaylistsPanelState extends State<PlaylistsPanel> {
                           } else if (v == 'automix') {
                             dj.startAutomix(paths.sublist(i), fadeSeconds: _fade);
                           } else if (v == 'remove') {
+                            // Deleting means "not for me": never picked or searched again.
+                            final removed = path;
                             widget.playlists.removeAt(pl.id, i);
+                            Dislikes.instance.add(removed);
+                            dj.automixDrop(removed);
+                            ScaffoldMessenger.of(context)
+                              ..hideCurrentSnackBar()
+                              ..showSnackBar(SnackBar(
+                                content: const Text(
+                                    'Deleted. It will not be picked or searched for again.'),
+                                action: SnackBarAction(
+                                  label: 'UNDO',
+                                  onPressed: () {
+                                    Dislikes.instance.remove(removed);
+                                    widget.playlists.add(pl.id, removed);
+                                  },
+                                ),
+                              ));
                           }
                         },
                         itemBuilder: (context) => const [
@@ -364,7 +382,7 @@ class _PlaylistsPanelState extends State<PlaylistsPanel> {
                             value: 'automix',
                             child: Text('Automix from here'),
                           ),
-                          PopupMenuItem(value: 'remove', child: Text('Remove')),
+                          PopupMenuItem(value: 'remove', child: Text('Delete (never play again)')),
                         ],
                       ),
                     );

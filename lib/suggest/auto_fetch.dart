@@ -9,6 +9,7 @@ import 'package:sidedeck/soulseek/playable.dart';
 import 'package:sidedeck/soulseek/slsk_setup.dart';
 import 'package:sidedeck/soulseek/storage_guard.dart';
 import 'package:sidedeck/soulseek/soulseek_client.dart';
+import 'package:sidedeck/state/dislikes.dart';
 import 'package:sidedeck/state/library_controller.dart';
 import 'package:sidedeck/suggest/harmony.dart';
 import 'package:sidedeck/wishlist/wishlist.dart';
@@ -403,7 +404,7 @@ class AutoFetch extends ChangeNotifier {
   int get manualPending => _manual.length;
 
   void enqueueTracks(List<Suggestion> tracks, LibraryController library) {
-    _manual.addAll(tracks);
+    _manual.addAll(tracks.where((t) => !Dislikes.instance.hasTrack(t.artist, t.title)));
     _lib = library;
     notifyListeners();
     _kick(library);
@@ -545,6 +546,11 @@ class AutoFetch extends ChangeNotifier {
   /// Searches, picks the best match, waits until it has downloaded. Returns
   /// the saved path, or null when nothing usable turned up.
   Future<String?> _fetchOne(Suggestion s, CamelotKey? seedKey) async {
+    await Dislikes.instance.load();
+    if (Dislikes.instance.hasTrack(s.artist, s.title)) {
+      DebugLog.add('fetch', 'skipped (you deleted it before): ${s.artist} - ${s.title}');
+      return null;
+    }
     final dir = SlskSetup.dj == null || _lib == null ? null : SlskSetup.dirFor(_lib!);
     if (dir != null) {
       final reason = await StorageGuard.blockReason(dir, 60 * 1024 * 1024);

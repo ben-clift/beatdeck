@@ -9,6 +9,7 @@ import 'package:sidedeck/debug/debug_log.dart';
 import 'package:sidedeck/suggest/auto_fetch.dart';
 import 'package:sidedeck/suggest/genres.dart';
 import 'package:sidedeck/suggest/hardwax.dart';
+import 'package:sidedeck/state/dislikes.dart';
 import 'package:sidedeck/suggest/suggest_service.dart';
 import 'package:sidedeck/theme/sidedeck_theme.dart';
 
@@ -107,6 +108,8 @@ class _AutoFetchPageState extends State<AutoFetchPage> {
     } else {
       t = await _loadOther(svc, id, name, onlyNew);
     }
+    await Dislikes.instance.load();
+    t = [for (final s in t) if (!Dislikes.instance.hasTrack(s.artist, s.title)) s];
     if (!mounted || seq != _loadSeq) return;
     for (final s in t) {
       final k = '${s.artist} ${s.title}'.toLowerCase();

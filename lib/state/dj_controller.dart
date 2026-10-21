@@ -8,6 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sidedeck/engine/analysis_cache.dart';
 import 'package:sidedeck/automix/set_flow.dart';
 import 'package:sidedeck/automix/transition_style.dart';
+import 'package:sidedeck/state/dislikes.dart';
 import 'package:sidedeck/suggest/harmony.dart';
 import 'package:sidedeck/engine/native_engine.dart';
 import 'package:sidedeck/engine/track_analyzer.dart';
@@ -528,6 +529,7 @@ class DjController extends ChangeNotifier {
   }
 
   bool _wasPlayed(String path) {
+    if (Dislikes.instance.hasPath(path)) return true; // deleted = not liked
     final k = _trackKey(path);
     if (_automixPlayed.contains(k)) return true;
     final t = _recentPlayed[k];
@@ -553,6 +555,20 @@ class DjController extends ChangeNotifier {
   }
 
   bool playedRecently(String path) => _wasPlayed(path);
+
+  /// The DJ deleted this track: take it out of the automix queue if it has
+  /// not played yet.
+  void automixDrop(String path) {
+    if (!automixOn) return;
+    final k = _trackKey(path);
+    for (var i = _automixQueue.length - 1; i > _automixIndex; i--) {
+      if (_trackKey(_automixQueue[i]) == k) {
+        _automixQueue.removeAt(i);
+        if (_flowNext == i) _flowNext = null;
+      }
+    }
+    notifyListeners();
+  }
 
   /// Forget what was played in the last 24 hours.
   Future<void> clearPlayedHistory() async {
@@ -657,6 +673,7 @@ class DjController extends ChangeNotifier {
     // The track already on deck A (if any) starts the set; then the list.
     final onA = deckA.loaded ? deckA.path : null;
     await _loadRecent();
+    await Dislikes.instance.load();
     final seen = <String>{};
     _automixQueue = [
       if (onA != null && File(onA).existsSync())

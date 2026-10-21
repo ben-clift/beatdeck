@@ -4,6 +4,7 @@ import 'package:sidedeck/engine/usb_output.dart';
 import 'package:sidedeck/debug/debug_log.dart';
 import 'package:sidedeck/debug/log_upload.dart';
 import 'package:sidedeck/ui/debug_page.dart';
+import 'package:sidedeck/state/dislikes.dart';
 import 'package:sidedeck/state/dj_controller.dart';
 import 'package:sidedeck/subsonic/subsonic_client.dart';
 import 'package:sidedeck/theme/sidedeck_theme.dart';
@@ -27,6 +28,9 @@ class _SettingsPageState extends State<SettingsPage> {
   @override
   void initState() {
     super.initState();
+    Dislikes.instance.load().then((_) {
+      if (mounted) setState(() {});
+    });
     _load();
   }
 
@@ -107,6 +111,18 @@ class _SettingsPageState extends State<SettingsPage> {
             },
           ),
           const Divider(height: 32),
+          ListTile(
+            title: Text('Deleted tracks (${Dislikes.instance.count})'),
+            subtitle: const Text('Tracks you deleted from a playlist are never picked or searched for. Tap to forget them all.'),
+            onTap: () async {
+              await Dislikes.instance.clear();
+              if (!mounted) return;
+              setState(() {});
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Deleted-tracks list cleared')),
+              );
+            },
+          ),
           ListTile(
             title: const Text('Clear automix play history'),
             subtitle: const Text('Tracks played in the last 24 hours are skipped. This lets them play again.'),
