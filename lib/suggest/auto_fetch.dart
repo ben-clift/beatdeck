@@ -615,6 +615,13 @@ class AutoFetch extends ChangeNotifier {
     var bestScore = -1;
     for (final r in soulseek.results) {
       if (!slskPlayable(r)) continue;
+      // Skip anything under 3 minutes (clips, edits, snippets), unless the
+      // track is from 1990 or earlier, when records were often shorter.
+      final secs = r.durationSec > 0
+          ? r.durationSec
+          : (r.bitrate > 0 ? (r.size * 8 / (r.bitrate * 1000)).round() : 0);
+      final oldRecord = s.year > 0 && s.year <= 1990;
+      if (secs > 0 && secs < 180 && !oldRecord) continue;
       final hay = '${r.folder} ${r.fileName}'.toLowerCase();
       if (words.isNotEmpty && !words.every(hay.contains)) continue;
       if (aWords.isNotEmpty && !aWords.any(hay.contains)) continue;

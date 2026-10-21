@@ -873,7 +873,14 @@ class DjController extends ChangeNotifier {
       final bar = 4 * 60.0 / inc.bpm;
       offset = (offset / bar).round() * bar;
     }
-    _fadeLen = (_plan?.seconds ?? automixFadeSeconds);
+    // Never plan a mix longer than what is left of the playing track, or the
+    // old track ends before the new one is heard.
+    final left = remainingSeconds(position: outPosition, duration: out.duration, rate: out.rate);
+    final cap = left > 5 ? left - 1.0 : math.max(2.0, left - 0.3);
+    _fadeLen = math.min(_plan?.seconds ?? automixFadeSeconds, cap).toDouble();
+    if (_fadeLen < (_plan?.seconds ?? automixFadeSeconds)) {
+      DebugLog.add('automix', 'only ${left.toStringAsFixed(0)} s left, mix shortened to ${_fadeLen.toStringAsFixed(0)} s');
+    }
     final room = math.max(0.0, inc.duration - _fadeLen - 5);
     final start = math.min(startRaw + offset, room).clamp(0.0, math.max(0.0, inc.duration)).toDouble();
     _engine.seek(other, start);
