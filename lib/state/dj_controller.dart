@@ -1284,7 +1284,11 @@ class DjController extends ChangeNotifier {
       // Intensity: how dense and steady the loudness is across the track
       // (average height of the waveform against its tallest part).
       final want = intensityWanted?.call() ?? 0;
-      if (want > 0) {
+      // Only for fresh downloads, and never for a track you asked for by genre:
+      // your own library is not held to the intensity bar, and a run of
+      // turn-downs gives up so the decks are not loaded over and over.
+      final fresh = path.contains('/soulseek/');
+      if (want > 0 && fresh && !forced && _rejectStreak < 3) {
         final n = math.min(inc.waveMax.length, inc.waveMin.length);
         if (n > 20) {
           var sum = 0.0, top = 0.0;
@@ -1294,11 +1298,12 @@ class DjController extends ChangeNotifier {
             if (a > top) top = a;
           }
           final dens = top > 0 ? sum / n / top : 0.0;
-          const need = [0.0, 0.40, 0.52, 0.62];
+          const need = [0.0, 0.34, 0.44, 0.54];
           DebugLog.add('automix',
               'intensity of ${path.split(RegExp(r'[\\/]')).last}: ${(dens * 100).round()} (wanted ${(need[want] * 100).round()})');
           if (tier < 2 && dens < need[want]) {
             DebugLog.add('automix', 'turned down: not intense enough, choosing another');
+            _rejectStreak++;
             _rejected.add(path);
             _upNext = null;
             _flowNext = null;
@@ -1317,6 +1322,7 @@ class DjController extends ChangeNotifier {
         _automixPreloaded = false;
         return;
       }
+      _rejectStreak = 0;
       DebugLog.ok('automix', 'next track ready on deck ${other + 1} (${inc.bpm.round()} BPM)');
       _automixPreloaded = true;
     } catch (e) {
@@ -1331,6 +1337,7 @@ class DjController extends ChangeNotifier {
   }
 
   DateTime _loadHold = DateTime(2000);
+  int _rejectStreak = 0;
 
   /// True while tracks are still being downloaded for automix.
   bool Function()? fetchBusy;
