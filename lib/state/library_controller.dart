@@ -1,3 +1,4 @@
+import 'package:sidedeck/debug/debug_log.dart';
 import 'dart:async';
 import 'dart:io';
 
@@ -297,12 +298,14 @@ class LibraryController extends ChangeNotifier {
     final have = tracks.any((t) =>
         t.path != path && dupKey(t.path) == key && _sameLength(t.durationMs, ms));
     if (have) {
+      DebugLog.add('library', 'duplicate, deleting $path (key $key, ${ms} ms)');
       try {
         await File(path).delete();
       } catch (_) {}
       return;
     }
     await _addPath(path);
+    DebugLog.add('library', 'added ${await DebugLog.describeFile(path)}');
     await _persist();
     _emit();
     unawaited(analyzePath(path));

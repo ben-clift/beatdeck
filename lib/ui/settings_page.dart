@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sidedeck/engine/usb_output.dart';
+import 'package:sidedeck/ui/debug_page.dart';
 import 'package:sidedeck/state/dj_controller.dart';
 import 'package:sidedeck/subsonic/subsonic_client.dart';
 import 'package:sidedeck/theme/sidedeck_theme.dart';
@@ -102,6 +103,16 @@ class _SettingsPageState extends State<SettingsPage> {
               await widget.dj.setExternalMixer(v);
               if (mounted) setState(() {});
             },
+          ),
+          const Divider(height: 32),
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: const Icon(Icons.bug_report_outlined),
+            title: const Text('Debug log'),
+            subtitle: const Text('Downloads, library and load problems. Copy it to send.'),
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute<void>(builder: (_) => const DebugPage()),
+            ),
           ),
           const Divider(height: 32),
           SwitchListTile(

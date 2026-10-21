@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+
+import 'package:sidedeck/debug/debug_log.dart';
 import 'dart:math' as math;
 import 'dart:typed_data';
 
@@ -544,6 +546,8 @@ class SoulseekClient extends ChangeNotifier {
       if (d.received > 0 && (d.size <= 0 || d.received >= d.size * 0.999)) {
         _finish(d);
       } else {
+        DebugLog.add('download',
+            'interrupted: received ${d.received} of ${d.size} from ${d.user}');
         d.sink?.close();
         d.state = DlState.failed;
         d.message = 'Transfer interrupted';
@@ -693,6 +697,7 @@ class SoulseekClient extends ChangeNotifier {
     }
     d.savedPath = file.path;
     d.sink = file.openWrite();
+    DebugLog.add('download', 'start ${file.path} (expect ${d.size} bytes) from ${d.user}');
     d.state = DlState.downloading;
     d.message = '';
     peer.download = d;
@@ -713,7 +718,11 @@ class SoulseekClient extends ChangeNotifier {
     d.message = 'Saved';
     _changed();
     final saved = d.savedPath;
-    if (saved != null) onFileSaved?.call(saved);
+    if (saved != null) {
+      DebugLog.add('download',
+          'done: received ${d.received} of ${d.size}. On disk: ${await DebugLog.describeFile(saved)}');
+      onFileSaved?.call(saved);
+    }
   }
 
   @override

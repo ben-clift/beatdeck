@@ -1,3 +1,4 @@
+import 'package:sidedeck/debug/debug_log.dart';
 import 'dart:async';
 import 'dart:io';
 import 'dart:math' as math;
@@ -768,6 +769,7 @@ class DjController extends ChangeNotifier {
       } catch (e) {
         detail = 'Android will not let the app open this file ($e).';
       }
+      DebugLog.add('load', 'FAILED $path -> $detail | ${await DebugLog.describeFile(path)}');
       engineError = detail.isNotEmpty
           ? 'Could not load $name - $detail'
           : 'Could not decode $name (need MP3, WAV, FLAC, Opus, or AAC M4A).';

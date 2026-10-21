@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
+import 'package:sidedeck/debug/debug_log.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sidedeck/soulseek/soulseek_client.dart';
@@ -48,6 +49,7 @@ class SlskSetup {
     soulseek.downloadDir = () => dirFor(lib);
     soulseek.storageCheck = (size) => StorageGuard.blockReason(dirFor(lib), size);
     soulseek.onFileSaved = (path) {
+      DebugLog.add('library', 'adding $path');
       lib.addFile(path);
       dj?.automixAppend(path);
     };
