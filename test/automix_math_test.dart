@@ -55,12 +55,15 @@ void main() {
     );
   });
 
-  test('incomingRate matches heard tempo and clamps', () {
-    expect(incomingRate(outBpm: 120, outRate: 1.0, inBpm: 100), closeTo(1.2, 1e-9));
+  test('incomingRate matches heard tempo, limited to 8 %', () {
+    expect(incomingRate(outBpm: 120, outRate: 1.0, inBpm: 110), closeTo(120 / 110, 1e-9));
+    expect(incomingRate(outBpm: 120, outRate: 1.0, inBpm: 100), 1.08);
     expect(incomingRate(outBpm: 120, outRate: 1.05, inBpm: 126), closeTo(1.0, 1e-9));
     expect(incomingRate(outBpm: 0, outRate: 1.0, inBpm: 100), 1.0);
-    expect(incomingRate(outBpm: 200, outRate: 1.0, inBpm: 60), 2.0);
-    expect(incomingRate(outBpm: 60, outRate: 1.0, inBpm: 200), 0.5);
+    expect(incomingRate(outBpm: 200, outRate: 1.0, inBpm: 60), 1.08);
+    // half / double-time reads match on the same beat
+    expect(incomingRate(outBpm: 65, outRate: 1.0, inBpm: 130), closeTo(1.0, 1e-9));
+    expect(incomingRate(outBpm: 130, outRate: 1.0, inBpm: 65), closeTo(1.0, 1e-9));
   });
 
   test('preload and fade timing', () {
