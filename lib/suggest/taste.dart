@@ -69,7 +69,12 @@ class Taste {
     return all.take(math.max(0, n)).toList();
   }
 
+  static DateTime _lastRead = DateTime.fromMillisecondsSinceEpoch(0);
+
   static Future<void> refresh(LibraryController lib) async {
+    // Reading every playlist file again for each track is wasted work.
+    if (artists.isNotEmpty && DateTime.now().difference(_lastRead).inMinutes < 10) return;
+    _lastRead = DateTime.now();
     try {
       final prefs = await SharedPreferences.getInstance();
       final store = PlaylistStore.decode(prefs.getString('local_playlists'));

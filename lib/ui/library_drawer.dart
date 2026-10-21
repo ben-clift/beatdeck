@@ -73,11 +73,34 @@ class _LibraryOverlayState extends State<LibraryOverlay> {
     };
     widget.dj.loadPlayedHistory();
     widget.library.addListener(_onLib);
-    widget.dj.addListener(_onLib);
+    widget.dj.addListener(_onDj);
   }
 
   void _onLib() {
     if (mounted) setState(() {});
+  }
+
+  String _djSig = '';
+
+  /// The deck clock ticks 20 times a second; the track list only needs to
+  /// redraw when what is loaded or playing changes.
+  void _onDj() {
+    final dj = widget.dj;
+    final sig = StringBuffer()
+      ..write(dj.automixOn)
+      ..write('|')
+      ..write(dj.loadedPaths.length);
+    for (var i = 0; i < dj.visibleDecks; i++) {
+      final d = dj.deck(i);
+      sig
+        ..write('|')
+        ..write(d.path)
+        ..write(d.playing);
+    }
+    final s = sig.toString();
+    if (s == _djSig) return;
+    _djSig = s;
+    _onLib();
   }
 
   Future<void> _loadClient() async {
@@ -90,7 +113,7 @@ class _LibraryOverlayState extends State<LibraryOverlay> {
   @override
   void dispose() {
     widget.library.removeListener(_onLib);
-    widget.dj.removeListener(_onLib);
+    widget.dj.removeListener(_onDj);
     _search.dispose();
     _localPlaylists.dispose();
     super.dispose();

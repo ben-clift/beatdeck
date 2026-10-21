@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:sidedeck/state/dj_controller.dart';
 import 'package:sidedeck/state/look_controller.dart';
@@ -22,6 +23,28 @@ class _FxPullDownState extends State<FxPullDown> {
   static const _beatLabels = ['1/4', '1/2', '3/4', '1', '2'];
 
   bool _open = false;
+  bool _showPanel = false;
+  Timer? _hideTimer;
+
+  void _setOpen(bool v) {
+    if (_open == v) return;
+    _hideTimer?.cancel();
+    setState(() {
+      _open = v;
+      if (v) _showPanel = true;
+    });
+    if (!v) {
+      _hideTimer = Timer(const Duration(milliseconds: 320), () {
+        if (mounted && !_open) setState(() => _showPanel = false);
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _hideTimer?.cancel();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -36,7 +59,7 @@ class _FxPullDownState extends State<FxPullDown> {
         listenable: Listenable.merge([widget.dj, LookController.instance]),
         builder: (context, _) => Column(
           children: [
-            SizedBox(height: _panelH, child: _panel()),
+            SizedBox(height: _panelH, child: _showPanel ? _panel() : const SizedBox.shrink()),
             _tab(),
           ],
         ),
@@ -53,11 +76,11 @@ class _FxPullDownState extends State<FxPullDown> {
       alignment: Alignment.centerRight,
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
-        onTap: () => setState(() => _open = !_open),
+        onTap: () => _setOpen(!_open),
         onVerticalDragEnd: (d) {
           final v = d.primaryVelocity ?? 0;
-          if (v > 120 && !_open) setState(() => _open = true);
-          if (v < -120 && _open) setState(() => _open = false);
+          if (v > 120 && !_open) _setOpen(true);
+          if (v < -120 && _open) _setOpen(false);
         },
         child: Container(
           height: _tabH,
@@ -99,7 +122,7 @@ class _FxPullDownState extends State<FxPullDown> {
     const timed = true; // deck effect pads use the beat length too
     return GestureDetector(
       onVerticalDragEnd: (d) {
-        if ((d.primaryVelocity ?? 0) < -120) setState(() => _open = false);
+        if ((d.primaryVelocity ?? 0) < -120) _setOpen(false);
       },
       child: Container(
         padding: const EdgeInsets.fromLTRB(14, 10, 14, 6),
