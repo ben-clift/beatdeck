@@ -7,7 +7,17 @@ import 'package:sidedeck/state/playlist_store.dart';
 /// Local playlists, saved on the phone in app preferences.
 class PlaylistController extends ChangeNotifier {
   PlaylistController() {
+    _live.add(this);
     restore();
+  }
+
+  static final Set<PlaylistController> _live = {};
+
+  /// Other parts of the app changed the saved lists: read them again.
+  static Future<void> reloadAll() async {
+    for (final c in List.of(_live)) {
+      await c.restore();
+    }
   }
 
   static const _prefsKey = 'local_playlists';
@@ -91,6 +101,7 @@ class PlaylistController extends ChangeNotifier {
 
   @override
   void dispose() {
+    _live.remove(this);
     _disposed = true;
     super.dispose();
   }

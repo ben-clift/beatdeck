@@ -13,6 +13,7 @@ import 'package:sidedeck/theme/sidedeck_theme.dart';
 import 'package:sidedeck/ui/automix_pulldown.dart';
 import 'package:sidedeck/ui/controller_widgets.dart';
 import 'package:sidedeck/ui/equaliser_view.dart';
+import 'package:sidedeck/state/backup_tracks.dart';
 import 'package:sidedeck/ui/fx_pulldown.dart';
 import 'package:sidedeck/ui/library_drawer.dart';
 import 'package:sidedeck/ui/track_picker.dart';
@@ -519,6 +520,21 @@ class _DeckPanelState extends State<_DeckPanel> {
     );
   }
 
+  Future<void> _backup(DeckState d) async {
+    final path = d.path;
+    if (path == null || path.isEmpty) return;
+    final err = widget.dj.removeFromDeck(widget.index);
+    if (err != null) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(err)));
+      return;
+    }
+    await BackupTracks.add(path);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Saved in the playlist "Backup tracks". Play it from Auto DJ or the library another time.')),
+    );
+  }
+
   Future<void> _confirmRemove(DeckState d) async {
     final path = d.path;
     final name = d.title;
@@ -603,6 +619,15 @@ class _DeckPanelState extends State<_DeckPanel> {
                 ),
               ),
               const Icon(Icons.library_music, size: 18),
+              if (d.loaded)
+                IconButton(
+                  tooltip: 'Put in Backup tracks to come back to another time',
+                  visualDensity: VisualDensity.compact,
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                  icon: const Icon(Icons.bookmark_add_outlined, size: 20),
+                  onPressed: () => _backup(d),
+                ),
               if (d.loaded)
                 IconButton(
                   tooltip: 'Remove this track and never play it again',
