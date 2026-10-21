@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:sidedeck/automix/set_flow.dart';
 import 'package:sidedeck/state/dj_controller.dart';
 import 'package:sidedeck/state/library_controller.dart';
 import 'package:sidedeck/state/look_controller.dart';
@@ -28,6 +29,8 @@ class _AutomixPullDownState extends State<AutomixPullDown> {
   bool _open = false;
   double _fade = 20;
   double _offset = 10;
+  FlowArc _arc = FlowArc.off;
+  double _len = 60;
 
   @override
   void initState() {
@@ -37,6 +40,8 @@ class _AutomixPullDownState extends State<AutomixPullDown> {
       setState(() {
         _fade = p.getDouble('automix_fade') ?? _fade;
         _offset = p.getDouble('automix_offset') ?? _offset;
+        _arc = FlowArc.values[(p.getInt('automix_arc') ?? 0).clamp(0, FlowArc.values.length - 1)];
+        _len = p.getDouble('automix_len') ?? _len;
       });
     }).catchError((_) {});
   }
@@ -45,6 +50,8 @@ class _AutomixPullDownState extends State<AutomixPullDown> {
     SharedPreferences.getInstance().then((p) {
       p.setDouble('automix_fade', _fade);
       p.setDouble('automix_offset', _offset);
+      p.setInt('automix_arc', _arc.index);
+      p.setDouble('automix_len', _len);
     }).catchError((_) {});
   }
   String? _selectedId;
@@ -224,7 +231,7 @@ class _AutomixPullDownState extends State<AutomixPullDown> {
                     onPressed: paths.isEmpty
                         ? null
                         : () {
-                            dj.startAutomix(paths, fadeSeconds: _fade, startOffsetSeconds: _offset);
+                            dj.startAutomix(paths, fadeSeconds: _fade, startOffsetSeconds: _offset, arc: _arc, lengthMinutes: _len);
                             setState(() => _open = false);
                           },
                     icon: const Icon(Icons.auto_mode, size: 18),
@@ -272,6 +279,57 @@ class _AutomixPullDownState extends State<AutomixPullDown> {
                 ],
               ),
             ),
+            Padding(
+              padding: const EdgeInsets.only(bottom: 4),
+              child: Wrap(
+                spacing: 6,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  const Text('Set flow', style: TextStyle(fontSize: 12)),
+                  for (final a in FlowArc.values)
+                    ChoiceChip(
+                      label: Text(a.label, style: const TextStyle(fontSize: 12)),
+                      selected: _arc == a,
+                      onSelected: on
+                          ? null
+                          : (_) {
+                              setState(() => _arc = a);
+                              _saveTimes();
+                            },
+                    ),
+                ],
+              ),
+            ),
+            Text(_arc.blurb,
+                style: const TextStyle(fontSize: 11, color: SideDeckTheme.muted)),
+            if (_arc != FlowArc.off)
+              Row(
+                children: [
+                  const SizedBox(
+                    width: 150,
+                    child: Text('Set length', style: TextStyle(fontSize: 12)),
+                  ),
+                  Expanded(
+                    child: Slider(
+                      value: _len,
+                      min: 20,
+                      max: 180,
+                      divisions: 32,
+                      label: '${_len.round()} min',
+                      onChanged: on
+                          ? null
+                          : (v) {
+                              setState(() => _len = v);
+                              _saveTimes();
+                            },
+                    ),
+                  ),
+                  SizedBox(
+                    width: 48,
+                    child: Text('${_len.round()} min', style: const TextStyle(fontSize: 12)),
+                  ),
+                ],
+              ),
             Row(
               children: [
                 const SizedBox(

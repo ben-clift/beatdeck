@@ -5,6 +5,8 @@ import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sidedeck/engine/analysis_cache.dart';
+import 'package:sidedeck/automix/set_flow.dart';
+import 'package:sidedeck/suggest/harmony.dart';
 import 'package:sidedeck/engine/native_engine.dart';
 import 'package:sidedeck/engine/track_analyzer.dart';
 import 'package:sidedeck/engine/usb_output.dart';
@@ -418,6 +420,7 @@ class DjController extends ChangeNotifier {
     if (!automixOn || _automixQueue.contains(path)) return;
     if (_automixQueue.any((q) => _trackKey(q) == _trackKey(path))) return;
     _automixQueue.add(path);
+    _flowLearn(path);
     notifyListeners();
   }
 
@@ -454,8 +457,70 @@ class DjController extends ChangeNotifier {
     return name.toLowerCase().trim();
   }
 
+  // ---- Set flow ----------------------------------------------------------
+  SetFlow? _flow;
+  double _baseFade = 20;
+  int? _flowNext;
+  String _flowMove = '?';
+  final Map<String, FlowTrack> _flowInfo = {};
+  String? flowStatus;
+
+  Future<void> _flowLearn(String path) async {
+    if (_flowInfo.containsKey(path)) return;
+    var bpm = 0.0;
+    CamelotKey? key;
+    try {
+      final stat = await File(path).stat();
+      final a = await _analysisCache.get(
+        path,
+        stat.size,
+        stat.modified.millisecondsSinceEpoch,
+      );
+      if (a != null) {
+        bpm = a.bpm;
+        key = CamelotKey.fromIndex(a.key);
+      }
+    } catch (_) {}
+    final name = path.split(RegExp(r'[\\/]')).last.replaceFirst(RegExp(r'\.[^.]+$'), '');
+    final hints = parseNameHints(name);
+    if (bpm <= 0) bpm = hints.bpm ?? 0;
+    key ??= hints.key;
+    var artist = '';
+    final dash = name.indexOf(' - ');
+    if (dash > 0) artist = name.substring(0, dash).trim();
+    _flowInfo[path] = FlowTrack(path, bpm: bpm, key: key, artist: artist);
+  }
+
+  FlowTrack? _flowOf(String path) => _flowInfo[path];
+
   /// The next queue entry that has not been played yet, or null.
   int? _nextUnplayed() {
+    final flow = _flow;
+    if (flow != null && flow.arc != FlowArc.off) {
+      final held = _flowNext;
+      if (held != null &&
+          held > _automixIndex &&
+          held < _automixQueue.length &&
+          !_automixPlayed.contains(_trackKey(_automixQueue[held]))) {
+        return held;
+      }
+      final cands = <(int, FlowTrack)>[];
+      for (var i = _automixIndex + 1; i < _automixQueue.length; i++) {
+        final path = _automixQueue[i];
+        if (_automixPlayed.contains(_trackKey(path))) continue;
+        cands.add((i, _flowOf(path) ?? FlowTrack(path)));
+      }
+      if (cands.isEmpty) return null;
+      final cur = _automixIndex >= 0 && _automixIndex < _automixQueue.length
+          ? _flowOf(_automixQueue[_automixIndex])
+          : null;
+      final pick = flow.pick(cur, cands);
+      if (pick == null) return null;
+      _flowNext = pick.index;
+      _flowMove = pick.moveLabel;
+      automixFadeSeconds = (_baseFade * flow.arc.fadeScale(pick.energy)).clamp(6.0, 60.0).toDouble();
+      return pick.index;
+    }
     for (var i = _automixIndex + 1; i < _automixQueue.length; i++) {
       if (!_automixPlayed.contains(_trackKey(_automixQueue[i]))) return i;
     }
@@ -469,6 +534,8 @@ class DjController extends ChangeNotifier {
     List<String> paths, {
     double fadeSeconds = 20,
     double startOffsetSeconds = 10,
+    FlowArc arc = FlowArc.off,
+    double lengthMinutes = 60,
   }) async {
     if (paths.isEmpty) return;
     stopAutomix();
@@ -480,6 +547,12 @@ class DjController extends ChangeNotifier {
     ];
     _automixPlayed.clear();
     automixFadeSeconds = fadeSeconds.clamp(4.0, 60.0).toDouble();
+    _baseFade = automixFadeSeconds;
+    _flowNext = null;
+    _flow = arc == FlowArc.off ? null : SetFlow(arc, lengthMinutes: lengthMinutes);
+    for (final p in _automixQueue) {
+      await _flowLearn(p);
+    }
     automixStartOffset = startOffsetSeconds.clamp(0.0, 90.0).toDouble();
     automixOn = true;
     automixStatus = 'Loading first track';
@@ -517,6 +590,8 @@ class DjController extends ChangeNotifier {
     _automixPreloaded = false;
     _automixDeck = -1;
     _automixIndex = -1;
+    _flowNext = null;
+    _flow = null;
     if (wasOn) {
       automixStatus = null;
       notifyListeners();
@@ -560,6 +635,7 @@ class DjController extends ChangeNotifier {
           } else {
             // Skip a track that will not load.
             _automixQueue.removeAt(next);
+            _flowNext = null;
             automixStatus = 'Skipped a track that would not load';
           }
           notifyListeners();
@@ -629,8 +705,11 @@ class DjController extends ChangeNotifier {
       _engine.play(cur, false);
       deck(cur).playing = false;
       _automixDeck = other;
+      final prevTrack = _flowOf(_automixQueue[_automixIndex]);
       _automixIndex = _automixNextTarget;
       _automixPlayed.add(_trackKey(_automixQueue[_automixIndex]));
+      if (prevTrack != null) _flow?.played(prevTrack, _flowMove);
+      _flowNext = null;
       _automixPreloaded = false;
       _automixFading = false;
     }
