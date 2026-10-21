@@ -51,6 +51,7 @@ class _SoulseekPageState extends State<SoulseekPage> {
   }
 
   bool _showAll = false;
+  bool _panelOpen = false;
 
   String? _pendingSearch;
 
@@ -205,6 +206,43 @@ class _SoulseekPageState extends State<SoulseekPage> {
               ),
             ),
           ),
+          ListenableBuilder(
+            listenable: AutoFetch.instance,
+            builder: (context, _) {
+              final af = AutoFetch.instance;
+              return InkWell(
+                onTap: () => setState(() => _panelOpen = !_panelOpen),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                  child: Row(
+                    children: [
+                      Icon(_panelOpen ? Icons.expand_less : Icons.expand_more, size: 20),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          af.running
+                              ? 'AUTO ON  ·  ${af.status.isEmpty ? af.genre : af.status}  (${af.fetched})'
+                              : 'Download settings  ·  AUTO off',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                            color: af.running ? const Color(0xFF3DDC57) : SideDeckTheme.muted,
+                          ),
+                        ),
+                      ),
+                      Switch(
+                        value: af.running,
+                        onChanged: (v) => af.toggle(v, widget.library),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            },
+          ),
+          if (_panelOpen) ...[
           ListTile(
             dense: true,
             leading: const Icon(Icons.folder_open),
@@ -287,6 +325,7 @@ class _SoulseekPageState extends State<SoulseekPage> {
               );
             },
           ),
+          ],
           TabBar(
             tabs: [
               Tab(text: 'Results (${results.length})'),
