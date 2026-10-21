@@ -98,7 +98,7 @@ class _AutoFetchPageState extends State<AutoFetchPage> {
         t = await Hardwax.fetch(_hwTag.isEmpty ? 'this-week' : _hwTag, skip: onlyNew ? _seen : const {});
         if (t.isEmpty) {
           _loadError = onlyNew
-              ? 'No new releases left on this tag. Hardwax lists refresh once a day; try another tag.'
+              ? 'No new releases left on this tag. Hardwax lists refresh weekly; try another tag.'
               : 'No releases found on that Hardwax page.';
         }
       } catch (e) {
@@ -251,7 +251,7 @@ class _AutoFetchPageState extends State<AutoFetchPage> {
             const SizedBox(height: 10),
             if (_source == 'trax')
               const Text(
-                'Every Traxsource genre Top 100, read once a day and kept on the phone. '
+                'Every Traxsource genre Top 100, read once a week and kept on the phone. '
                 'Names, genre and tempo only. AUTO fetches them in random order.',
                 style: TextStyle(fontSize: 12, color: SideDeckTheme.muted),
               ),

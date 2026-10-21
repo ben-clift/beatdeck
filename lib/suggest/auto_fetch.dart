@@ -449,7 +449,7 @@ class AutoFetch extends ChangeNotifier {
     );
   }
 
-  /// Traxsource: the whole library (every genre's Top 100, read once a day),
+  /// Traxsource: the whole library (every genre's Top 100, read once a week),
   /// in random order.
   Future<void> startTraxsource({
     required LibraryController library,
@@ -647,7 +647,7 @@ class AutoFetch extends ChangeNotifier {
             if (fresh.isNotEmpty) return fresh.take(12).toList();
           } catch (_) {}
         }
-        // Traxsource (read once a day) instead of Deezer, by genre family and tempo.
+        // Traxsource (read once a week) instead of Deezer, by genre family and tempo.
         if (!useTrax) return <Suggestion>[];
         try {
           final tx = (await Traxsource.matching(g, bpmMin: lo, bpmMax: hi))

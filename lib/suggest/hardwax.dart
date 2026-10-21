@@ -45,9 +45,29 @@ class Hardwax {
     return s;
   }
 
-  /// Each tag page is read from the shop at most once every 24 hours; in
-  /// between, the saved list is used.
-  static const _maxAge = Duration(hours: 24);
+  /// Hardwax updates its lists weekly, so each tag page is read from the shop
+  /// at most once a week; in between, the saved list is used. After a failed
+  /// read nothing is tried again for a day.
+  static const _maxAge = Duration(days: 7);
+  static const _retryAfter = Duration(hours: 24);
+
+  static Future<bool> _triedRecently(String slug) async {
+    try {
+      final p = await SharedPreferences.getInstance();
+      final t = p.getInt('hardwax_try_$slug');
+      return t != null &&
+          DateTime.now().difference(DateTime.fromMillisecondsSinceEpoch(t)) < _retryAfter;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  static Future<void> _markTry(String slug) async {
+    try {
+      final p = await SharedPreferences.getInstance();
+      await p.setInt('hardwax_try_$slug', DateTime.now().millisecondsSinceEpoch);
+    } catch (_) {}
+  }
 
   static Future<List<Suggestion>?> _cached(String slug, {bool stale = false}) async {
     try {
@@ -88,9 +108,15 @@ class Hardwax {
   static Future<List<Suggestion>> fetch(String slug, {Set<String> skip = const {}}) async {
     final fresh = await _cached(slug);
     if (fresh != null) {
-      DebugLog.add('hardwax', '$slug: using the list saved in the last 24 hours (${fresh.length})');
+      DebugLog.add('hardwax', '$slug: using the saved list (read within the last week) (${fresh.length})');
       return _skip(fresh, skip);
     }
+    // A recent failed read: use the old list and leave the shop alone.
+    if (await _triedRecently(slug)) {
+      final old = await _cached(slug, stale: true);
+      return _skip(old ?? const [], skip);
+    }
+    await _markTry(slug);
     http.Response r;
     try {
       r = await http.get(

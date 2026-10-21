@@ -7,11 +7,13 @@ import 'package:sidedeck/debug/debug_log.dart';
 import 'package:sidedeck/suggest/suggest_service.dart';
 
 /// Reads the public Top 100 page of every Traxsource genre (names, genre and
-/// tempo only: no audio, no previews, no downloads from the store). The whole
-/// library is read once every 24 hours and kept on the phone; in between the
-/// saved copy is used.
+/// tempo only: no audio, no previews, no downloads from the store). Traxsource
+/// updates its charts weekly, so the whole library is read once a week and
+/// kept on the phone; in between the saved copy is used. After a failed read
+/// nothing is tried again for a day.
 class Traxsource {
-  static const _maxAge = Duration(hours: 24);
+  static const _maxAge = Duration(days: 7);
+  static const _tryKey = 'traxsource_try';
   static const _key = 'traxsource_all_v1';
   static const _base = 'https://www.traxsource.com';
   static const _headers = {'User-Agent': 'BeatDeck/1.0 (personal DJ app)'};
@@ -106,8 +108,23 @@ class Traxsource {
   static Future<List<Suggestion>> _load() async {
     final fresh = await _cached();
     if (fresh != null && fresh.isNotEmpty) {
-      DebugLog.add('traxsource', 'using the library saved in the last 24 hours (${fresh.length} tracks)');
+      DebugLog.add('traxsource', 'using the saved library (read within the last week) (${fresh.length} tracks)');
       return _memory = fresh;
+    }
+    // A recent failed read: use the old copy and leave the site alone.
+    try {
+      final p = await SharedPreferences.getInstance();
+      final t = p.getInt(_tryKey);
+      if (t != null &&
+          DateTime.now().difference(DateTime.fromMillisecondsSinceEpoch(t)) <
+              const Duration(hours: 24)) {
+        final old = await _cached(stale: true);
+        if (old != null) return _memory = old;
+        throw Exception('read failed recently, waiting a day before trying again');
+      }
+      await p.setInt(_tryKey, DateTime.now().millisecondsSinceEpoch);
+    } catch (e) {
+      if (e is Exception && '$e'.contains('waiting a day')) rethrow;
     }
     try {
       // Genre pages are found from the all-genres chart page.
