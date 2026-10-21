@@ -616,6 +616,19 @@ class _DeckPanelState extends State<_DeckPanel> {
   Widget _deckBody(DeckState d, int i, double remaining, double heard) {
     return Column(
       children: [
+        if (widget.dj.moreLikeStatus != null)
+          Container(
+            width: double.infinity,
+            margin: const EdgeInsets.only(bottom: 4),
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            color: const Color(0x33FFC107),
+            child: Text(
+              widget.dj.moreLikeStatus!,
+              style: const TextStyle(fontSize: 11),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
         GestureDetector(
           behavior: HitTestBehavior.opaque,
           onTap: _openPicker,

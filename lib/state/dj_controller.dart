@@ -501,77 +501,118 @@ class DjController extends ChangeNotifier {
   /// ask Soulseek for one like it. Returns what happened, for the screen.
   String automixMoreLike(int deckIndex) {
     if (!automixOn || _automixDeck < 0) return 'Start Auto DJ first.';
+    if (_automixFading) {
+      _setMoreLike('More like this: a mix is happening, press again in a moment.');
+      return 'A mix is happening: press it again in a moment.';
+    }
     final path = deck(deckIndex).path;
     if (path == null || path.isEmpty) return 'Load a track first.';
     final src = _flowOf(path);
     final srcGenre = genreOf?.call(path) ?? '';
+    _setMoreLike('More like this: looking in your library…');
     final onDeck = <String>{
       for (var i = 0; i < 2; i++) if ((deck(i).path ?? '').isNotEmpty) _trackKey(deck(i).path!),
     };
+    // Three passes, each looser than the last, so something is always picked
+    // when the library has anything unplayed: same tempo + key + genre, then
+    // tempo only, then simply the closest tempo.
     String? best;
-    var bestScore = -1e9;
-    for (final q in _automixQueue) {
-      final k = _trackKey(q);
-      if (onDeck.contains(k) || _wasPlayed(q) || failedPaths.contains(q)) continue;
-      if (Dislikes.instance.hasPath(q) || !File(q).existsSync()) continue;
-      final c = _flowOf(q);
-      var score = 0.0;
-      if (src != null && src.bpm > 0 && c != null && c.bpm > 0) {
-        final gap = bpmGapPercent(src.bpm, c.bpm).abs();
-        if (gap > 6) continue;
-        score -= gap * 4;
-        if (src.key != null && c.key != null) {
-          final km = keyMatch(src.key!, c.key!).score;
-          if (km < 50) continue;
-          score += km * 0.3;
+    for (var pass = 0; pass < 3 && best == null; pass++) {
+      var bestScore = -1e9;
+      for (final q in _automixQueue) {
+        final k = _trackKey(q);
+        if (onDeck.contains(k) || _wasPlayed(q) || failedPaths.contains(q)) continue;
+        if (Dislikes.instance.hasPath(q) || !File(q).existsSync()) continue;
+        if (_avoided(q)) continue;
+        final c = _flowOf(q);
+        var score = 0.0;
+        if (src != null && src.bpm > 0 && c != null && c.bpm > 0) {
+          final gap = bpmGapPercent(src.bpm, c.bpm).abs();
+          if (pass < 2 && gap > (pass == 0 ? 6 : 9)) continue;
+          score -= gap * 4;
+          if (pass == 0 && src.key != null && c.key != null) {
+            final km = keyMatch(src.key!, c.key!).score;
+            if (km < 50) continue;
+            score += km * 0.3;
+          }
+        } else {
+          if (pass == 0) continue;
+          score -= 60; // tempo not known: after every known fit
         }
-      } else {
-        score -= 20; // tempo not known yet: after the known fits
-      }
-      final g = genreOf?.call(q) ?? '';
-      if (srcGenre.isNotEmpty && g.isNotEmpty) {
-        if (!genresSimilar(srcGenre, g)) continue;
-        score += 15;
-      }
-      if (score > bestScore) {
-        bestScore = score;
-        best = q;
+        final g = genreOf?.call(q) ?? '';
+        if (srcGenre.isNotEmpty && g.isNotEmpty) {
+          if (genresSimilar(srcGenre, g)) {
+            score += 15;
+          } else if (pass == 0) {
+            continue;
+          }
+        }
+        if (score > bestScore) {
+          bestScore = score;
+          best = q;
+        }
       }
     }
+    String shown(String f) =>
+        f.split(RegExp(r'[\\/]')).last.replaceFirst(RegExp(r'\.[^.]+$'), '');
+    final cb = onNeedTrack;
+    final canAsk = cb != null && (fetchWanted?.call() ?? true);
+    String msg;
     if (best != null) {
       _forcePath = best;
       _upNext = best;
       _automixPreloaded = false;
       _rejected.remove(best);
       _flowNext = null;
-      if (deckIndex == _automixDeck) _mixNow = true;
-      final name = best.split(RegExp(r'[\\/]')).last;
-      DebugLog.add('automix', 'more like this: found one in the library: $name');
-      notifyListeners();
-      final shown = name.replaceFirst(RegExp(r'\.[^.]+$'), '');
-      return 'Found one in your library: ' + shown;
+      _mixNow = true; // straight away
+      automixStatus = 'More like this: mixing in ${shown(best)}';
+      DebugLog.add('automix', 'more like this: library pick ${shown(best)}');
+      msg = 'Mixing in ${shown(best)} from your library'
+          '${canAsk ? '. Asking Soulseek for a better match too.' : '.'}';
+      _setMoreLike(canAsk
+          ? 'Mixing in ${shown(best)} (library). Asking Soulseek for a better match; it switches if one arrives.'
+          : 'Mixing in ${shown(best)} (library).');
+    } else {
+      msg = canAsk
+          ? 'Nothing unplayed in the library. Asking Soulseek: it plays next when it arrives.'
+          : 'Nothing unplayed in the library, and Soulseek fetching is off.';
+      _setMoreLike(canAsk ? 'Asking Soulseek for something like this…' : msg);
     }
-    // Nothing similar in the library: ask Soulseek.
-    final cb = onNeedTrack;
-    if (cb == null || !(fetchWanted?.call() ?? true)) {
-      return 'Nothing like it in the library, and fetching from Soulseek is off.';
+    if (canAsk) {
+      final name = shown(path);
+      final dash = name.indexOf(' - ');
+      var artist = src?.artist ?? '';
+      var title = dash > 0 ? name.substring(dash + 3).trim() : name;
+      if (artist.isEmpty) {
+        final cut = RegExp(r'\s*[\(\[]|\s-').firstMatch(name);
+        artist = (cut != null && cut.start > 1 ? name.substring(0, cut.start) : name)
+            .replaceFirst(RegExp(r'^\d+[\.\s-]+'), '')
+            .trim();
+        title = name;
+      }
+      armPlayNext();
+      _moreLikeArmed = true;
+      DebugLog.add('automix', 'more like this: asking Soulseek like $name');
+      cb(artist, src?.bpm ?? 0, src?.key, title, srcGenre);
     }
-    final name = path.split(RegExp(r'[\\/]')).last.replaceFirst(RegExp(r'\.[^.]+$'), '');
-    final dash = name.indexOf(' - ');
-    var artist = src?.artist ?? '';
-    var title = dash > 0 ? name.substring(dash + 3).trim() : name;
-    if (artist.isEmpty) {
-      final cut = RegExp(r'\s*[\(\[]|\s-').firstMatch(name);
-      artist = (cut != null && cut.start > 1 ? name.substring(0, cut.start) : name)
-          .replaceFirst(RegExp(r'^\d+[\.\s-]+'), '')
-          .trim();
-      title = name;
-    }
-    armPlayNext();
-    DebugLog.add('automix', 'more like this: nothing in the library, asking Soulseek like $name');
-    cb(artist, src?.bpm ?? 0, src?.key, title, srcGenre);
     notifyListeners();
-    return 'Nothing like it in the library, so asking Soulseek. It will play next.';
+    return msg;
+  }
+
+  /// What the More like this button is doing, shown on the decks for a while.
+  String? moreLikeStatus;
+  bool _moreLikeArmed = false;
+  Timer? _moreLikeTimer;
+
+  void _setMoreLike(String text, {int seconds = 40}) {
+    moreLikeStatus = text;
+    _moreLikeTimer?.cancel();
+    _moreLikeTimer = Timer(Duration(seconds: seconds), () {
+      moreLikeStatus = null;
+      _moreLikeArmed = false;
+      notifyListeners();
+    });
+    notifyListeners();
   }
 
   /// A new track (for example a finished Soulseek download) joins the end of
@@ -593,6 +634,13 @@ class DjController extends ChangeNotifier {
       _automixPreloaded = false;
       _rejected.remove(path);
       DebugLog.add('automix', 'your genre choice arrived, playing it next: ${path.split(RegExp(r'[\\/]')).last}');
+      if (_moreLikeArmed) {
+        _moreLikeArmed = false;
+        _setMoreLike('Soulseek found ${path.split(RegExp(r'[\\/]')).last.replaceFirst(RegExp(r'\.[^.]+$'), '')}: switching to it.', seconds: 12);
+      }
+    } else if (_moreLikeArmed && _automixFading) {
+      _moreLikeArmed = false;
+      _setMoreLike('Soulseek found one: it plays after this mix.', seconds: 12);
     }
     // A fresh download plays before the playlist's own tracks (the genre and
     // tempo checks still apply when it loads).
