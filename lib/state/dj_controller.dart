@@ -716,6 +716,9 @@ class DjController extends ChangeNotifier {
     }
   }
 
+  /// Called when a library file turns out to be missing.
+  void Function(String path)? onFileMissing;
+
   Future<bool> loadFile(
     int deckIndex,
     String path, {
@@ -756,7 +759,8 @@ class DjController extends ChangeNotifier {
       try {
         final f = File(path);
         if (!f.existsSync()) {
-          detail = 'The file is gone (moved or deleted). Remove it from the library.';
+          detail = 'The file is gone (moved or deleted). It has been removed from the library.';
+          onFileMissing?.call(path);
         } else {
           final len = f.lengthSync();
           final ext = path.contains('.') ? path.split('.').last.toLowerCase() : '?';

@@ -48,6 +48,7 @@ class SlskSetup {
   static void wire(LibraryController lib) {
     soulseek.downloadDir = () => dirFor(lib);
     soulseek.storageCheck = (size) => StorageGuard.blockReason(dirFor(lib), size);
+    dj?.onFileMissing = (_) => lib.removeMissing();
     soulseek.onFileSaved = (path) {
       DebugLog.add('library', 'adding $path');
       lib.addFile(path);
