@@ -42,7 +42,7 @@ class _AutoFetchPageState extends State<AutoFetchPage> {
   final Set<int> _picked = {};
   bool _underground = false;
   bool _classics = false;
-  bool _hardwax = false;
+  bool _hardwax = true; // Hardwax is the default source
   String _hwTag = 'this-week';
   String? _loadError;
   int _loadSeq = 0;

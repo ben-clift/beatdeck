@@ -586,6 +586,40 @@ class DjController extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Takes the track off a deck for good: it is marked as disliked, dropped
+  /// from the automix queue and unloaded. Returns a message when it cannot
+  /// be done right now, otherwise null. If automix was playing that deck, the
+  /// other deck carries on.
+  String? removeFromDeck(int i) {
+    final d = deck(i);
+    if (!d.loaded) return 'Nothing is loaded on deck ${i + 1}.';
+    if (automixOn && _automixFading) return 'Wait for the mix to finish, then remove it.';
+    if (automixOn && _automixBusy) return 'Automix is loading a track. Try again in a moment.';
+    final path = d.path ?? '';
+    final wasCurrent = automixOn && i == _automixDeck;
+    final wasNext = automixOn && _automixDeck >= 0 && i == 1 - _automixDeck;
+    _engine.play(i, false);
+    d.playing = false;
+    _engine.unload(i);
+    d.loaded = false;
+    d.title = 'Empty';
+    d.artist = '';
+    d.path = null;
+    d.position = 0;
+    d.duration = 0;
+    d.bpm = 0;
+    d.key = -1;
+    loadedPaths.remove(path);
+    automixDrop(path);
+    if (wasNext) _automixPreloaded = false;
+    if (wasCurrent) {
+      // Same as a deck that ended: bring in the next suitable track.
+      _automixDeckEnded(i, 1 - i);
+    }
+    notifyListeners();
+    return null;
+  }
+
   /// Forget what was played in the last 24 hours.
   Future<void> clearPlayedHistory() async {
     _recentPlayed.clear();
@@ -857,10 +891,9 @@ class DjController extends ChangeNotifier {
     final other = 1 - cur;
     final d = deck(cur);
     // The playing deck ran to its end without a mix: carry on at once.
-    if (d.loaded &&
-        !d.playing &&
-        d.duration > 0 &&
-        _engine.position(cur) >= d.duration - 0.6) {
+    if (!d.loaded ||
+        (!d.playing && d.duration > 0 && _engine.position(cur) >= d.duration - 0.6)) {
+      // Ended, or the track was removed from the deck.
       return _automixDeckEnded(cur, other);
     }
     if (!d.loaded || !d.playing) return false; // paused by the DJ: wait

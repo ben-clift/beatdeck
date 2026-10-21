@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:sidedeck/engine/music_utils.dart';
 import 'package:sidedeck/state/dj_controller.dart';
+import 'package:sidedeck/state/dislikes.dart';
 import 'package:sidedeck/state/library_controller.dart';
 import 'package:sidedeck/state/look_controller.dart';
 import 'package:sidedeck/theme/sidedeck_theme.dart';
@@ -518,6 +519,48 @@ class _DeckPanelState extends State<_DeckPanel> {
     );
   }
 
+  Future<void> _confirmRemove(DeckState d) async {
+    final path = d.path;
+    final name = d.title;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Remove this track?'),
+        content: Text(
+            '$name\n\nIt comes off the deck, is deleted from this phone, and will not be played or searched for again.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: Colors.red.shade700),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Remove'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    final err = widget.dj.removeFromDeck(widget.index);
+    if (err != null) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(err)));
+      return;
+    }
+    if (path != null && path.isNotEmpty) {
+      await Dislikes.instance.add(path);
+      final match = widget.library.tracks.where((t) => t.path == path).toList();
+      if (match.isNotEmpty) {
+        await widget.library.deleteTracks(match);
+      } else {
+        try {
+          await File(path).delete();
+        } catch (_) {}
+      }
+    }
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Removed. It will not be played or searched for again.')),
+    );
+  }
+
   void _openPicker() => showTrackPicker(
         context,
         dj: widget.dj,
@@ -560,6 +603,15 @@ class _DeckPanelState extends State<_DeckPanel> {
                 ),
               ),
               const Icon(Icons.library_music, size: 18),
+              if (d.loaded)
+                IconButton(
+                  tooltip: 'Remove this track and never play it again',
+                  visualDensity: VisualDensity.compact,
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                  icon: const Icon(Icons.delete_outline, size: 20, color: Colors.redAccent),
+                  onPressed: () => _confirmRemove(d),
+                ),
             ],
           ),
         ),

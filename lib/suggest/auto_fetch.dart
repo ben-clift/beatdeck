@@ -10,7 +10,9 @@ import 'package:sidedeck/soulseek/slsk_setup.dart';
 import 'package:sidedeck/soulseek/storage_guard.dart';
 import 'package:sidedeck/soulseek/soulseek_client.dart';
 import 'package:sidedeck/state/dislikes.dart';
+import 'package:sidedeck/automix/genre_family.dart';
 import 'package:sidedeck/suggest/genres.dart';
+import 'package:sidedeck/suggest/hardwax.dart';
 import 'package:sidedeck/state/library_controller.dart';
 import 'package:sidedeck/suggest/harmony.dart';
 import 'package:sidedeck/wishlist/wishlist.dart';
@@ -498,14 +500,52 @@ class AutoFetch extends ChangeNotifier {
     final double? hi = bpm > 1 ? bpm * 1.07 : null;
     DebugLog.add('fetch',
         'matching the playing track: genre "$g", ${lo == null ? 'any tempo' : '${lo.round()}-${hi!.round()} BPM'}, underground only');
+    // Hardwax first (never chart music); the Deezer low-rank list only when
+    // the shop's list for this style has nothing left.
+    final slug = _hardwaxSlug(g);
+    var hwDone = false;
     await _runSource(
-      label: '$g${bpm > 1 ? ', ${bpm.round()} BPM' : ''}, underground',
-      more: (tried) => _service.underground(g, bpmMin: lo, bpmMax: hi, skip: tried, want: 12),
+      label: '$g${bpm > 1 ? ', ${bpm.round()} BPM' : ''}, Hardwax then underground',
+      more: (tried) async {
+        if (!hwDone) {
+          hwDone = true;
+          try {
+            final hw = await Hardwax.fetch(slug, skip: tried);
+            final fresh = hw.where((s) => !Dislikes.instance.hasTrack(s.artist, s.title)).toList()
+              ..shuffle();
+            if (fresh.isNotEmpty) return fresh.take(12).toList();
+          } catch (_) {}
+        }
+        return _service.underground(g, bpmMin: lo, bpmMax: hi, skip: tried, want: 12);
+      },
       library: library,
       count: count,
       endless: false,
       useYears: false,
     );
+  }
+
+  /// The Hardwax tag page that fits a genre name.
+  static String _hardwaxSlug(String genre) {
+    switch (genreFamily(genre)) {
+      case 'house':
+        return genre.toLowerCase().contains('detroit') ? 'detroit-house' : 'house';
+      case 'techno':
+      case 'trance':
+        return 'techno';
+      case 'breaks':
+        return genre.toLowerCase().contains('electro') ? 'electro' : 'bass';
+      case 'dnb':
+        return 'drum-and-bass';
+      case 'dub':
+        return 'reggae-dub';
+      case 'ambient':
+        return 'ambient';
+      case 'hiphop':
+        return 'new-global-styles';
+      default:
+        return 'this-week';
+    }
   }
 
   Future<void> startByGenre({
