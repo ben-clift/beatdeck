@@ -1,3 +1,6 @@
+import 'package:sidedeck/automix/genre_family.dart';
+import 'package:sidedeck/suggest/genres.dart';
+import 'dart:math' as math;
 import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
@@ -94,22 +97,42 @@ class SlskSetup {
       }
       // One pipeline: shortlist, search, download, library, automix.
       () async {
-        // Keep searching until a track is found (or automix is stopped).
+        // Keep searching until a track is found (or automix is stopped). After
+        // a search that finds nothing, the tempo range widens and a related
+        // genre joins the pool.
+        final pin = af.pinned && af.genres.isNotEmpty;
+        final pool = <String>[if (pin) ...af.genres else genre];
+        var lo = pin ? af.bpmMin : (bpm > 1 ? bpm * 0.93 : af.bpmMin);
+        var hi = pin ? af.bpmMax : (bpm > 1 ? bpm * 1.07 : af.bpmMax);
+        var attempt = 0;
+        final rnd = math.Random();
         while (true) {
-          final pin = af.pinned && af.genres.isNotEmpty;
           await af.findNext(
-            genre: pin ? af.pickGenre() : genre,
+            genre: pool[rnd.nextInt(pool.length)],
             artist: artist,
             title: title,
             bpm: bpm,
             library: lib,
-            bpmLo: pin ? af.bpmMin : null,
-            bpmHi: pin ? af.bpmMax : null,
+            bpmLo: lo,
+            bpmHi: hi,
             steer: pin,
           );
           if (af.lastFound || !(dj?.automixOn ?? false) || !autoFetchForAutomix) return;
-          DebugLog.add('automix', 'nothing found yet, searching again');
-          await Future<void>.delayed(const Duration(seconds: 4));
+          attempt++;
+          lo = math.max(70, lo - 4);
+          hi = math.min(180, hi + 4);
+          String? add;
+          for (final grp in genreGroups) {
+            for (final g in grp.$2) {
+              if (add != null || pool.contains(g.name)) continue;
+              if (g.max < lo || g.min > hi) continue;
+              if (pool.any((p) => genresSimilar(p, g.name))) add = g.name;
+            }
+          }
+          if (add != null) pool.add(add);
+          DebugLog.add('automix',
+              'nothing found (try $attempt), widening to ${lo.round()}-${hi.round()} BPM${add == null ? '' : ' and adding $add'}');
+          await Future<void>.delayed(const Duration(seconds: 3));
           if (!(dj?.automixOn ?? false) || af.running) return;
         }
       }();
