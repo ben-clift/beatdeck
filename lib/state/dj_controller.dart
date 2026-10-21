@@ -751,7 +751,12 @@ class DjController extends ChangeNotifier {
       loadingPath = null;
       failedPaths.add(path);
       final name = title ?? path.split(RegExp(r'[\\/]')).last;
-      final detail = _engine.lastError();
+      var detail = _engine.lastError();
+      try {
+        final ext = path.contains('.') ? path.split('.').last.toLowerCase() : '?';
+        final mb = (File(path).lengthSync() / 1048576).toStringAsFixed(1);
+        detail = detail.isEmpty ? '' : '$detail [.$ext, $mb MB]';
+      } catch (_) {}
       engineError = detail.isNotEmpty
           ? 'Could not load $name - $detail'
           : 'Could not decode $name (need MP3, WAV, FLAC, Opus, or AAC M4A).';

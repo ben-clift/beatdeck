@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sidedeck/automix/set_flow.dart';
@@ -22,7 +24,7 @@ class AutomixPullDown extends StatefulWidget {
 }
 
 class _AutomixPullDownState extends State<AutomixPullDown> {
-  static const _panelH = 222.0;
+  double get _panelH => math.min(MediaQuery.of(context).size.height * 0.85, 380.0);
   static const _tabH = 24.0;
 
   final _playlists = PlaylistController();
@@ -193,7 +195,8 @@ class _AutomixPullDownState extends State<AutomixPullDown> {
           color: Color.lerp(look.body, Colors.black, 0.15),
           border: Border(bottom: BorderSide(color: look.accent(0), width: 3)),
         ),
-        child: Column(
+        child: SingleChildScrollView(
+          child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
@@ -387,6 +390,7 @@ class _AutomixPullDownState extends State<AutomixPullDown> {
               ],
             ),
           ],
+        ),
         ),
       ),
     );
