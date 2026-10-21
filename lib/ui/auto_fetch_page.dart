@@ -38,6 +38,11 @@ class _AutoFetchPageState extends State<AutoFetchPage> {
   int _loadedFor = -1;
   final Set<int> _picked = {};
   bool _underground = false;
+  bool _yearFilter = false;
+  RangeValues _years = const RangeValues(1995, 2026);
+
+  bool _yearShown(Suggestion s) =>
+      !_yearFilter || (s.year > 0 && s.year >= _years.start && s.year <= _years.end);
   // Tracks already shown this session, so a reload brings only new ones.
   static final Set<String> _seen = {};
 
@@ -221,6 +226,27 @@ class _AutoFetchPageState extends State<AutoFetchPage> {
                   _loadTracks();
                 },
               ),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Only these years'),
+                subtitle: Text(
+                  _yearFilter
+                      ? '${_years.start.round()} to ${_years.end.round()}'
+                      : 'Off: any year',
+                  style: const TextStyle(fontSize: 12),
+                ),
+                value: _yearFilter,
+                onChanged: (v) => setState(() => _yearFilter = v),
+              ),
+              if (_yearFilter)
+                RangeSlider(
+                  values: _years,
+                  min: 1960,
+                  max: 2026,
+                  divisions: 66,
+                  labels: RangeLabels('${_years.start.round()}', '${_years.end.round()}'),
+                  onChanged: (v) => setState(() => _years = v),
+                ),
               Row(
                 children: [
                   OutlinedButton.icon(
@@ -237,8 +263,10 @@ class _AutoFetchPageState extends State<AutoFetchPage> {
                     )
                   else if (_tracks.isNotEmpty)
                     TextButton(
-                      onPressed: () => setState(() => _picked.addAll(
-                          [for (var i = 0; i < _tracks.length; i++) i])),
+                      onPressed: () => setState(() => _picked.addAll([
+                          for (var i = 0; i < _tracks.length; i++)
+                            if (_yearShown(_tracks[i])) i
+                        ])),
                       child: const Text('Select all'),
                     ),
                 ],
@@ -252,6 +280,7 @@ class _AutoFetchPageState extends State<AutoFetchPage> {
                 const Text('No new tracks left for this chart and tempo this session.',
                     style: TextStyle(fontSize: 12, color: SideDeckTheme.muted)),
               for (var i = 0; i < _tracks.length; i++)
+                if (_yearShown(_tracks[i]))
                 CheckboxListTile(
                   dense: true,
                   contentPadding: EdgeInsets.zero,
