@@ -1,4 +1,5 @@
 import 'package:http/http.dart' as http;
+import 'package:sidedeck/debug/debug_log.dart';
 import 'package:sidedeck/suggest/suggest_service.dart';
 import 'package:sidedeck/wishlist/wishlist.dart';
 
@@ -48,13 +49,17 @@ class Hardwax {
       headers: const {'User-Agent': 'BeatDeck/1.0 (personal DJ app)'},
     ).timeout(const Duration(seconds: 15));
     if (r.statusCode != 200) throw Exception('Hardwax answered ${r.statusCode}');
-    final items = WishParser.parse('€ Label Catalog MP3\n${_text(r.body)}');
+    final text = _text(r.body);
+    final items = WishParser.parse('€ Label Catalog MP3\n$text');
     final out = <Suggestion>[];
     for (final i in items) {
       if (i.artist.isEmpty) continue;
       if (skip.contains('${i.artist} ${i.title}'.toLowerCase())) continue;
       out.add(Suggestion(i.artist, i.title, 0, 'Hardwax'));
     }
+    DebugLog.add('hardwax',
+        '$slug: page ${r.body.length} bytes, ${items.length} parsed, ${out.length} usable'
+        '${out.isEmpty ? ', text starts: ${text.replaceAll(RegExp(r'\\s+'), ' ').trim().substring(0, text.trim().length < 300 ? text.trim().length : 300)}' : ', first: ${out.first.artist} - ${out.first.title}'}');
     return out;
   }
 }

@@ -51,6 +51,7 @@ class _AutoFetchPageState extends State<AutoFetchPage> {
   RangeValues _years = const RangeValues(1995, 2026);
 
   bool _yearShown(Suggestion s) =>
+      _hardwax ||
       !_yearFilter || (s.year > 0 && s.year >= _years.start && s.year <= _years.end);
   // Tracks already shown this session, so a reload brings only new ones.
   static final Set<String> _seen = {};
@@ -219,13 +220,18 @@ class _AutoFetchPageState extends State<AutoFetchPage> {
             ),
             const SizedBox(height: 10),
             if (_source == 'chart') ...[
-              const Text(
-                'The most played tracks of a genre right now, from Deezer\'s '
-                'charts. Dance and Electro are the dance floor ones.',
+              Text(
+                _hardwax
+                    ? 'New and notable releases from Hardwax, by their own '
+                        'genres. Pick a tag.'
+                    : 'The most played tracks of a genre right now, from Deezer\'s '
+                        'charts. Dance and Electro are the dance floor ones.',
                 style: TextStyle(fontSize: 12, color: SideDeckTheme.muted),
               ),
               const SizedBox(height: 6),
-              if (_charts.isEmpty)
+              if (_hardwax)
+                const SizedBox.shrink()
+              else if (_charts.isEmpty)
                 const Text('Loading charts…')
               else
                 DropdownButton<int>(
@@ -290,6 +296,9 @@ class _AutoFetchPageState extends State<AutoFetchPage> {
                   child: Text(_loadError!,
                       style: const TextStyle(fontSize: 12, color: Colors.redAccent)),
                 ),
+              // Hardwax has its own genres (the tags above); the Deezer
+              // filters below do not apply to it.
+              if (!_hardwax) ...[
               SwitchListTile(
                 contentPadding: EdgeInsets.zero,
                 title: const Text('Classics, before 1960'),
@@ -374,6 +383,7 @@ class _AutoFetchPageState extends State<AutoFetchPage> {
                   labels: RangeLabels('${_years.start.round()}', '${_years.end.round()}'),
                   onChanged: (v) => setState(() => _years = v),
                 ),
+              ],
               Row(
                 children: [
                   OutlinedButton.icon(
