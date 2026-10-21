@@ -30,7 +30,7 @@ class _AutomixPullDownState extends State<AutomixPullDown> {
 
   final _playlists = PlaylistController();
   bool _open = false;
-  double _fade = 20;
+  double _fade = 120;
   double _offset = 10;
   FlowArc _arc = FlowArc.off;
   TransitionStyle _style = TransitionStyle.auto;
@@ -43,9 +43,9 @@ class _AutomixPullDownState extends State<AutomixPullDown> {
       if (!mounted) return;
       setState(() {
         // One-time reset so everyone starts from 20 s and 10 s.
-        if (p.getBool('automix_times_v2') != true) {
-          p.setBool('automix_times_v2', true);
-          p.setDouble('automix_fade', 20);
+        if (p.getBool('automix_times_v3') != true) {
+          p.setBool('automix_times_v3', true);
+          p.setDouble('automix_fade', 120);
           p.setDouble('automix_offset', 10);
         }
         _fade = p.getDouble('automix_fade') ?? _fade;
@@ -382,8 +382,8 @@ class _AutomixPullDownState extends State<AutomixPullDown> {
                   child: Slider(
                     value: _fade,
                     min: 4,
-                    max: 60,
-                    divisions: 56,
+                    max: 180,
+                    divisions: 176,
                     label: '${_fade.round()} s',
                     onChanged: on
                         ? null

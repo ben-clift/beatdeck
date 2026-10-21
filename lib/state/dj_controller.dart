@@ -523,7 +523,7 @@ class DjController extends ChangeNotifier {
       if (pick == null) return null;
       _flowNext = pick.index;
       _flowMove = pick.moveLabel;
-      automixFadeSeconds = (_baseFade * flow.arc.fadeScale(pick.energy)).clamp(6.0, 60.0).toDouble();
+      automixFadeSeconds = (_baseFade * flow.arc.fadeScale(pick.energy)).clamp(6.0, 180.0).toDouble();
       return pick.index;
     }
     for (var i = _automixIndex + 1; i < _automixQueue.length; i++) {
@@ -560,7 +560,7 @@ class DjController extends ChangeNotifier {
       return;
     }
     _automixPlayed.clear();
-    automixFadeSeconds = fadeSeconds.clamp(4.0, 60.0).toDouble();
+    automixFadeSeconds = fadeSeconds.clamp(4.0, 180.0).toDouble();
     _baseFade = automixFadeSeconds;
     _flowNext = null;
     automixStyle = style;
