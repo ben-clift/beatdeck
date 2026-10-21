@@ -723,6 +723,7 @@ class SoulseekClient extends ChangeNotifier {
     if (saved != null) {
       final bad = await verifyDownload(saved, d.size);
       if (bad != null) {
+        DebugLog.flow('Download to library', false, bad);
         DebugLog.add('download', 'REJECTED $saved: $bad');
         try {
           await File(saved).delete();
@@ -735,6 +736,7 @@ class SoulseekClient extends ChangeNotifier {
     }
     d.state = DlState.done;
     d.message = 'Saved';
+    DebugLog.flow('Download to library', true);
     _changed();
     if (saved != null) {
       DebugLog.add('download',

@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
@@ -20,6 +21,17 @@ class LogEntry {
   }
 }
 
+/// Running tally of how often a kind of action worked or failed.
+class FlowStat {
+  FlowStat({this.ok = 0, this.fail = 0, this.lastFail = '', this.lastFailAt = ''});
+  int ok;
+  int fail;
+  String lastFail;
+  String lastFailAt;
+  Map<String, dynamic> toJson() =>
+      {'o': ok, 'f': fail, 'w': lastFail, 't': lastFailAt};
+}
+
 /// A trace of what the app is doing, for tracking down problems on the
 /// phone: shown live on screen when switched on, listed in Settings, and
 /// saved to a file so it survives restarts.
@@ -29,8 +41,14 @@ class DebugLog extends ChangeNotifier {
 
   final List<LogEntry> entries = [];
 
+  /// Success and failure counts per kind of action, kept across restarts.
+  final Map<String, FlowStat> flows = {};
+
   /// Show the live trace panel over the app.
   bool live = false;
+
+  /// Called whenever a failure is logged (used to send the log on).
+  void Function()? onFail;
 
   File? _file;
   String? filePath;
@@ -44,6 +62,31 @@ class DebugLog extends ChangeNotifier {
     _push(bad ? LogLevel.fail : LogLevel.info, tag, msg);
   }
 
+  /// Records the outcome of one kind of action in the running tally.
+  static void flow(String name, bool ok, [String why = '']) {
+    final s = instance.flows.putIfAbsent(name, () => FlowStat());
+    if (ok) {
+      s.ok++;
+    } else {
+      s.fail++;
+      s.lastFail = why;
+      final t = DateTime.now();
+      s.lastFailAt = '${t.month}/${t.day} ${t.hour}:${t.minute.toString().padLeft(2, '0')}';
+    }
+    instance._saveFlows();
+    instance.notifyListeners();
+  }
+
+  Future<void> _saveFlows() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(
+        'flow_stats',
+        jsonEncode({for (final e in flows.entries) e.key: e.value.toJson()}),
+      );
+    } catch (_) {}
+  }
+
   static void ok(String tag, String msg) => _push(LogLevel.ok, tag, msg);
   static void fail(String tag, String msg) => _push(LogLevel.fail, tag, msg);
 
@@ -53,6 +96,7 @@ class DebugLog extends ChangeNotifier {
     l.add(e);
     if (l.length > 600) l.removeRange(0, l.length - 600);
     instance._write(e);
+    if (level == LogLevel.fail) instance.onFail?.call();
     instance.notifyListeners();
   }
 
@@ -60,6 +104,18 @@ class DebugLog extends ChangeNotifier {
     try {
       final prefs = await SharedPreferences.getInstance();
       live = prefs.getBool('live_trace') ?? false;
+      final raw = prefs.getString('flow_stats');
+      if (raw != null) {
+        (jsonDecode(raw) as Map).forEach((k, v) {
+          final m = v as Map;
+          flows[k as String] = FlowStat(
+            ok: (m['o'] as num?)?.toInt() ?? 0,
+            fail: (m['f'] as num?)?.toInt() ?? 0,
+            lastFail: (m['w'] ?? '') as String,
+            lastFailAt: (m['t'] ?? '') as String,
+          );
+        });
+      }
       final dir = await getApplicationDocumentsDirectory();
       _file = File('${dir.path}/beatdeck_test_log.txt');
       filePath = _file!.path;
@@ -88,6 +144,8 @@ class DebugLog extends ChangeNotifier {
 
   void clear() {
     entries.clear();
+    flows.clear();
+    _saveFlows();
     try {
       _file?.writeAsStringSync('');
     } catch (_) {}

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:sidedeck/debug/debug_log.dart';
+import 'package:sidedeck/debug/log_upload.dart';
 import 'package:sidedeck/soulseek/slsk_setup.dart';
 import 'package:sidedeck/suggest/auto_fetch.dart';
 import 'package:flutter/services.dart';
@@ -48,7 +49,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     _library = LibraryController();
     SlskSetup.dj = _dj;
     AutoFetch.instance.load();
-    DebugLog.instance.init();
+    DebugLog.instance.init().then((_) => LogUpload.load());
     SlskSetup.load().then((_) => SlskSetup.wire(_library));
     SlskSetup.wire(_library);
     _dj.addListener(_onDjChanged);

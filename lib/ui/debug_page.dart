@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:sidedeck/debug/debug_log.dart';
+import 'package:sidedeck/debug/log_upload.dart';
 
 class DebugPage extends StatefulWidget {
   const DebugPage({super.key});
@@ -32,6 +33,16 @@ class _DebugPageState extends State<DebugPage> {
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(content: Text('Copied')),
               );
+            },
+          ),
+          IconButton(
+            icon: const Icon(Icons.cloud_upload_outlined),
+            tooltip: 'Send to Claude now',
+            onPressed: () async {
+              final r = await LogUpload.send();
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(r)));
+              }
             },
           ),
           IconButton(

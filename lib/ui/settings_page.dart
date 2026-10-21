@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sidedeck/engine/usb_output.dart';
 import 'package:sidedeck/debug/debug_log.dart';
+import 'package:sidedeck/debug/log_upload.dart';
 import 'package:sidedeck/ui/debug_page.dart';
 import 'package:sidedeck/state/dj_controller.dart';
 import 'package:sidedeck/subsonic/subsonic_client.dart';
@@ -114,6 +115,35 @@ class _SettingsPageState extends State<SettingsPage> {
             onTap: () => Navigator.of(context).push(
               MaterialPageRoute<void>(builder: (_) => const DebugPage()),
             ),
+          ),
+          const Text('Send logs to Claude',
+              style: TextStyle(fontWeight: FontWeight.bold)),
+          const SizedBox(height: 4),
+          const Text(
+            'Failures are posted to a private GitHub issue so Claude can read them '
+            'and find the cause. Create a fine-grained token for the beatdeck '
+            'repository only, with Issues: read and write, and paste it here.',
+            style: TextStyle(fontSize: 12),
+          ),
+          TextField(
+            controller: TextEditingController(text: LogUpload.token),
+            obscureText: true,
+            decoration: const InputDecoration(labelText: 'GitHub token'),
+            onChanged: (v) {
+              LogUpload.token = v;
+              LogUpload.save();
+            },
+          ),
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            title: const Text('Send failures automatically'),
+            subtitle: Text(LogUpload.status.isEmpty ? 'Off until a token is set' : LogUpload.status),
+            value: LogUpload.auto,
+            onChanged: (v) {
+              LogUpload.auto = v;
+              LogUpload.save();
+              setState(() {});
+            },
           ),
           SwitchListTile(
             contentPadding: EdgeInsets.zero,

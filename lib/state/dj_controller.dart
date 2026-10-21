@@ -584,6 +584,7 @@ class DjController extends ChangeNotifier {
     if (!automixOn) return; // stopped while loading
     if (!ok) {
       automixOn = false;
+      DebugLog.flow('Automix start', false, 'none of the tracks would load');
       DebugLog.fail('automix', 'none of the tracks would load');
       automixStatus = 'None of the tracks would load';
       notifyListeners();
@@ -599,6 +600,7 @@ class DjController extends ChangeNotifier {
     _automixDeck = 0;
     _automixIndex = 0;
     _automixPlayed.add(_trackKey(_automixQueue.first));
+    DebugLog.flow('Automix start', true);
     DebugLog.ok('automix', 'playing first track on deck 1: ${_automixQueue.first.split(RegExp(r'[\\/]')).last}');
     _automixPreloaded = false;
     _automixFading = false;
@@ -680,6 +682,7 @@ class DjController extends ChangeNotifier {
             _automixPreloaded = true;
           } else {
             // Skip a track that will not load.
+            DebugLog.flow('Automix mix to next deck', false, 'next track would not load');
             DebugLog.fail('automix', 'next track would not load, skipped: ${_automixQueue[next].split(RegExp(r'[\\/]')).last}');
             _automixQueue.removeAt(next);
             _flowNext = null;
@@ -752,6 +755,7 @@ class DjController extends ChangeNotifier {
     if (elapsed >= automixFadeSeconds) {
       _engine.play(cur, false);
       deck(cur).playing = false;
+      DebugLog.flow('Automix mix to next deck', true);
       DebugLog.ok('automix', 'mix finished, deck ${other + 1} now playing');
       _automixDeck = other;
       final prevTrack = _flowOf(_automixQueue[_automixIndex]);
@@ -822,6 +826,7 @@ class DjController extends ChangeNotifier {
       } catch (e) {
         detail = 'Android will not let the app open this file ($e).';
       }
+      DebugLog.flow('Load a track on a deck', false, detail);
       DebugLog.add('load', 'FAILED $path -> $detail | ${await DebugLog.describeFile(path)}');
       engineError = detail.isNotEmpty
           ? 'Could not load $name - $detail'
@@ -830,6 +835,7 @@ class DjController extends ChangeNotifier {
       return false;
     }
     loadedPaths.add(path);
+    DebugLog.flow('Load a track on a deck', true);
     DebugLog.ok('load', 'deck ${deckIndex + 1} loaded: ${path.split(RegExp(r'[\\/]')).last}');
     d.path = path;
     d.title = title ?? path.split(RegExp(r'[\\/]')).last;

@@ -14,6 +14,9 @@ class SlskSetup {
   /// Set at start-up so finished downloads can join a running automix.
   static DjController? dj;
 
+  /// Set when Soulseek is wired up, for the self-test.
+  static LibraryController? library;
+
   /// Folder the user picked, if any.
   static String? chosen;
 
@@ -45,6 +48,7 @@ class SlskSetup {
   /// Every finished download goes straight into the library, wherever it was
   /// saved, and is analysed for tempo and key.
   static void wire(LibraryController lib) {
+    library = lib;
     soulseek.downloadDir = () => dirFor(lib);
     soulseek.storageCheck = (size) => StorageGuard.blockReason(dirFor(lib), size);
     dj?.onFileMissing = (_) => lib.removeMissing();
