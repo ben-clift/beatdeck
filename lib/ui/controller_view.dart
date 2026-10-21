@@ -593,7 +593,7 @@ class _DeckPanelState extends State<_DeckPanel> {
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  d.loaded ? d.title : 'Tap to load a track',
+                  d.loaded ? d.title : (widget.dj.deckHint(i) ?? 'Tap to load a track'),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(

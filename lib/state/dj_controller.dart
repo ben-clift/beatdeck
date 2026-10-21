@@ -548,6 +548,7 @@ class DjController extends ChangeNotifier {
     if (Dislikes.instance.hasPath(path)) return true; // deleted = not liked
     final k = _trackKey(path);
     if (_automixPlayed.contains(k)) return true;
+    if (_replayOk.contains(k)) return false; // replayed on purpose, nothing newer
     final t = _recentPlayed[k];
     return t != null &&
         DateTime.now().millisecondsSinceEpoch - t < _recentHours * 3600 * 1000;
@@ -573,6 +574,27 @@ class DjController extends ChangeNotifier {
   }
 
   bool playedRecently(String path) => _wasPlayed(path);
+
+  // Tracks left out of the queue because they played in the last 24 hours.
+  // Used only as a last resort so the music never stops.
+  final List<String> _replayPool = [];
+  final Set<String> _replayOk = {};
+
+  int? _replayPick() {
+    while (_replayPool.isNotEmpty) {
+      _replayPool.sort((a, b) =>
+          (_recentPlayed[_trackKey(a)] ?? 0).compareTo(_recentPlayed[_trackKey(b)] ?? 0));
+      final path = _replayPool.removeAt(0);
+      if (!File(path).existsSync() || Dislikes.instance.hasPath(path)) continue;
+      if (_automixQueue.any((q) => _trackKey(q) == _trackKey(path))) continue;
+      _replayOk.add(_trackKey(path));
+      _automixQueue.add(path);
+      _learnAfterAnalysis(path);
+      DebugLog.add('automix', 'nothing new yet: replaying the track played longest ago: ${path.split(RegExp(r'[\\/]')).last}');
+      return _automixQueue.length - 1;
+    }
+    return null;
+  }
 
   // ---- Play counts (for the "Most played" sort) ----------------------------
   final Map<String, int> _plays = {};
@@ -875,6 +897,16 @@ class DjController extends ChangeNotifier {
       DebugLog.add('automix', 'everything was played in the last 24 hours: starting with the oldest, new tracks will be fetched');
     }
     _automixPlayed.clear();
+    _replayOk.clear();
+    _replayPool
+      ..clear()
+      ..addAll({
+        for (final p in paths)
+          if (File(p).existsSync() &&
+              !Dislikes.instance.hasPath(p) &&
+              !_automixQueue.any((q) => _trackKey(q) == _trackKey(p)))
+            p,
+      });
     automixFadeSeconds = fadeSeconds.clamp(4.0, 180.0).toDouble();
     _baseFade = automixFadeSeconds;
     _flowNext = null;
@@ -1015,11 +1047,16 @@ class DjController extends ChangeNotifier {
     // The fit relaxes as the end gets close, so something always plays:
     // same genre and tempo, then tempo within 15 %, then anything unplayed.
     final tier = remaining > 45 ? 0 : (remaining > 20 ? 1 : 2);
-    final next = _nextUnplayed(tier: tier);
+    var next = _nextUnplayed(tier: tier);
+    // Never silent: with the end near and nothing new yet, replay the track
+    // played longest ago (never a deleted one) while the helper keeps looking.
+    if (next == null && remaining <= 25 && _replayPick() != null) {
+      next = _nextUnplayed(tier: 2);
+    }
     if (next == null) {
       // Nothing to put on the other deck yet: say so, and keep asking.
       final text = (fetchBusy?.call() ?? false)
-          ? 'Finding the next track: ${fetchStatus?.call() ?? ''}'
+          ? (fetchStatus?.call() ?? 'Finding the next track…')
           : 'No track fits yet. Looking for one (Soulseek helper), or add music.';
       if (automixStatus != text) {
         automixStatus = text;
@@ -1115,8 +1152,17 @@ class DjController extends ChangeNotifier {
   /// True while tracks are still being downloaded for automix.
   bool Function()? fetchBusy;
 
-  /// What the helper is doing now (for the status line).
+  /// What the helper is doing now (for the status line and the empty deck).
   String Function()? fetchStatus;
+
+  void refresh() => notifyListeners();
+
+  /// Text for an empty deck while automix is looking for its next track.
+  String? deckHint(int i) {
+    if (!automixOn || _automixDeck < 0 || i == _automixDeck) return null;
+    final st = fetchStatus?.call() ?? '';
+    return st.isNotEmpty ? st : automixStatus;
+  }
 
   /// Automix started or stopped (the app switches AUTO and Soulseek with it).
   void Function()? onAutomixStart;
@@ -1127,7 +1173,8 @@ class DjController extends ChangeNotifier {
   /// other deck if needed and start it straight away.
   bool _automixDeckEnded(int cur, int other) {
     final waiting = fetchBusy?.call() ?? false;
-    final next = _nextUnplayed(tier: 0) ?? (waiting ? null : _nextUnplayed(tier: 2));
+    var next = _nextUnplayed(tier: 0) ?? (waiting ? null : _nextUnplayed(tier: 2));
+    if (next == null && _replayPick() != null) next = _nextUnplayed(tier: 2);
     if (next == null) {
       // The deck ended and nothing suitable is queued: stay on, ask for a
       // match, and start it the moment it arrives.

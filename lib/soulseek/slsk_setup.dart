@@ -68,6 +68,7 @@ class SlskSetup {
     dj?.fetchBusy = () => AutoFetch.instance.running || AutoFetch.instance.manualPending > 0;
     dj?.genreOf = lib.genreOf;
     dj?.fetchStatus = () => AutoFetch.instance.status;
+    AutoFetch.instance.addListener(() => dj?.refresh());
     // Starting automix switches AUTO on and makes sure Soulseek is signed in.
     dj?.onAutomixStart = () {
       if (!autoFetchForAutomix) return;
@@ -87,8 +88,8 @@ class SlskSetup {
         DebugLog.add('automix', 'cannot fetch a match: auto-fetch is busy');
         return;
       }
-      // Underground tracks with the playing track's genre and tempo.
-      af.startMatching(
+      // One pipeline: shortlist, search, download, library, automix.
+      af.findNext(
         genre: genre,
         artist: artist,
         title: title,

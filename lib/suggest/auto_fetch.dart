@@ -690,6 +690,200 @@ class AutoFetch extends ChangeNotifier {
     );
   }
 
+
+  // ---- Next track pipeline ---------------------------------------------------
+  // One owner for "automix needs a track": build a shortlist from the shop
+  // lists (genre and tempo of the playing track), search Soulseek one
+  // candidate after another, keep up to three downloads going at once, and
+  // take the first complete file. The file joins the library and automix
+  // through the normal download hook; the stage is shown on the empty deck.
+  bool _pipeline = false;
+  bool get pipelineBusy => _pipeline;
+  static final Set<String> _triedThisSession = {};
+
+  Future<List<Suggestion>> _shortlist(String g, double? lo, double? hi) async {
+    final lib = _lib;
+    final out = <Suggestion>[];
+    final seen = <String>{};
+    void add(Iterable<Suggestion> l) {
+      for (final x in l) {
+        final k = x.query.toLowerCase();
+        if (Dislikes.instance.hasTrack(x.artist, x.title)) continue;
+        if (lib != null && _inLibrary(lib, x)) continue;
+        if (_triedThisSession.contains(k)) continue;
+        if (seen.add(k)) out.add(x);
+      }
+    }
+
+    var tx = <Suggestion>[];
+    var hw = <Suggestion>[];
+    if (useTrax) {
+      try {
+        tx = await Traxsource.matching(g, bpmMin: lo, bpmMax: hi);
+      } catch (e) {
+        DebugLog.add('fetch', 'Traxsource list not available: $e');
+      }
+    }
+    if (useHardwax) {
+      try {
+        hw = await Hardwax.fetch(_hardwaxSlug(g));
+      } catch (e) {
+        DebugLog.add('fetch', 'Hardwax list not available: $e');
+      }
+    }
+    tx.shuffle();
+    hw.shuffle();
+    // Traxsource first (it has the tempo), then Hardwax, alternating.
+    final mixed = <Suggestion>[];
+    for (var i = 0; i < tx.length || i < hw.length; i++) {
+      if (i < tx.length) mixed.add(tx[i]);
+      if (i < hw.length) mixed.add(hw[i]);
+    }
+    add(mixed);
+    DebugLog.add('fetch', 'shortlist for "$g": ${tx.length} Traxsource + ${hw.length} Hardwax, ${out.length} usable');
+    if (out.length < 5 && (useTrax || useHardwax)) {
+      DebugLog.add('fetch', 'shop lists are short, adding the underground list');
+      try {
+        add(await _service.underground(g, bpmMin: lo, bpmMax: hi, skip: seen, want: 10));
+      } catch (_) {}
+    }
+    return out.take(20).toList();
+  }
+
+  /// Searches for [s], picks the best file and starts its download. Null when
+  /// nothing usable was found.
+  Future<_Flight?> _startFlight(Suggestion s) async {
+    _triedThisSession.add(s.query.toLowerCase());
+    final dir = _lib == null ? null : SlskSetup.dirFor(_lib!);
+    if (dir != null) {
+      final reason = await StorageGuard.blockReason(dir, 60 * 1024 * 1024);
+      if (reason != null) {
+        _stop = true;
+        _say('Next track: stopped. $reason');
+        return null;
+      }
+    }
+    _say('Next track: searching for ${s.artist} - ${s.title}');
+    soulseek.search(s.query);
+    var waited = 0;
+    await Future<void>.delayed(const Duration(seconds: 2));
+    while (soulseek.searching && waited < 10 && !_stop) {
+      await Future<void>.delayed(const Duration(seconds: 1));
+      waited++;
+    }
+    final best = _pick(s, null);
+    if (best == null) {
+      DebugLog.add('fetch', 'no good match for ${s.artist} - ${s.title}');
+      return null;
+    }
+    soulseek.download(best);
+    for (final d in soulseek.downloads) {
+      if (d.user == best.user && d.remotePath == best.path) {
+        DebugLog.add('fetch', 'downloading ${best.fileName}');
+        return _Flight(s, d, best.fileName);
+      }
+    }
+    return null;
+  }
+
+  /// Finds a track for automix and puts it in the library. Returns when one
+  /// has downloaded, or when it gave up.
+  Future<void> findNext({
+    required String genre,
+    required String artist,
+    required String title,
+    required double bpm,
+    required LibraryController library,
+  }) async {
+    if (running || _pipeline) return;
+    _pipeline = true;
+    running = true;
+    _lib = library;
+    _stop = false;
+    fetched = 0;
+    limit = 1;
+    log.clear();
+    notifyListeners();
+    final flights = <_Flight>[];
+    try {
+      var g = genre.trim();
+      if (g.isEmpty) g = genreForBpm(bpm);
+      final double? lo = bpm > 1 ? bpm * 0.93 : null;
+      final double? hi = bpm > 1 ? bpm * 1.07 : null;
+      DebugLog.add('fetch',
+          'next track: genre "$g", ${lo == null ? 'any tempo' : '${lo.round()}-${hi!.round()} BPM'}');
+      if (!soulseek.online) {
+        _say('Next track: waiting for Soulseek to sign in…');
+        for (var i = 0; i < 60 && !_stop && !soulseek.online; i++) {
+          await Future<void>.delayed(const Duration(seconds: 2));
+        }
+        if (!soulseek.online) {
+          _say('Next track: could not sign in to Soulseek (check name and password)');
+          return;
+        }
+      }
+      _say('Next track: building a shortlist for $g');
+      var list = await _shortlist(g, lo, hi);
+      if (list.isEmpty && _triedThisSession.isNotEmpty) {
+        // Everything on the lists was tried: start over once.
+        _triedThisSession.clear();
+        list = await _shortlist(g, lo, hi);
+      }
+      if (list.isEmpty) {
+        _say('Next track: the shop lists have nothing for $g');
+        return;
+      }
+      String? winner;
+      var i = 0;
+      final started = DateTime.now();
+      while (!_stop && winner == null) {
+        for (final f in [...flights]) {
+          if (f.dl.state == DlState.done && f.dl.savedPath != null) {
+            winner = f.dl.savedPath;
+            break;
+          }
+          if (f.dl.state == DlState.failed) {
+            flights.remove(f);
+            DebugLog.add('fetch', 'download failed: ${f.name}');
+          }
+        }
+        if (winner != null) break;
+        if (DateTime.now().difference(started).inMinutes >= 6) {
+          DebugLog.add('fetch', 'next track: gave up after 6 minutes');
+          break;
+        }
+        if (i >= list.length && flights.isEmpty) break;
+        if (i < list.length && flights.length < 3) {
+          final f = await _startFlight(list[i++]);
+          if (f != null) flights.add(f);
+        } else {
+          if (flights.isNotEmpty) {
+            final f = flights.first;
+            _say('Next track: downloading ${f.name} ${(f.dl.progress * 100).round()}%');
+          }
+          await Future<void>.delayed(const Duration(seconds: 1));
+        }
+      }
+      for (final f in flights) {
+        if (f.dl.state != DlState.done) soulseek.removeDownload(f.dl);
+      }
+      if (winner != null) {
+        _fetched.add(winner);
+        fetched = 1;
+        DebugLog.ok('fetch', 'next track downloaded: $winner');
+        _say('Next track: downloaded, checking it');
+      } else if (!_stop) {
+        _say('Next track: nothing usable found on Soulseek yet');
+      }
+    } catch (e) {
+      _say('Next track: stopped ($e)');
+    } finally {
+      _pipeline = false;
+      running = false;
+      notifyListeners();
+    }
+  }
+
   /// The Hardwax tag page that fits a genre name.
   static String _hardwaxSlug(String genre) {
     switch (genreFamily(genre)) {
@@ -891,4 +1085,11 @@ class AutoFetch extends ChangeNotifier {
     }
     return best;
   }
+}
+
+class _Flight {
+  _Flight(this.s, this.dl, this.name);
+  final Suggestion s;
+  final SlskDownload dl;
+  final String name;
 }
