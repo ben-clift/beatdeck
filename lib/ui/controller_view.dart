@@ -4,6 +4,8 @@ import 'dart:math' as math;
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
+import 'package:sidedeck/debug/debug_log.dart';
 import 'package:sidedeck/engine/music_utils.dart';
 import 'package:sidedeck/state/dj_controller.dart';
 import 'package:sidedeck/state/dislikes.dart';
@@ -221,25 +223,57 @@ class _ControllerViewState extends State<ControllerView> {
     final messenger = ScaffoldMessenger.of(context);
     if (dj.recording) {
       final path = dj.stopRecording();
+      final ok = path != null && File(path).existsSync() && File(path).lengthSync() > 1000;
       messenger.showSnackBar(SnackBar(
-        content: Text(path == null ? 'Recording stopped' : 'Saved $path'),
+        duration: const Duration(seconds: 8),
+        content: Text(path == null
+            ? 'Recording stopped'
+            : ok
+                ? 'Saved ${path.split(RegExp(r'[\\/]')).last}'
+                : 'Recording is empty: nothing was playing?'),
+        action: ok
+            ? SnackBarAction(
+                label: 'Share',
+                onPressed: () => SharePlus.instance.share(ShareParams(files: [XFile(path)])),
+              )
+            : null,
       ));
       final f = widget.library.folderPath;
-      if (f != null && f.isNotEmpty) widget.library.scanDirectory(f, persist: false);
+      if (ok && f != null && f.isNotEmpty && path.startsWith(f)) {
+        widget.library.scanDirectory(f, persist: false);
+      }
       return;
     }
-    var dir = widget.library.folderPath;
-    if (dir == null || dir.isEmpty) {
+    // The music folder is tried first; Android often refuses writes there,
+    // so fall back to the app's own folder, which always works.
+    final dirs = <String>[];
+    final lib = widget.library.folderPath;
+    if (lib != null && lib.isNotEmpty) dirs.add(lib);
+    try {
       final ext = await getExternalStorageDirectory();
-      final d = Directory('${ext?.path ?? (await getTemporaryDirectory()).path}/recordings');
-      await d.create(recursive: true);
-      dir = d.path;
+      if (ext != null) dirs.add('${ext.path}/recordings');
+    } catch (_) {}
+    dirs.add('${(await getApplicationDocumentsDirectory()).path}/recordings');
+    String? path;
+    for (final d in dirs) {
+      try {
+        await Directory(d).create(recursive: true);
+      } catch (_) {}
+      path = dj.startRecording(d);
+      if (path != null) break;
+      DebugLog.add('record', 'could not write to $d');
     }
-    final path = dj.startRecording(dir);
     if (path == null) {
       messenger.showSnackBar(
-        const SnackBar(content: Text('Could not start recording')),
+        const SnackBar(content: Text('Could not start recording (no folder to write to)')),
       );
+    } else {
+      DebugLog.add('record', 'recording to $path');
+      if (!path.startsWith(lib ?? '\u0000')) {
+        messenger.showSnackBar(SnackBar(
+          content: Text('Recording in the app folder: ${path.split(RegExp(r'[\\/]')).last}'),
+        ));
+      }
     }
   }
 
