@@ -38,6 +38,9 @@ class _AutoFetchPageState extends State<AutoFetchPage> {
   int _loadedFor = -1;
   final Set<int> _picked = {};
   bool _underground = false;
+  bool _classics = false;
+  int _era = 1950; // decade start; 0 means everything before 1960
+  final _style = TextEditingController();
   bool _yearFilter = false;
   RangeValues _years = const RangeValues(1995, 2026);
 
@@ -57,7 +60,14 @@ class _AutoFetchPageState extends State<AutoFetchPage> {
       _picked.clear();
     });
     final svc = SuggestService();
-    final t = _underground
+    final t = _classics
+        ? await svc.classics(
+            _era == 0 ? 1920 : _era,
+            _era == 0 ? 1959 : _era + 9,
+            style: _style.text,
+            skip: _seen,
+          )
+        : _underground
         ? await svc.underground(
             name,
             bpmMin: _chartTempo ? _bpm.start : null,
@@ -139,6 +149,7 @@ class _AutoFetchPageState extends State<AutoFetchPage> {
   void dispose() {
     _remember();
     _genre.dispose();
+    _style.dispose();
     _pasted.dispose();
     super.dispose();
   }
@@ -203,6 +214,46 @@ class _AutoFetchPageState extends State<AutoFetchPage> {
                     _loadTracks();
                   },
                 ),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Classics, before 1960'),
+                subtitle: const Text('Old records by decade. Tempo is not used.',
+                    style: TextStyle(fontSize: 12)),
+                value: _classics,
+                onChanged: (v) {
+                  setState(() {
+                    _classics = v;
+                    _tracks = const [];
+                  });
+                  _loadTracks();
+                },
+              ),
+              if (_classics) ...[
+                Wrap(
+                  spacing: 6,
+                  children: [
+                    for (final d in const [0, 1920, 1930, 1940, 1950])
+                      ChoiceChip(
+                        label: Text(d == 0 ? 'All pre-1960' : '${d}s'),
+                        selected: _era == d,
+                        onSelected: (_) {
+                          setState(() {
+                            _era = d;
+                            _tracks = const [];
+                          });
+                          _loadTracks();
+                        },
+                      ),
+                  ],
+                ),
+                TextField(
+                  controller: _style,
+                  decoration: const InputDecoration(
+                    labelText: 'Style (optional): jazz, swing, blues, doo-wop…',
+                  ),
+                  onSubmitted: (_) => _loadTracks(),
+                ),
+              ],
               SwitchListTile(
                 contentPadding: EdgeInsets.zero,
                 title: const Text('Underground'),

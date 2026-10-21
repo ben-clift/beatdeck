@@ -231,6 +231,68 @@ class SuggestService {
     return out;
   }
 
+  /// Older music for a decade (1920 to 1950), found through playlists named
+  /// for that era and style, then kept only if the track's own release year
+  /// falls inside [from]..[to]. Tempo is not required: old tracks rarely have it.
+  Future<List<Suggestion>> classics(
+    int from,
+    int to, {
+    String style = '',
+    Set<String> skip = const {},
+    int want = 40,
+  }) async {
+    final decades = <int>{for (var y = from; y <= to; y += 10) (y ~/ 10) * 10};
+    final styles = style.trim().isEmpty
+        ? ['hits', 'jazz', 'swing', 'blues', 'big band', 'rock and roll', 'soul', 'latin', 'dance', 'vocal']
+        : [style.trim()];
+    final raw = <(int, String, String)>[];
+    final seenIds = <int>{};
+    final qs = <String>[
+      for (final d in decades)
+        for (final s in styles) '${d}s $s',
+    ]..shuffle();
+    for (final q in qs.take(12)) {
+      try {
+        final pl = await _get(
+            'https://api.deezer.com/search/playlist?q=${Uri.encodeQueryComponent(q)}&limit=6');
+        final lists = [...((pl['data'] as List?) ?? const [])]..shuffle();
+        for (final l in lists.take(2)) {
+          try {
+            final tr = await _get(
+                'https://api.deezer.com/playlist/${(l as Map)['id']}/tracks?limit=60');
+            for (final t in ((tr['data'] as List?) ?? const [])) {
+              final m = t as Map;
+              final artist = ((m['artist'] as Map?)?['name'] ?? '') as String;
+              final title = (m['title'] ?? '') as String;
+              if (skip.contains('$artist $title'.toLowerCase())) continue;
+              if (seenIds.add(m['id'] as int)) raw.add((m['id'] as int, title, artist));
+            }
+          } catch (_) {}
+        }
+      } catch (_) {}
+      if (raw.length >= want * 5) break;
+    }
+    raw.shuffle();
+    final out = <Suggestion>[];
+    for (var i = 0; i < raw.length && out.length < want; i += 6) {
+      final got = await Future.wait(raw.skip(i).take(6).map((r) async {
+        double bpm = 0;
+        var year = 0;
+        try {
+          final tr = await _get('https://api.deezer.com/track/${r.$1}');
+          bpm = ((tr['bpm'] as num?) ?? 0).toDouble();
+          year = yearOf(tr);
+        } catch (_) {}
+        return Suggestion(r.$3, r.$2, bpm, 'Classics', year);
+      }));
+      for (final s in got) {
+        if (s.year >= from && s.year <= to) out.add(s);
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 400));
+    }
+    return out;
+  }
+
   /// Deezer's genres, as (id, name), for the chart picker.
   Future<List<(int, String)>> genres() async {
     try {
