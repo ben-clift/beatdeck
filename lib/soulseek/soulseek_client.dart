@@ -218,10 +218,15 @@ class SoulseekClient extends ChangeNotifier {
     try {
       Uint8List? body;
       while ((body = _serverBuf.next()) != null) {
-        _onServerMessage(body!);
+        // One message the app cannot read must not end the connection.
+        try {
+          _onServerMessage(body!);
+        } catch (e) {
+          DebugLog.add('soulseek', 'a server message could not be read, ignored: $e');
+        }
       }
-    } catch (_) {
-      _serverLost('Unexpected reply from the server');
+    } catch (e) {
+      _serverLost('Unexpected reply from the server ($e)');
     }
   }
 
