@@ -1273,7 +1273,12 @@ class DjController extends ChangeNotifier {
     } else {
       // Try each track until one loads.
       while (_automixQueue.isNotEmpty && automixOn) {
-        ok = await loadFile(0, _automixQueue.first);
+        _quietLoad = true;
+        try {
+          ok = await loadFile(0, _automixQueue.first);
+        } finally {
+          _quietLoad = false;
+        }
         if (ok) break;
         DebugLog.add('automix', 'first track would not load, skipping: ${_automixQueue.first}');
         _automixQueue.removeAt(0);
@@ -1488,7 +1493,12 @@ class DjController extends ChangeNotifier {
       final bad = await AudioCheck.problem(path);
       var ok = false;
       if (bad == null) {
-        ok = await loadFile(other, path);
+        _quietLoad = true;
+        try {
+          ok = await loadFile(other, path);
+        } finally {
+          _quietLoad = false;
+        }
       } else {
         DebugLog.add('automix', 'not loaded (${path.split(RegExp(r'[\\/]')).last}): $bad');
         failedPaths.add(path);
@@ -1501,6 +1511,8 @@ class DjController extends ChangeNotifier {
         _upNext = null;
         _flowNext = null;
         automixStatus = 'Skipped a track that would not load';
+        _loadHold = DateTime(2000);
+        _askForTrackNow();
         return;
       }
       final out = deck(1 - other);
@@ -1659,7 +1671,13 @@ class DjController extends ChangeNotifier {
     () async {
       try {
         if (!_automixPreloaded) {
-          final ok = await loadFile(other, _automixQueue[next]);
+          _quietLoad = true;
+          bool ok;
+          try {
+            ok = await loadFile(other, _automixQueue[next]);
+          } finally {
+            _quietLoad = false;
+          }
           if (!automixOn) return;
           if (!ok) {
             DebugLog.flow('Automix mix to next deck', false, 'next track would not load');
@@ -1929,6 +1947,8 @@ class DjController extends ChangeNotifier {
   /// Called when a library file turns out to be missing.
   void Function(String path)? onFileMissing;
 
+  bool _quietLoad = false;
+
   Future<bool> loadFile(
     int deckIndex,
     String path, {
@@ -1986,9 +2006,12 @@ class DjController extends ChangeNotifier {
       }
       DebugLog.flow('Load a track on a deck', false, detail);
       DebugLog.add('load', 'FAILED $path -> $detail | ${await DebugLog.describeFile(path)}');
-      engineError = detail.isNotEmpty
-          ? 'Could not load $name - $detail'
-          : 'Could not decode $name (need MP3, WAV, FLAC, Opus, or AAC M4A).';
+      // Auto DJ loading for itself: no error banner, it just finds another.
+      if (!_quietLoad) {
+        engineError = detail.isNotEmpty
+            ? 'Could not load $name - $detail'
+            : 'Could not decode $name (need MP3, WAV, FLAC, Opus, or AAC M4A).';
+      }
       notifyListeners();
       return false;
     }
