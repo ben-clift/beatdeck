@@ -4,6 +4,7 @@ import 'package:sidedeck/engine/usb_output.dart';
 import 'package:sidedeck/debug/debug_log.dart';
 import 'package:sidedeck/debug/log_upload.dart';
 import 'package:sidedeck/ui/debug_page.dart';
+import 'package:sidedeck/ui/deleted_tracks_page.dart';
 import 'package:sidedeck/state/dislikes.dart';
 import 'package:sidedeck/state/dj_controller.dart';
 import 'package:sidedeck/subsonic/subsonic_client.dart';
@@ -112,15 +113,15 @@ class _SettingsPageState extends State<SettingsPage> {
           ),
           const Divider(height: 32),
           ListTile(
+            leading: const Icon(Icons.delete_outline),
             title: Text('Deleted tracks (${Dislikes.instance.count})'),
-            subtitle: const Text('Tracks you deleted from a playlist are never picked or searched for. Tap to forget them all.'),
+            subtitle: const Text('See what you deleted. These are never picked or searched for.'),
+            trailing: const Icon(Icons.chevron_right),
             onTap: () async {
-              await Dislikes.instance.clear();
-              if (!mounted) return;
-              setState(() {});
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Deleted-tracks list cleared')),
+              await Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const DeletedTracksPage()),
               );
+              if (mounted) setState(() {});
             },
           ),
           ListTile(

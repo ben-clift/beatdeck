@@ -584,6 +584,23 @@ class LibraryController extends ChangeNotifier {
         case TrackSort.added:
           c = a.modifiedMs.compareTo(b.modifiedMs);
           break;
+        case TrackSort.genre:
+          // Tracks with no genre go last; same genre by name.
+          if (a.genre.isEmpty != b.genre.isEmpty) {
+            c = a.genre.isEmpty ? 1 : -1;
+            return sortDesc ? -c : c;
+          }
+          c = a.genre.toLowerCase().compareTo(b.genre.toLowerCase());
+          if (c == 0) c = a.title.toLowerCase().compareTo(b.title.toLowerCase());
+          break;
+        case TrackSort.year:
+          if ((a.year == 0) != (b.year == 0)) {
+            c = a.year == 0 ? 1 : -1;
+            return sortDesc ? -c : c;
+          }
+          c = a.year.compareTo(b.year);
+          if (c == 0) c = a.title.toLowerCase().compareTo(b.title.toLowerCase());
+          break;
         default:
           c = compareTrackSort(sort, a.title, a.artist, a.bpm, a.key, b.title,
               b.artist, b.bpm, b.key);

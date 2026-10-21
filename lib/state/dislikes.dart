@@ -11,7 +11,11 @@ class Dislikes extends ChangeNotifier {
   static final Dislikes instance = Dislikes._();
 
   // Each entry: full normalised file name, artist, title (normalised).
-  final List<({String full, String artist, String title})> _items = [];
+  final List<({String full, String artist, String title, String name, int at})> _items = [];
+
+  /// Newest first, for the log page.
+  List<({String name, int at})> get log =>
+      [for (final i in _items.reversed) (name: i.name, at: i.at)];
   bool _loaded = false;
 
   static String _norm(String s) => s
@@ -34,7 +38,13 @@ class Dislikes extends ChangeNotifier {
       final p = await SharedPreferences.getInstance();
       for (final raw in p.getStringList('disliked_v1') ?? const <String>[]) {
         final m = jsonDecode(raw) as List;
-        _items.add((full: m[0] as String, artist: m[1] as String, title: m[2] as String));
+        _items.add((
+          full: m[0] as String,
+          artist: m[1] as String,
+          title: m[2] as String,
+          name: m.length > 3 ? m[3] as String : (m[1] as String).isEmpty ? m[2] as String : '${m[1]} - ${m[2]}',
+          at: m.length > 4 ? m[4] as int : 0,
+        ));
       }
     } catch (_) {}
     notifyListeners();
@@ -44,15 +54,21 @@ class Dislikes extends ChangeNotifier {
     try {
       final p = await SharedPreferences.getInstance();
       await p.setStringList('disliked_v1', [
-        for (final i in _items) jsonEncode([i.full, i.artist, i.title]),
+        for (final i in _items) jsonEncode([i.full, i.artist, i.title, i.name, i.at]),
       ]);
     } catch (_) {}
   }
 
-  ({String full, String artist, String title}) _entryFor(String path) {
+  ({String full, String artist, String title, String name, int at}) _entryFor(String path) {
     final name = _nameOf(path);
     final parsed = splitTitleArtist(name);
-    return (full: _norm(name), artist: _norm(parsed.artist), title: _norm(parsed.title));
+    return (
+      full: _norm(name),
+      artist: _norm(parsed.artist),
+      title: _norm(parsed.title),
+      name: name,
+      at: DateTime.now().millisecondsSinceEpoch,
+    );
   }
 
   /// A file the DJ disliked (the same file, or a copy of it).
@@ -94,6 +110,15 @@ class Dislikes extends ChangeNotifier {
   Future<void> remove(String path) async {
     final e = _entryFor(path);
     _items.removeWhere((i) => i.full == e.full);
+    notifyListeners();
+    await _save();
+  }
+
+  /// Allow one logged track again (by its position in [log]).
+  Future<void> allowAgain(int logIndex) async {
+    final idx = _items.length - 1 - logIndex;
+    if (idx < 0 || idx >= _items.length) return;
+    _items.removeAt(idx);
     notifyListeners();
     await _save();
   }

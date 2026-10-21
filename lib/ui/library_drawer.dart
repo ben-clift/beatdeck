@@ -425,6 +425,8 @@ class _LibraryOverlayState extends State<LibraryOverlay> {
                       _sortItem(TrackSort.artist, 'Artist'),
                       _sortItem(TrackSort.bpm, 'BPM'),
                       _sortItem(TrackSort.key, 'Key'),
+                      _sortItem(TrackSort.genre, 'Genre'),
+                      _sortItem(TrackSort.year, 'Year'),
                       _sortItem(TrackSort.length, 'Length'),
                       _sortItem(TrackSort.added, 'Newest'),
                     ],
