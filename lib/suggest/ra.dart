@@ -130,7 +130,7 @@ class RaSource {
     final t = prefs.getInt(_tryKey);
     if (t != null &&
         DateTime.now().difference(DateTime.fromMillisecondsSinceEpoch(t)) < _retryAfter) {
-      return await _cached(stale: true) ?? const [];
+      return await _cached(stale: true) ?? <Suggestion>[];
     }
     await prefs.setInt(_tryKey, DateTime.now().millisecondsSinceEpoch);
     final urls = [..._pages];
@@ -156,7 +156,7 @@ class RaSource {
     }
     if (all.isEmpty) {
       DebugLog.add('ra', 'nothing found on the RA pages (they may need JavaScript or block automated reads)');
-      return await _cached(stale: true) ?? const [];
+      return await _cached(stale: true) ?? <Suggestion>[];
     }
     try {
       await prefs.setString(

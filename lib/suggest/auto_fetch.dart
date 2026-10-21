@@ -13,6 +13,7 @@ import 'package:sidedeck/state/dislikes.dart';
 import 'package:sidedeck/automix/genre_family.dart';
 import 'package:sidedeck/suggest/genres.dart';
 import 'package:sidedeck/suggest/hardwax.dart';
+import 'package:sidedeck/engine/audio_check.dart';
 import 'package:sidedeck/suggest/ra.dart';
 import 'package:sidedeck/suggest/taste.dart';
 import 'package:sidedeck/suggest/traxsource.dart';
@@ -724,14 +725,14 @@ class AutoFetch extends ChangeNotifier {
     var hw = <Suggestion>[];
     if (useTrax) {
       try {
-        tx = await Traxsource.matching(g, bpmMin: lo, bpmMax: hi);
+        tx = [...await Traxsource.matching(g, bpmMin: lo, bpmMax: hi)];
       } catch (e) {
         DebugLog.add('fetch', 'Traxsource list not available: $e');
       }
     }
     if (useHardwax) {
       try {
-        hw = await Hardwax.fetch(_hardwaxSlug(g));
+        hw = [...await Hardwax.fetch(_hardwaxSlug(g))];
       } catch (e) {
         DebugLog.add('fetch', 'Hardwax list not available: $e');
       }
@@ -739,7 +740,7 @@ class AutoFetch extends ChangeNotifier {
     var ra = <Suggestion>[];
     if (useRa) {
       try {
-        ra = await RaSource.all();
+        ra = [...await RaSource.all()];
       } catch (e) {
         DebugLog.add('fetch', 'RA list not available: $e');
       }
@@ -866,8 +867,20 @@ class AutoFetch extends ChangeNotifier {
       while (!_stop && winner == null) {
         for (final f in [...flights]) {
           if (f.dl.state == DlState.done && f.dl.savedPath != null) {
-            winner = f.dl.savedPath;
-            break;
+            // Look at the file before it goes anywhere near a deck.
+            final bad = await AudioCheck.problem(f.dl.savedPath!);
+            if (bad == null) {
+              winner = f.dl.savedPath;
+              break;
+            }
+            DebugLog.add('fetch', 'rejected ${f.name}: $bad. Deleting it and trying another');
+            _say('Next track: ${f.name} is not usable ($bad), trying another');
+            flights.remove(f);
+            try {
+              await File(f.dl.savedPath!).delete();
+            } catch (_) {}
+            soulseek.removeDownload(f.dl);
+            continue;
           }
           if (f.dl.state == DlState.failed) {
             flights.remove(f);
@@ -881,8 +894,13 @@ class AutoFetch extends ChangeNotifier {
         }
         if (i >= list.length && flights.isEmpty) break;
         if (i < list.length && flights.length < 3) {
-          final f = await _startFlight(list[i++]);
-          if (f != null) flights.add(f);
+          try {
+            final f = await _startFlight(list[i++]);
+            if (f != null) flights.add(f);
+          } catch (e, st) {
+            // One bad candidate must not stop the rest.
+            DebugLog.add('fetch', 'candidate skipped: $e ${st.toString().split('\n').take(3).join(' | ')}');
+          }
         } else {
           if (flights.isNotEmpty) {
             final f = flights.first;
@@ -903,6 +921,7 @@ class AutoFetch extends ChangeNotifier {
         _say('Next track: nothing usable found on Soulseek yet');
       }
     } catch (e) {
+      DebugLog.add('fetch', 'next track pipeline error: $e');
       _say('Next track: stopped ($e)');
     } finally {
       _pipeline = false;

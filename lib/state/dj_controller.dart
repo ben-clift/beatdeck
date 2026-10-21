@@ -1,6 +1,8 @@
 import 'package:sidedeck/debug/debug_log.dart';
 import 'dart:async';
 import 'dart:io';
+
+import 'package:sidedeck/engine/audio_check.dart';
 import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
@@ -815,6 +817,7 @@ class DjController extends ChangeNotifier {
       for (var i = _automixIndex + 1; i < _automixQueue.length; i++) {
         final path = _automixQueue[i];
         if (_wasPlayed(path)) continue;
+        if (failedPaths.contains(path)) continue;
         if (tier < 2 && _rejected.contains(path)) continue;
         if (!_suits(path, tier: tier)) continue;
         cands.add((i, _flowOf(path) ?? FlowTrack(path)));
@@ -840,6 +843,7 @@ class DjController extends ChangeNotifier {
     for (var i = _automixIndex + 1; i < _automixQueue.length; i++) {
       final path = _automixQueue[i];
       if (_wasPlayed(path)) continue;
+      if (failedPaths.contains(path)) continue;
       if (tier < 2 && _rejected.contains(path)) continue;
       if (!_suits(path, tier: tier)) continue;
       final c = _flowOf(path);
@@ -1109,7 +1113,15 @@ class DjController extends ChangeNotifier {
   /// and turns it down if it is too far from the playing track.
   Future<void> _loadNext(int other, String path, int tier) async {
     try {
-      final ok = await loadFile(other, path);
+      // Look at the file first; a bad one never reaches the deck.
+      final bad = await AudioCheck.problem(path);
+      var ok = false;
+      if (bad == null) {
+        ok = await loadFile(other, path);
+      } else {
+        DebugLog.add('automix', 'not loaded (${path.split(RegExp(r'[\\/]')).last}): $bad');
+        failedPaths.add(path);
+      }
       if (!automixOn || _automixDeck != 1 - other) return;
       if (!ok) {
         DebugLog.flow('Automix mix to next deck', false, 'next track would not load');
@@ -1160,7 +1172,8 @@ class DjController extends ChangeNotifier {
   /// Text for an empty deck while automix is looking for its next track.
   String? deckHint(int i) {
     if (!automixOn || _automixDeck < 0 || i == _automixDeck) return null;
-    final st = fetchStatus?.call() ?? '';
+    // Only show the helper's line while it is working, not an old result.
+    final st = (fetchBusy?.call() ?? false) ? (fetchStatus?.call() ?? '') : '';
     return st.isNotEmpty ? st : automixStatus;
   }
 
