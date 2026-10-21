@@ -673,7 +673,14 @@ class DjController extends ChangeNotifier {
   /// deck, drop that track and choose another.
   String? automixSkip(int deckIndex) {
     if (!automixOn || _automixDeck < 0) return 'Automix is not running.';
-    if (_automixFading) return 'Wait for the mix to finish.';
+    if (_automixFading) {
+      // Skip during a mix: finish it this instant, the new track takes over.
+      _automixFadeStart = DateTime.now().subtract(Duration(milliseconds: (_fadeLen * 1000).ceil() + 50));
+      _automixAdvanceFade();
+      DebugLog.add('automix', 'skip during a mix: finished it at once, the new track is playing');
+      notifyListeners();
+      return null;
+    }
     final playingDeck = deck(_automixDeck);
     final heard = playingDeck.bpm > 1 ? playingDeck.bpm * playingDeck.rate : 0.0;
     final pressed = deck(deckIndex).path;
