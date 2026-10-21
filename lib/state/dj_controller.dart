@@ -769,6 +769,12 @@ class DjController extends ChangeNotifier {
   bool _automixTick() {
     if (!automixOn || _automixBusy || _automixDeck < 0) return false;
     if (_automixFading) {
+      final jump = _skipJump(_automixDeck);
+      if (jump != 0) {
+        DebugLog.add('automix', 'you moved the playing track ${jump > 0 ? 'forward' : 'back'} ${jump.abs().toStringAsFixed(0)} s during a mix: mix cancelled and planned again');
+        _abortFade(_automixDeck, 1 - _automixDeck);
+        return true;
+      }
       _automixAdvanceFade();
       return true;
     }
@@ -776,8 +782,12 @@ class DjController extends ChangeNotifier {
     final other = 1 - cur;
     final d = deck(cur);
     if (!d.loaded || !d.playing) return false; // paused by the DJ: wait
+    final jump = _skipJump(cur);
+    if (jump != 0) {
+      DebugLog.add('automix', 'you moved the playing track ${jump > 0 ? 'forward' : 'back'} ${jump.abs().toStringAsFixed(0)} s, timing worked out again');
+    }
     final remaining = remainingSeconds(
-      position: d.position,
+      position: _engine.position(cur),
       duration: d.duration,
       rate: d.rate,
     );
@@ -912,6 +922,45 @@ class DjController extends ChangeNotifier {
   EqMove _eqBaseIn = EqMove.none;
   double _swapAt = 0.6;
   bool _phaseFixed = false;
+
+  // Spots a manual skip or scrub of the playing deck: its position moves by
+  // more than the time that passed.
+  double _watchPos = -1;
+  DateTime _watchAt = DateTime.fromMillisecondsSinceEpoch(0);
+  int _watchDeck = -1;
+
+  /// Returns the jump in seconds (negative = back) when the playhead of the
+  /// playing deck was moved by hand since the last look, else 0.
+  double _skipJump(int deckIndex) {
+    final d = deck(deckIndex);
+    final pos = _engine.position(deckIndex);
+    final now = DateTime.now();
+    var jump = 0.0;
+    if (_watchDeck == deckIndex && _watchPos >= 0 && d.playing) {
+      final dt = now.difference(_watchAt).inMilliseconds / 1000.0;
+      final expected = dt * (d.rate <= 0 ? 1 : d.rate);
+      final diff = pos - _watchPos - expected;
+      if (dt < 2.0 && diff.abs() > 1.5) jump = diff;
+    }
+    _watchDeck = deckIndex;
+    _watchPos = pos;
+    _watchAt = now;
+    return jump;
+  }
+
+  /// A skip during a mix: undo the mix so far and let it start again from
+  /// the new position (the next track stays loaded).
+  void _abortFade(int cur, int other) {
+    _engine.play(other, false);
+    deck(other).playing = false;
+    _engine.setFader(cur, _fadeOutBase);
+    _engine.setFader(other, _fadeInBase);
+    _restoreMixEq(cur, other);
+    _engine.setXfader(crossfaderEndFor(cur));
+    xfader = crossfaderEndFor(cur);
+    _automixFading = false;
+    _automixPreloaded = true;
+  }
 
   void _applyMixEq(int cur, int other, double t) {
     final (inc, out) = eqMoves(_plan?.kind ?? TransitionKind.smooth, t, _swapAt);
