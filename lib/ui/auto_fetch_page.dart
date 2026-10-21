@@ -56,6 +56,27 @@ class _AutoFetchPageState extends State<AutoFetchPage> {
   // Tracks already shown this session, so a reload brings only new ones.
   static final Set<String> _seen = {};
 
+  // Everything found this session, from any source, for the "All finds" list.
+  static final Map<String, Suggestion> _finds = {};
+  bool _allMode = false;
+  bool _artistDesc = true;
+
+  void _showAllFinds() {
+    final list = _finds.values.toList()
+      ..sort((a, b) {
+        final c = a.artist.toLowerCase().compareTo(b.artist.toLowerCase());
+        final r = c != 0 ? c : a.title.toLowerCase().compareTo(b.title.toLowerCase());
+        return _artistDesc ? -r : r;
+      });
+    setState(() {
+      _allMode = true;
+      _loadError = list.isEmpty ? 'Nothing found yet this session. Show some tracks first.' : null;
+      _tracks = list;
+      _picked.clear();
+      _loadingTracks = false;
+    });
+  }
+
   Future<void> _loadTracks({bool onlyNew = false}) async {
     final af = AutoFetch.instance;
     final id = _charts.any((c) => c.$1 == af.chartId) ? af.chartId : (_charts.isEmpty ? -1 : _charts.first.$1);
@@ -88,9 +109,12 @@ class _AutoFetchPageState extends State<AutoFetchPage> {
     }
     if (!mounted || seq != _loadSeq) return;
     for (final s in t) {
-      _seen.add('${s.artist} ${s.title}'.toLowerCase());
+      final k = '${s.artist} ${s.title}'.toLowerCase();
+      _seen.add(k);
+      _finds[k] = s;
     }
     setState(() {
+      _allMode = false;
       _tracks = t;
       _loadingTracks = false;
     });
@@ -384,14 +408,32 @@ class _AutoFetchPageState extends State<AutoFetchPage> {
                   onChanged: (v) => setState(() => _years = v),
                 ),
               ],
-              Row(
+              Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                crossAxisAlignment: WrapCrossAlignment.center,
                 children: [
                   OutlinedButton.icon(
-                    onPressed: () => _loadTracks(onlyNew: true),
+                    // First time: show everything. Reload: only tracks not seen yet.
+                    onPressed: () => _loadTracks(onlyNew: _tracks.isNotEmpty && !_allMode),
                     icon: const Icon(Icons.refresh, size: 18),
-                    label: Text(_tracks.isEmpty ? 'Show tracks' : 'Reload'),
+                    label: Text(_tracks.isEmpty || _allMode ? 'Show tracks' : 'Reload'),
                   ),
-                  const Spacer(),
+                  const SizedBox(width: 6),
+                  OutlinedButton(
+                    onPressed: _showAllFinds,
+                    child: Text('All finds (${_finds.length})'),
+                  ),
+                  if (_allMode)
+                    IconButton(
+                      tooltip: _artistDesc ? 'Artist Z to A' : 'Artist A to Z',
+                      onPressed: () {
+                        _artistDesc = !_artistDesc;
+                        _showAllFinds();
+                      },
+                      icon: Icon(_artistDesc ? Icons.arrow_downward : Icons.arrow_upward, size: 20),
+                    ),
+                  
                   if (_picked.isNotEmpty)
                     FilledButton.icon(
                       onPressed: () => _download([for (final i in _picked) _tracks[i]]),
