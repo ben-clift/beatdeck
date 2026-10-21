@@ -166,6 +166,11 @@ class SlskSetup {
     dj?.fetchWanted = () => autoFetchForAutomix && AutoFetch.instance.followAutomix;
     dj?.intensityWanted = () => AutoFetch.instance.intensity;
     dj?.genrePinned = () => AutoFetch.instance.pinned && AutoFetch.instance.genres.isNotEmpty;
+    dj?.tempoWindow = () {
+      final af = AutoFetch.instance;
+      if (!(af.pinned && af.genres.isNotEmpty)) return null;
+      return (af.bpmMin, af.bpmMax);
+    };
     dj?.genreOf = (path) {
       final g = lib.genreOf(path);
       return g.isNotEmpty ? g : AutoFetch.instance.hintFor(path);

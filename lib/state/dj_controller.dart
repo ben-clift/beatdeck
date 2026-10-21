@@ -666,6 +666,26 @@ class DjController extends ChangeNotifier {
 
   /// Genres picked by the user are in force: fetch them, skip the genre gate.
   bool Function()? genrePinned;
+
+  /// The tempo range picked with the genres (null when none is in force).
+  (double, double)? Function()? tempoWindow;
+
+  /// The playback rate that lands [bpm] inside the picked range: 1.0 when it
+  /// is already inside, the nearest edge within 8 %, null when out of reach.
+  double? _winFit(double bpm) {
+    final w = tempoWindow?.call();
+    if (w == null || bpm <= 1) return 1.0;
+    final lo = w.$1, hi = w.$2;
+    if (bpm >= lo && bpm <= hi) return 1.0;
+    final r = bpm < lo ? (lo + 0.5) / bpm : (hi - 0.5) / bpm;
+    return (r >= 0.92 && r <= 1.08) ? r : null;
+  }
+
+  bool _inWindow(String path) {
+    final c = _flowOf(path);
+    if (c == null || c.bpm <= 1) return true; // unknown: checked once it is loaded
+    return _winFit(c.bpm) != null;
+  }
   bool _mixNow = false;
   DateTime? _skipAt;
 
@@ -759,6 +779,7 @@ class DjController extends ChangeNotifier {
         final k = _trackKey(q);
         if (onDeck.contains(k) || ex.contains(k) || _wasPlayed(q) || failedPaths.contains(q)) continue;
         if (Dislikes.instance.hasPath(q) || !File(q).existsSync() || _avoided(q)) continue;
+        if (!_inWindow(q)) continue;
         if (pass == 0 && _rejected.contains(q)) continue;
         final gap = _tempoGap(heard, q);
         var score = gap;
@@ -918,7 +939,7 @@ class DjController extends ChangeNotifier {
             : (_recentPlayed[_trackKey(a)] ?? 0).compareTo(_recentPlayed[_trackKey(b)] ?? 0);
       });
       final path = _replayPool.removeAt(0);
-      if (!File(path).existsSync() || Dislikes.instance.hasPath(path)) continue;
+      if (!File(path).existsSync() || Dislikes.instance.hasPath(path) || !_inWindow(path)) continue;
       if (_automixQueue.any((q) => _trackKey(q) == _trackKey(path))) continue;
       _replayOk.add(_trackKey(path));
       _automixQueue.add(path);
@@ -949,7 +970,7 @@ class DjController extends ChangeNotifier {
     for (final q in _automixQueue) {
       final k = _trackKey(q);
       if (onDeck.contains(k) || Dislikes.instance.hasPath(q) || failedPaths.contains(q)) continue;
-      if (!File(q).existsSync()) continue;
+      if (!File(q).existsSync() || !_inWindow(q)) continue;
       final at = _recentPlayed[k] ?? 0;
       final bucket = _tempoBucket(q);
       if (bucket < bestBucket || (bucket == bestBucket && at < bestAt)) {
@@ -1173,6 +1194,7 @@ class DjController extends ChangeNotifier {
     final curPath = _automixIndex >= 0 && _automixIndex < _automixQueue.length
         ? _automixQueue[_automixIndex]
         : null;
+    if (!_inWindow(path)) return false;
     if (curPath == null || tier >= 2) return true;
     final cur = _flowOf(curPath);
     final c = _flowOf(path);
@@ -1313,6 +1335,18 @@ class DjController extends ChangeNotifier {
       for (final p in paths)
         if (File(p).existsSync() && !_wasPlayed(p) && seen.add(_trackKey(p))) p,
     ];
+    if (tempoWindow?.call() != null) {
+      // Your tempo range: only tracks that can sit inside it start the set.
+      for (final q in _automixQueue) {
+        await _flowLearn(q);
+      }
+      final fit = _automixQueue.where(_inWindow).toList();
+      if (fit.isNotEmpty) {
+        _automixQueue = fit;
+      } else {
+        DebugLog.add('automix', 'nothing in the list fits your tempo range: starting with the closest, the helper will fetch matches');
+      }
+    }
     if (_automixQueue.isEmpty) {
       // Everything was played in the last 24 hours: start with the one played
       // longest ago (never a deleted one) and let the helper find new tracks.
@@ -1386,6 +1420,12 @@ class DjController extends ChangeNotifier {
       deckB.playing = false;
     }
     setXfader(0.0);
+    final fitRate = deckA.bpm > 1 ? _winFit(deckA.bpm * (deckA.rate <= 0 ? 1 : deckA.rate)) : 1.0;
+    if (fitRate != null && fitRate != 1.0) {
+      // Within 8 % of your range: speed it into the range.
+      setRate(0, (deckA.rate <= 0 ? 1.0 : deckA.rate) * fitRate);
+      DebugLog.add('automix', 'first track sped into your tempo range: ${(deckA.bpm * deckA.rate).toStringAsFixed(1)} BPM');
+    }
     _engine.play(0, true);
     deckA.playing = true;
     _automixDeck = 0;
@@ -1656,6 +1696,15 @@ class DjController extends ChangeNotifier {
             return;
           }
         }
+      }
+      if (inc.bpm > 1 && _winFit(inc.bpm) == null) {
+        DebugLog.add('automix',
+            'turned down ${path.split(RegExp(r'[\\/]')).last}: ${inc.bpm.round()} BPM is outside your tempo range, choosing another');
+        _rejected.add(path);
+        _upNext = null;
+        _flowNext = null;
+        _automixPreloaded = false;
+        return;
       }
       final tol = forced ? (_forceAnyTempo ? 1e9 : 9.0) : (tier == 0 ? 6.0 : (tier == 1 ? 9.0 : 1e9));
       if (out.bpm > 1 && inc.bpm > 1 && bpmGapPercent(out.bpm, inc.bpm).abs() > tol) {
