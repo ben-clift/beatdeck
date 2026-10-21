@@ -121,12 +121,29 @@ class _GenrePickerState extends State<GenrePicker> {
         },
       );
 
+  Widget _fetchButton() => FilledButton.icon(
+        onPressed: (_sel.isEmpty && _genre.text.trim().isEmpty) ? null : _go,
+        icon: const Icon(Icons.download, size: 18),
+        label: const Text('Fetch & mix now'),
+      );
+
   @override
   Widget build(BuildContext context) {
     final noSource = !_af.useHardwax && !_af.useTrax && !_af.useRa && !_af.useBandcamp && !_af.useDiscogs;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        Row(
+          children: [
+            _fetchButton(),
+            const SizedBox(width: 10),
+            const Expanded(
+              child: Text('Fetches your ticked genres and mixes the first match in.',
+                  style: TextStyle(fontSize: 11, color: SideDeckTheme.muted)),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
         TextField(
           controller: _genre,
           onChanged: (_) => setState(() {}),
@@ -264,10 +281,7 @@ class _GenrePickerState extends State<GenrePicker> {
         const SizedBox(height: 8),
         Row(
           children: [
-            FilledButton(
-              onPressed: (_sel.isEmpty && _genre.text.trim().isEmpty) ? null : _go,
-              child: Text(_af.pinned ? 'Update genres and fetch' : 'Fetch and mix these genres'),
-            ),
+            _fetchButton(),
             const SizedBox(width: 10),
             Expanded(
               child: Text(
