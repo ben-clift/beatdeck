@@ -69,6 +69,7 @@ class SlskDownload {
   String? savedPath;
   IOSink? sink;
   bool finishing = false;
+  int resumes = 0;
 
   String get user => result.user;
   String get remotePath => result.path;
@@ -618,6 +619,26 @@ class SoulseekClient extends ChangeNotifier {
       } else {
         DebugLog.add('download',
             'interrupted: received ${d.received} of ${d.size} from ${d.user}');
+        if (d.resumes < 4 && d.received > 0 && d.savedPath != null && d.size > 0) {
+          // Pick up where it stopped on a fresh connection instead of starting over.
+          d.resumes++;
+          final sink = d.sink;
+          d.sink = null;
+          d.state = DlState.connecting;
+          d.message = 'Connection dropped, resuming';
+          DebugLog.add('download', 'resuming from ${d.received} bytes (try ${d.resumes})');
+          _changed();
+          Future<void>(() async {
+            try {
+              await sink?.flush();
+              await sink?.close();
+            } catch (_) {}
+            await Future<void>.delayed(const Duration(seconds: 2));
+            if (downloads.contains(d) && d.state == DlState.connecting) _beginDownload(d);
+          });
+          peer.close();
+          return;
+        }
         d.state = DlState.failed;
         _discardPartial(d);
         d.message = 'Transfer interrupted';
@@ -731,7 +752,7 @@ class SoulseekClient extends ChangeNotifier {
       }
       if (!_startFile(peer, d)) return;
       peer.rawStage = 1;
-      peer.send((MsgWriter()..u64(0)).bytes);
+      peer.send((MsgWriter()..u64(d.received)).bytes);
       chunk = Uint8List.sublistView(head, 4);
       if (chunk.isEmpty) return;
     }
@@ -754,6 +775,21 @@ class SoulseekClient extends ChangeNotifier {
       peer.close();
       _changed();
       return false;
+    }
+    if (d.resumes > 0 && d.savedPath != null && File(d.savedPath!).existsSync()) {
+      final f = File(d.savedPath!);
+      if (f.lengthSync() == d.received) {
+        d.sink = f.openWrite(mode: FileMode.append);
+        DebugLog.add('download', 'resumed ${f.path} at ${d.received} of ${d.size} from ${d.user}');
+        d.state = DlState.downloading;
+        d.message = '';
+        peer.download = d;
+        return true;
+      }
+      d.received = 0; // the file does not match: start again
+      try {
+        f.deleteSync();
+      } catch (_) {}
     }
     final name = d.result.fileName.replaceAll(RegExp(r'[<>:"/\\|?*]'), '_');
     var file = File(p.join(dir, name));
