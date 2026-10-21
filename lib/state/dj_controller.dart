@@ -673,6 +673,9 @@ class DjController extends ChangeNotifier {
   void stopAutomix() {
     final wasOn = automixOn;
     if (wasOn) DebugLog.add('automix', 'stopped');
+    if (_automixFading && _automixDeck >= 0) {
+      _restoreMixEq(_automixDeck, 1 - _automixDeck);
+    }
     automixOn = false;
     _automixFading = false;
     _automixPreloaded = false;
@@ -790,6 +793,11 @@ class DjController extends ChangeNotifier {
     _fadeInBase = inc.fader;
     _engine.setXfader(0.5);
     _engine.setFader(other, 0.0);
+    _eqBaseOut = EqMove(out.eqLow, out.eqMid, out.eqHigh);
+    _eqBaseIn = EqMove(inc.eqLow, inc.eqMid, inc.eqHigh);
+    final barReal = (inc.bpm > 1 ? 4 * 60.0 / inc.bpm : 2.0) / (inc.rate <= 0 ? 1 : inc.rate);
+    _swapAt = bassSwapAt(_plan?.kind ?? TransitionKind.smooth, _fadeLen, barReal);
+    _applyMixEq(cur, other, 0);
     _engine.play(other, true);
     inc.playing = true;
     _automixFadeStart = DateTime.now();
@@ -800,6 +808,21 @@ class DjController extends ChangeNotifier {
   }
 
   double _fadeOutBase = 1;
+  EqMove _eqBaseOut = EqMove.none;
+  EqMove _eqBaseIn = EqMove.none;
+  double _swapAt = 0.6;
+
+  void _applyMixEq(int cur, int other, double t) {
+    final (inc, out) = eqMoves(_plan?.kind ?? TransitionKind.smooth, t, _swapAt);
+    double c(double base, double off) => math.max(-24.0, base + off);
+    _engine.setEq(other, c(_eqBaseIn.low, inc.low), c(_eqBaseIn.mid, inc.mid), c(_eqBaseIn.high, inc.high));
+    _engine.setEq(cur, c(_eqBaseOut.low, out.low), c(_eqBaseOut.mid, out.mid), c(_eqBaseOut.high, out.high));
+  }
+
+  void _restoreMixEq(int cur, int other) {
+    _engine.setEq(other, _eqBaseIn.low, _eqBaseIn.mid, _eqBaseIn.high);
+    _engine.setEq(cur, _eqBaseOut.low, _eqBaseOut.mid, _eqBaseOut.high);
+  }
   double _fadeInBase = 1;
 
   void _automixAdvanceFade() {
@@ -820,12 +843,14 @@ class DjController extends ChangeNotifier {
     final (gIn, gOut) = gains(_plan?.kind ?? TransitionKind.smooth, t);
     _engine.setFader(other, _fadeInBase * gIn);
     _engine.setFader(cur, _fadeOutBase * gOut);
+    _applyMixEq(cur, other, t);
     if (elapsed >= _fadeLen) {
       _engine.play(cur, false);
       deck(cur).playing = false;
       // Put both faders back and park the crossfader on the new deck.
       _engine.setFader(cur, _fadeOutBase);
       _engine.setFader(other, _fadeInBase);
+      _restoreMixEq(cur, other);
       _engine.setXfader(crossfaderEndFor(other));
       xfader = crossfaderEndFor(other);
       DebugLog.flow('Automix mix to next deck', true);

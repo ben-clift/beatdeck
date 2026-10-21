@@ -97,3 +97,56 @@ bool nearBarLine(double position, double bpm, double beatOffset, {double window 
   final into = (position - beatOffset) % bar;
   return into >= 0 && into <= window;
 }
+
+/// EQ offsets in dB (added to the deck's own EQ) during a mix.
+class EqMove {
+  const EqMove(this.low, this.mid, this.high);
+  final double low;
+  final double mid;
+  final double high;
+  static const none = EqMove(0, 0, 0);
+}
+
+const double _kill = -24;
+
+double _ramp(double t, double a, double b, double from, double to) {
+  if (t <= a) return from;
+  if (t >= b) return to;
+  return from + (to - from) * (t - a) / (b - a);
+}
+
+/// Where the bass swap happens, as a fraction of the mix, snapped to a
+/// phrase (8 bars for long mixes, 4 for short ones) so the low ends trade
+/// places on a downbeat. [barSeconds] is one bar in real time.
+double bassSwapAt(TransitionKind kind, double lengthSeconds, double barSeconds) {
+  final want = kind == TransitionKind.smooth ? 0.6 : 0.5;
+  if (barSeconds <= 0 || lengthSeconds <= 0) return want;
+  final grid = barSeconds * (lengthSeconds > 60 ? 8 : 4);
+  final at = ((want * lengthSeconds) / grid).round() * grid;
+  return (at / lengthSeconds).clamp(0.25, 0.8).toDouble();
+}
+
+/// The standard club blend: the new track comes in with its bass cut and a
+/// little less mid and treble, which open up slowly; at the swap point the
+/// bass changes hands (new track's low in, old track's low out); then the old
+/// track's mids and treble fall away. Cuts need no EQ.
+(EqMove, EqMove) eqMoves(TransitionKind kind, double t, double swap) {
+  t = t.clamp(0.0, 1.0);
+  if (kind == TransitionKind.cut) return (EqMove.none, EqMove.none);
+  final quick = kind == TransitionKind.quick;
+  final inMid = quick ? -4.0 : -8.0;
+  final inHigh = quick ? -6.0 : -12.0;
+  final open = quick ? 0.5 : 0.55;
+  final w = quick ? 0.04 : 0.02; // swap ramp, a short fraction of the mix
+  final incoming = EqMove(
+    _ramp(t, swap, swap + w, _kill, 0),
+    _ramp(t, 0, open, inMid, 0),
+    _ramp(t, 0, open, inHigh, 0),
+  );
+  final outgoing = EqMove(
+    _ramp(t, swap, swap + w, 0, _kill),
+    _ramp(t, swap, 1, 0, quick ? -4 : -8),
+    _ramp(t, swap, 1, 0, quick ? -6 : -12),
+  );
+  return (incoming, outgoing);
+}
