@@ -538,14 +538,22 @@ class DjController extends ChangeNotifier {
     FlowArc arc = FlowArc.off,
     double lengthMinutes = 60,
   }) async {
-    if (paths.isEmpty) return;
+    if (paths.isEmpty && !(deckA.loaded && deckA.path != null)) return;
     stopAutomix();
-    // One copy of each track only.
+    // The track already on deck A (if any) starts the set; then the list.
+    final onA = deckA.loaded ? deckA.path : null;
     final seen = <String>{};
     _automixQueue = [
+      if (onA != null && File(onA).existsSync())
+        if (seen.add(_trackKey(onA))) onA,
       for (final p in paths)
-        if (seen.add(_trackKey(p))) p,
+        if (File(p).existsSync() && seen.add(_trackKey(p))) p,
     ];
+    if (_automixQueue.isEmpty) {
+      automixStatus = 'No playable files in that list';
+      notifyListeners();
+      return;
+    }
     _automixPlayed.clear();
     automixFadeSeconds = fadeSeconds.clamp(4.0, 60.0).toDouble();
     _baseFade = automixFadeSeconds;
@@ -559,12 +567,23 @@ class DjController extends ChangeNotifier {
     automixStatus = 'Loading first track';
     _automixBusy = true;
     notifyListeners();
-    final ok = await loadFile(0, _automixQueue.first);
+    var ok = false;
+    if (onA != null && _automixQueue.first == onA) {
+      ok = true; // already loaded on deck A
+    } else {
+      // Try each track until one loads.
+      while (_automixQueue.isNotEmpty && automixOn) {
+        ok = await loadFile(0, _automixQueue.first);
+        if (ok) break;
+        DebugLog.add('automix', 'first track would not load, skipping: ${_automixQueue.first}');
+        _automixQueue.removeAt(0);
+      }
+    }
     _automixBusy = false;
     if (!automixOn) return; // stopped while loading
     if (!ok) {
       automixOn = false;
-      automixStatus = 'Could not load the first track';
+      automixStatus = 'None of the tracks would load';
       notifyListeners();
       return;
     }
