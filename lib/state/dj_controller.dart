@@ -432,7 +432,7 @@ class DjController extends ChangeNotifier {
     if (now.difference(_needCheck).inSeconds < 5) return;
     _needCheck = now;
     final path = _automixQueue[_automixIndex];
-    if (_needAsked == path && now.difference(_needAskedAt).inSeconds < 60) return;
+    if (_needAsked == path && now.difference(_needAskedAt).inSeconds < 20) return;
     final cur = _flowOf(path);
     if (cur == null) return;
     var fits = 0;
@@ -1019,7 +1019,7 @@ class DjController extends ChangeNotifier {
     if (next == null) {
       // Nothing to put on the other deck yet: say so, and keep asking.
       final text = (fetchBusy?.call() ?? false)
-          ? 'Finding the next track…'
+          ? 'Finding the next track: ${fetchStatus?.call() ?? ''}'
           : 'No track fits yet. Looking for one (Soulseek helper), or add music.';
       if (automixStatus != text) {
         automixStatus = text;
@@ -1114,6 +1114,9 @@ class DjController extends ChangeNotifier {
 
   /// True while tracks are still being downloaded for automix.
   bool Function()? fetchBusy;
+
+  /// What the helper is doing now (for the status line).
+  String Function()? fetchStatus;
 
   /// Automix started or stopped (the app switches AUTO and Soulseek with it).
   void Function()? onAutomixStart;

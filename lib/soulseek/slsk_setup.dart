@@ -67,6 +67,7 @@ class SlskSetup {
     dj?.onFileMissing = (_) => lib.removeMissing();
     dj?.fetchBusy = () => AutoFetch.instance.running || AutoFetch.instance.manualPending > 0;
     dj?.genreOf = lib.genreOf;
+    dj?.fetchStatus = () => AutoFetch.instance.status;
     // Starting automix switches AUTO on and makes sure Soulseek is signed in.
     dj?.onAutomixStart = () {
       if (!autoFetchForAutomix) return;
