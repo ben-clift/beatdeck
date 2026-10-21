@@ -410,6 +410,10 @@ class LibraryController extends ChangeNotifier {
   }
 
   bool _readingTags = false;
+  final Map<String, String> _genreByPath = {};
+
+  /// The tagged genre of a library file, empty when unknown.
+  String genreOf(String path) => _genreByPath[path] ?? '';
 
   /// Reads genre and year for tracks that have not been read yet, a few at a
   /// time in the background. Results are saved so the next start is instant.
@@ -444,6 +448,7 @@ class LibraryController extends ChangeNotifier {
         }
         final at = tracks.indexWhere((x) => x.path == t.path);
         if (at >= 0) tracks[at] = tracks[at].withTags(genre, year);
+        if (genre.isNotEmpty) _genreByPath[t.path] = genre;
         if (++changed % 25 == 0) {
           _emit();
           await Future<void>.delayed(Duration.zero);

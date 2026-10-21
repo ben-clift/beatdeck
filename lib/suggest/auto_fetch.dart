@@ -10,6 +10,7 @@ import 'package:sidedeck/soulseek/slsk_setup.dart';
 import 'package:sidedeck/soulseek/storage_guard.dart';
 import 'package:sidedeck/soulseek/soulseek_client.dart';
 import 'package:sidedeck/state/dislikes.dart';
+import 'package:sidedeck/suggest/genres.dart';
 import 'package:sidedeck/state/library_controller.dart';
 import 'package:sidedeck/suggest/harmony.dart';
 import 'package:sidedeck/wishlist/wishlist.dart';
@@ -473,6 +474,40 @@ class AutoFetch extends ChangeNotifier {
 
   /// Picks by genre and tempo alone, no seed track. With [endless] it keeps
   /// going until stopped; otherwise it stops after [count] downloads.
+  /// Underground tracks that match the one playing: its genre and tempo (a
+  /// few percent either way). The key is checked later, once downloaded and
+  /// analysed. Used by automix when nothing in its queue fits.
+  Future<void> startMatching({
+    required String genre,
+    required String artist,
+    required String title,
+    required double bpm,
+    required LibraryController library,
+    int count = 2,
+  }) async {
+    if (running) return;
+    var g = genre.trim();
+    if (g.isEmpty && artist.isNotEmpty) {
+      try {
+        final info = await _service.lookupSeed(artist, title);
+        if (info.genres.isNotEmpty) g = info.genres.first;
+      } catch (_) {}
+    }
+    if (g.isEmpty) g = genreForBpm(bpm);
+    final lo = bpm * 0.93;
+    final hi = bpm * 1.07;
+    DebugLog.add('fetch',
+        'matching the playing track: genre "$g", ${lo.round()}-${hi.round()} BPM, underground only');
+    await _runSource(
+      label: '$g, ${bpm.round()} BPM, underground',
+      more: (tried) => _service.underground(g, bpmMin: lo, bpmMax: hi, skip: tried, want: 12),
+      library: library,
+      count: count,
+      endless: false,
+      useYears: false,
+    );
+  }
+
   Future<void> startByGenre({
     required String genre,
     required double bpmMin,

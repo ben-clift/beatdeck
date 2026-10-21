@@ -7,6 +7,7 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sidedeck/engine/analysis_cache.dart';
 import 'package:sidedeck/automix/set_flow.dart';
+import 'package:sidedeck/automix/genre_family.dart';
 import 'package:sidedeck/automix/transition_style.dart';
 import 'package:sidedeck/state/dislikes.dart';
 import 'package:sidedeck/suggest/harmony.dart';
@@ -419,7 +420,7 @@ class DjController extends ChangeNotifier {
 
   /// Called when nothing left in the queue fits the playing track (tempo or
   /// key); the app uses it to fetch a matching track from Soulseek.
-  void Function(String artist, double bpm, CamelotKey? key, String title)? onNeedTrack;
+  void Function(String artist, double bpm, CamelotKey? key, String title, String genre)? onNeedTrack;
   String? _needAsked;
   DateTime _needCheck = DateTime.fromMillisecondsSinceEpoch(0);
 
@@ -439,7 +440,7 @@ class DjController extends ChangeNotifier {
       if (_wasPlayed(q)) continue;
       final c = _flowOf(q);
       if (c == null) continue;
-      if (c.bpm > 0 && bpmGapPercent(cur.bpm, c.bpm).abs() > 8) continue;
+      if (!_suits(q)) continue;
       if (cur.key != null && c.key != null && keyMatch(cur.key!, c.key!).score < 70) continue;
       fits++;
     }
@@ -460,7 +461,7 @@ class DjController extends ChangeNotifier {
       title = name;
     }
     DebugLog.add('automix', 'nothing in the queue fits $name (${cur.bpm.round()} BPM), asking Soulseek for a match');
-    cb(artist, cur.bpm, cur.key, title);
+    cb(artist, cur.bpm, cur.key, title, genreOf?.call(path) ?? '');
   }
 
   /// A new track (for example a finished Soulseek download) joins the end of
@@ -624,7 +625,27 @@ class DjController extends ChangeNotifier {
   FlowTrack? _flowOf(String path) => _flowInfo[path];
 
   /// The next queue entry that has not been played yet, or null.
-  int? _nextUnplayed() {
+  /// Looks up a track's genre (set by the app from the library tags).
+  String Function(String path)? genreOf;
+
+  /// Does [path] suit the track now playing? Same or similar genre and a
+  /// tempo within 8 %. Unknown genre or tempo does not rule it out.
+  bool _suits(String path) {
+    final curPath = _automixIndex >= 0 && _automixIndex < _automixQueue.length
+        ? _automixQueue[_automixIndex]
+        : null;
+    if (curPath == null) return true;
+    final cur = _flowOf(curPath);
+    final c = _flowOf(path);
+    if (cur != null && c != null && cur.bpm > 0 && c.bpm > 0) {
+      if (bpmGapPercent(cur.bpm, c.bpm).abs() > 8) return false;
+    }
+    final g = genreOf;
+    if (g != null && !genresSimilar(g(curPath), g(path))) return false;
+    return true;
+  }
+
+  int? _nextUnplayed({bool strict = true}) {
     final flow = _flow;
     if (flow != null && flow.arc != FlowArc.off) {
       final held = _flowNext;
@@ -638,6 +659,7 @@ class DjController extends ChangeNotifier {
       for (var i = _automixIndex + 1; i < _automixQueue.length; i++) {
         final path = _automixQueue[i];
         if (_wasPlayed(path)) continue;
+        if (strict && !_suits(path)) continue;
         cands.add((i, _flowOf(path) ?? FlowTrack(path)));
       }
       if (cands.isEmpty) return null;
@@ -651,10 +673,29 @@ class DjController extends ChangeNotifier {
       automixFadeSeconds = (_baseFade * flow.arc.fadeScale(pick.energy)).clamp(6.0, 180.0).toDouble();
       return pick.index;
     }
+    // No set flow: the best fit by tempo first, then key.
+    final curPath = _automixIndex >= 0 && _automixIndex < _automixQueue.length
+        ? _automixQueue[_automixIndex]
+        : null;
+    final cur = curPath == null ? null : _flowOf(curPath);
+    int? best;
+    var bestScore = -1e9;
     for (var i = _automixIndex + 1; i < _automixQueue.length; i++) {
-      if (!_wasPlayed(_automixQueue[i])) return i;
+      final path = _automixQueue[i];
+      if (_wasPlayed(path)) continue;
+      if (strict && !_suits(path)) continue;
+      final c = _flowOf(path);
+      var score = 0.0;
+      if (cur != null && c != null) {
+        if (cur.bpm > 0 && c.bpm > 0) score -= bpmGapPercent(cur.bpm, c.bpm).abs() * 4;
+        if (cur.key != null && c.key != null) score += keyMatch(cur.key!, c.key!).score * 0.3;
+      }
+      if (score > bestScore) {
+        bestScore = score;
+        best = i;
+      }
     }
-    return null;
+    return best;
   }
 
   int get automixQueueLength => _automixQueue.length;
@@ -816,7 +857,8 @@ class DjController extends ChangeNotifier {
       rate: d.rate,
     );
     _checkNeedTrack();
-    final next = _nextUnplayed();
+    // Only tracks that suit; with under 45 s left, take the nearest rather than stop.
+    final next = _nextUnplayed() ?? (remaining <= 45 ? _nextUnplayed(strict: false) : null);
     if (next == null) {
       if (remaining <= 0.5) {
         DebugLog.ok('automix', 'finished, no more tracks');
@@ -890,7 +932,8 @@ class DjController extends ChangeNotifier {
   /// track was not ready or a mix was cancelled): load a fitting track on the
   /// other deck if needed and start it straight away.
   bool _automixDeckEnded(int cur, int other) {
-    final next = _nextUnplayed();
+    final waiting = fetchBusy?.call() ?? false;
+    final next = _nextUnplayed() ?? (waiting ? null : _nextUnplayed(strict: false));
     if (next == null) {
       _checkNeedTrack();
       if (fetchBusy?.call() ?? false) {

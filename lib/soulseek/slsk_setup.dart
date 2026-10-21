@@ -65,21 +65,22 @@ class SlskSetup {
     soulseek.storageCheck = (size) => StorageGuard.blockReason(dirFor(lib), size);
     dj?.onFileMissing = (_) => lib.removeMissing();
     dj?.fetchBusy = () => AutoFetch.instance.running || AutoFetch.instance.manualPending > 0;
-    dj?.onNeedTrack = (artist, bpm, key, title) {
+    dj?.genreOf = lib.genreOf;
+    dj?.onNeedTrack = (artist, bpm, key, title, genre) {
       final af = AutoFetch.instance;
       if (!autoFetchForAutomix) return;
-      if (af.running || !soulseek.online || artist.isEmpty) {
+      if (af.running || !soulseek.online) {
         DebugLog.add('automix',
-            'cannot fetch a match: ${af.running ? 'auto-fetch is busy' : !soulseek.online ? 'not signed in to Soulseek' : 'no artist name for this track'}');
+            'cannot fetch a match: ${af.running ? 'auto-fetch is busy' : 'not signed in to Soulseek'}');
         return;
       }
-      af.start(
+      // Underground tracks with the playing track's genre and tempo.
+      af.startMatching(
+        genre: genre,
         artist: artist,
         title: title,
-        seedBpm: bpm,
-        seedKey: key,
+        bpm: bpm,
         library: lib,
-        count: 2,
       );
     };
     soulseek.onFileSaved = (path) async {

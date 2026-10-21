@@ -114,3 +114,17 @@ const List<(String, List<GenreInfo>)> genreGroups = [
     GenreInfo('speedcore', 220, 300),
   ]),
 ];
+
+
+/// The genre whose usual tempo range is the tightest one around [bpm].
+String genreForBpm(double bpm) {
+  GenreInfo? best;
+  for (final group in genreGroups) {
+    for (final g in group.$2) {
+      if (bpm >= g.min && bpm <= g.max) {
+        if (best == null || (g.max - g.min) < (best.max - best.min)) best = g;
+      }
+    }
+  }
+  return best?.name ?? 'house';
+}
