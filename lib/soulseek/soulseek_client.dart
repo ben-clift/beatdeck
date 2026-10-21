@@ -120,6 +120,9 @@ class SoulseekClient extends ChangeNotifier {
   final Map<int, SlskDownload> _byToken = {};
   final List<_Peer> _anonymous = [];
 
+  /// Set when the user signs out by hand, so auto-connect leaves it alone.
+  bool manualDisconnect = false;
+
   bool get online => status == SlskStatus.online;
 
   int _newToken() => 1 + _rng.nextInt(0x7FFFFFFE);
@@ -135,6 +138,7 @@ class SoulseekClient extends ChangeNotifier {
 
   Future<void> connect(String user, String password) async {
     if (status != SlskStatus.offline) return;
+    manualDisconnect = false;
     username = user;
     status = SlskStatus.connecting;
     error = null;
@@ -188,6 +192,7 @@ class SoulseekClient extends ChangeNotifier {
   }
 
   void disconnect() {
+    manualDisconnect = true;
     error = null;
     _serverLost('');
     error = null;
