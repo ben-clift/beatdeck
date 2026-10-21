@@ -7,6 +7,7 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sidedeck/engine/analysis_cache.dart';
 import 'package:sidedeck/automix/set_flow.dart';
+import 'package:sidedeck/automix/transition_style.dart';
 import 'package:sidedeck/suggest/harmony.dart';
 import 'package:sidedeck/engine/native_engine.dart';
 import 'package:sidedeck/engine/track_analyzer.dart';
@@ -433,6 +434,9 @@ class DjController extends ChangeNotifier {
   bool automixOn = false;
   /// How long before the end the mix starts (and how long it lasts).
   double automixFadeSeconds = 20;
+  TransitionStyle automixStyle = TransitionStyle.auto;
+  TransitionPlan? _plan;
+  double _fadeLen = 20;
 
   /// How far into the next track it starts playing, rounded to whole bars.
   double automixStartOffset = 10;
@@ -537,6 +541,7 @@ class DjController extends ChangeNotifier {
     double startOffsetSeconds = 10,
     FlowArc arc = FlowArc.off,
     double lengthMinutes = 60,
+    TransitionStyle style = TransitionStyle.auto,
   }) async {
     if (paths.isEmpty && !(deckA.loaded && deckA.path != null)) return;
     stopAutomix();
@@ -558,6 +563,7 @@ class DjController extends ChangeNotifier {
     automixFadeSeconds = fadeSeconds.clamp(4.0, 60.0).toDouble();
     _baseFade = automixFadeSeconds;
     _flowNext = null;
+    automixStyle = style;
     _flow = arc == FlowArc.off ? null : SetFlow(arc, lengthMinutes: lengthMinutes);
     for (final p in _automixQueue) {
       await _flowLearn(p);
@@ -694,6 +700,17 @@ class DjController extends ChangeNotifier {
       return false;
     }
     if (shouldStartFade(remaining: remaining, fadeSeconds: automixFadeSeconds)) {
+      final plan = planFor(automixStyle,
+          outBpm: d.bpm, inBpm: deck(other).bpm, baseSeconds: automixFadeSeconds);
+      // A cut lands on the first beat of a bar, so wait for the bar line
+      // (unless the track is about to end).
+      final bar = d.bpm > 1 ? 4 * 60.0 / d.bpm : 2.0;
+      if (plan.onBarLine &&
+          remaining > bar + 1 &&
+          !nearBarLine(_engine.position(cur), d.bpm, d.beatOffset)) {
+        return false;
+      }
+      _plan = plan;
       _automixBeginFade(cur, other, next);
       return true;
     }
@@ -724,7 +741,8 @@ class DjController extends ChangeNotifier {
       final bar = 4 * 60.0 / inc.bpm;
       offset = (offset / bar).round() * bar;
     }
-    final room = math.max(0.0, inc.duration - automixFadeSeconds - 5);
+    _fadeLen = (_plan?.seconds ?? automixFadeSeconds);
+    final room = math.max(0.0, inc.duration - _fadeLen - 5);
     final start = math.min(startRaw + offset, room).clamp(0.0, math.max(0.0, inc.duration)).toDouble();
     _engine.seek(other, start);
     inc.position = start;
@@ -738,7 +756,7 @@ class DjController extends ChangeNotifier {
     _engine.play(other, true);
     inc.playing = true;
     _automixFadeStart = DateTime.now();
-    DebugLog.add('automix', 'mixing deck ${cur + 1} into deck ${other + 1} over ${automixFadeSeconds.round()} s');
+    DebugLog.add('automix', 'mixing deck ${cur + 1} into deck ${other + 1}: ${_plan?.label ?? 'blend'}, ${_fadeLen.toStringAsFixed(1)} s (${out.bpm.round()} to ${inc.bpm.round()} BPM)');
     _automixNextTarget = next;
     _automixFading = true;
     automixStatus = null;
@@ -757,16 +775,15 @@ class DjController extends ChangeNotifier {
     // silence (sin squared) while the old one falls away (cosine).
     xfader = crossfaderAt(
       elapsed: elapsed,
-      fadeSeconds: automixFadeSeconds,
+      fadeSeconds: _fadeLen,
       from: _automixFadeFrom,
       to: crossfaderEndFor(other),
     );
-    final t = (elapsed / automixFadeSeconds).clamp(0.0, 1.0);
-    final gIn = math.pow(math.sin(t * math.pi / 2), 2).toDouble();
-    final gOut = math.cos(t * math.pi / 2);
+    final t = (elapsed / _fadeLen).clamp(0.0, 1.0);
+    final (gIn, gOut) = gains(_plan?.kind ?? TransitionKind.smooth, t);
     _engine.setFader(other, _fadeInBase * gIn);
     _engine.setFader(cur, _fadeOutBase * gOut);
-    if (elapsed >= automixFadeSeconds) {
+    if (elapsed >= _fadeLen) {
       _engine.play(cur, false);
       deck(cur).playing = false;
       // Put both faders back and park the crossfader on the new deck.

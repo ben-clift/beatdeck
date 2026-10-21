@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:sidedeck/automix/transition_style.dart';
 import 'package:sidedeck/automix/set_flow.dart';
 import 'package:sidedeck/state/dj_controller.dart';
 import 'package:sidedeck/state/library_controller.dart';
@@ -24,7 +25,7 @@ class AutomixPullDown extends StatefulWidget {
 }
 
 class _AutomixPullDownState extends State<AutomixPullDown> {
-  double get _panelH => math.min(MediaQuery.of(context).size.height * 0.85, 380.0);
+  double get _panelH => math.min(MediaQuery.of(context).size.height * 0.85, 440.0);
   static const _tabH = 24.0;
 
   final _playlists = PlaylistController();
@@ -32,6 +33,7 @@ class _AutomixPullDownState extends State<AutomixPullDown> {
   double _fade = 20;
   double _offset = 10;
   FlowArc _arc = FlowArc.off;
+  TransitionStyle _style = TransitionStyle.auto;
   double _len = 60;
 
   @override
@@ -50,6 +52,7 @@ class _AutomixPullDownState extends State<AutomixPullDown> {
         _offset = p.getDouble('automix_offset') ?? _offset;
         _arc = FlowArc.values[(p.getInt('automix_arc') ?? 0).clamp(0, FlowArc.values.length - 1)];
         _len = p.getDouble('automix_len') ?? _len;
+        _style = TransitionStyle.values[(p.getInt('automix_style') ?? 0).clamp(0, TransitionStyle.values.length - 1)];
       });
     }).catchError((_) {});
   }
@@ -60,6 +63,7 @@ class _AutomixPullDownState extends State<AutomixPullDown> {
       p.setDouble('automix_offset', _offset);
       p.setInt('automix_arc', _arc.index);
       p.setDouble('automix_len', _len);
+      p.setInt('automix_style', _style.index);
     }).catchError((_) {});
   }
   String? _selectedId;
@@ -240,7 +244,7 @@ class _AutomixPullDownState extends State<AutomixPullDown> {
                     onPressed: paths.isEmpty
                         ? null
                         : () {
-                            dj.startAutomix(paths, fadeSeconds: _fade, startOffsetSeconds: _offset, arc: _arc, lengthMinutes: _len);
+                            dj.startAutomix(paths, fadeSeconds: _fade, startOffsetSeconds: _offset, arc: _arc, lengthMinutes: _len, style: _style);
                             setState(() => _open = false);
                           },
                     icon: const Icon(Icons.auto_mode, size: 18),
@@ -294,6 +298,28 @@ class _AutomixPullDownState extends State<AutomixPullDown> {
                 ],
               ),
             ),
+            Padding(
+              padding: const EdgeInsets.only(bottom: 4),
+              child: Wrap(
+                spacing: 6,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  const Text('Transition', style: TextStyle(fontSize: 12)),
+                  for (final t in TransitionStyle.values)
+                    ChoiceChip(
+                      label: Text(t.label, style: const TextStyle(fontSize: 12)),
+                      selected: _style == t,
+                      onSelected: (_) {
+                        setState(() => _style = t);
+                        widget.dj.automixStyle = t;
+                        _saveTimes();
+                      },
+                    ),
+                ],
+              ),
+            ),
+            Text(_style.blurb,
+                style: const TextStyle(fontSize: 11, color: SideDeckTheme.muted)),
             Padding(
               padding: const EdgeInsets.only(bottom: 4),
               child: Wrap(
