@@ -446,8 +446,18 @@ class DjController extends ChangeNotifier {
     _needAsked = path;
     final name = path.split(RegExp(r'[\\/]')).last.replaceFirst(RegExp(r'\.[^.]+$'), '');
     final dash = name.indexOf(' - ');
-    final artist = cur.artist;
-    final title = dash > 0 ? name.substring(dash + 3).trim() : name;
+    var artist = cur.artist;
+    var title = dash > 0 ? name.substring(dash + 3).trim() : name;
+    if (artist.isEmpty) {
+      // No "Artist - Title" name: use what comes before a bracket, e.g.
+      // "baby ford & zip (glidin' along)-[perl 061]" gives "baby ford & zip".
+      final cut = RegExp(r'\s*[\(\[]|\s-').firstMatch(name);
+      final head = (cut != null && cut.start > 1 ? name.substring(0, cut.start) : name)
+          .replaceFirst(RegExp(r'^\d+[\.\s-]+'), '')
+          .trim();
+      artist = head;
+      title = name;
+    }
     DebugLog.add('automix', 'nothing in the queue fits $name (${cur.bpm.round()} BPM), asking Soulseek for a match');
     cb(artist, cur.bpm, cur.key, title);
   }

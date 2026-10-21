@@ -55,7 +55,11 @@ class SlskSetup {
     dj?.onFileMissing = (_) => lib.removeMissing();
     dj?.onNeedTrack = (artist, bpm, key, title) {
       final af = AutoFetch.instance;
-      if (af.running || !soulseek.online || artist.isEmpty) return;
+      if (af.running || !soulseek.online || artist.isEmpty) {
+        DebugLog.add('automix',
+            'cannot fetch a match: ${af.running ? 'auto-fetch is busy' : !soulseek.online ? 'not signed in to Soulseek' : 'no artist name for this track'}');
+        return;
+      }
       af.start(
         artist: artist,
         title: title,
