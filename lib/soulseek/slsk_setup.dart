@@ -70,6 +70,7 @@ class SlskSetup {
     dj?.onFileMissing = (_) => lib.removeMissing();
     dj?.fetchBusy = () => AutoFetch.instance.running || AutoFetch.instance.manualPending > 0;
     dj?.fetchWanted = () => autoFetchForAutomix && AutoFetch.instance.followAutomix;
+    dj?.intensityWanted = () => AutoFetch.instance.intensity;
     dj?.genrePinned = () => AutoFetch.instance.pinned && AutoFetch.instance.genres.isNotEmpty;
     dj?.genreOf = (path) {
       final g = lib.genreOf(path);
@@ -103,8 +104,9 @@ class SlskSetup {
         // genre joins the pool.
         final pin = af.pinned && af.genres.isNotEmpty;
         final pool = <String>[if (pin) ...af.genres else genre];
-        var lo = pin ? af.bpmMin : (bpm > 1 ? bpm * 0.93 : af.bpmMin);
-        var hi = pin ? af.bpmMax : (bpm > 1 ? bpm * 1.07 : af.bpmMax);
+        final fixedTempo = pin || af.tempoPinned;
+        var lo = fixedTempo ? af.bpmMin : (bpm > 1 ? bpm * 0.93 : af.bpmMin);
+        var hi = fixedTempo ? af.bpmMax : (bpm > 1 ? bpm * 1.07 : af.bpmMax);
         var attempt = 0;
         final rnd = math.Random();
         while (true) {

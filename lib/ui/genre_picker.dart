@@ -164,7 +164,52 @@ class _GenrePickerState extends State<GenrePicker> {
           max: 180,
           divisions: 110,
           labels: RangeLabels('${_bpm.start.round()}', '${_bpm.end.round()}'),
-          onChanged: (v) => setState(() => _bpm = v),
+          onChanged: (v) => setState(() {
+            _bpm = v;
+            _af.bpmMin = v.start;
+            _af.bpmMax = v.end;
+          }),
+          onChangeEnd: (_) => _af.save(),
+        ),
+        SwitchListTile(
+          contentPadding: EdgeInsets.zero,
+          dense: true,
+          title: const Text('Use this tempo for every new track'),
+          subtitle: const Text('Off: new tracks follow the tempo of what is playing',
+              style: TextStyle(fontSize: 11)),
+          value: _af.tempoPinned,
+          onChanged: (v) {
+            _af.tempoPinned = v;
+            _af.bpmMin = _bpm.start;
+            _af.bpmMax = _bpm.end;
+            _af.save();
+            _af.refresh();
+          },
+        ),
+        const SizedBox(height: 6),
+        const Text('Intensity', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12)),
+        Wrap(
+          spacing: 8,
+          children: [
+            for (final e in const [(0, 'Any'), (1, 'Medium'), (2, 'High'), (3, 'Peak')])
+              ChoiceChip(
+                label: Text(e.$2),
+                visualDensity: VisualDensity.compact,
+                selected: _af.intensity == e.$1,
+                onSelected: (_) {
+                  _af.intensity = e.$1;
+                  _af.save();
+                  _af.refresh();
+                },
+              ),
+          ],
+        ),
+        const Padding(
+          padding: EdgeInsets.only(top: 2),
+          child: Text(
+            'Higher intensity prefers faster tracks and turns down downloads that are quiet or sparse.',
+            style: TextStyle(fontSize: 11, color: SideDeckTheme.muted),
+          ),
         ),
         Text(
           'Genres that fit ${_bpm.start.round()}-${_bpm.end.round()} BPM are lit.',

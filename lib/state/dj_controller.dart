@@ -514,6 +514,9 @@ class DjController extends ChangeNotifier {
 
   bool _playNextArmed = false;
 
+  /// Wanted intensity 0..3 (see AutoFetch.intensity).
+  int Function()? intensityWanted;
+
   /// True when automix should bring in new downloads all the time.
   bool Function()? fetchWanted;
 
@@ -1223,6 +1226,32 @@ class DjController extends ChangeNotifier {
           _flowNext = null;
           _automixPreloaded = false;
           return;
+        }
+      }
+      // Intensity: how dense and steady the loudness is across the track
+      // (average height of the waveform against its tallest part).
+      final want = intensityWanted?.call() ?? 0;
+      if (want > 0) {
+        final n = math.min(inc.waveMax.length, inc.waveMin.length);
+        if (n > 20) {
+          var sum = 0.0, top = 0.0;
+          for (var k = 0; k < n; k++) {
+            final a = (inc.waveMax[k] - inc.waveMin[k]).toDouble();
+            sum += a;
+            if (a > top) top = a;
+          }
+          final dens = top > 0 ? sum / n / top : 0.0;
+          const need = [0.0, 0.40, 0.52, 0.62];
+          DebugLog.add('automix',
+              'intensity of ${path.split(RegExp(r'[\\/]')).last}: ${(dens * 100).round()} (wanted ${(need[want] * 100).round()})');
+          if (tier < 2 && dens < need[want]) {
+            DebugLog.add('automix', 'turned down: not intense enough, choosing another');
+            _rejected.add(path);
+            _upNext = null;
+            _flowNext = null;
+            _automixPreloaded = false;
+            return;
+          }
         }
       }
       final tol = forced ? 30.0 : (tier == 0 ? 10.0 : (tier == 1 ? 16.0 : 1e9));

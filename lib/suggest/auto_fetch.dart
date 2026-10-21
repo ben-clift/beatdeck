@@ -41,6 +41,12 @@ class AutoFetch extends ChangeNotifier {
   /// (not the genre of the playing track) and the result is mixed in at once.
   List<String> genres = [];
   bool pinned = false;
+
+  /// How hard the tracks should hit: 0 any, 1 medium, 2 high, 3 peak.
+  int intensity = 0;
+
+  /// Use the tempo range below for every search, whatever genre is playing.
+  bool tempoPinned = false;
   final _rnd = math.Random();
   String pickGenre() => (pinned && genres.isNotEmpty) ? genres[_rnd.nextInt(genres.length)] : genre;
   double bpmMin = 120;
@@ -76,6 +82,8 @@ class AutoFetch extends ChangeNotifier {
       useRa = prefs.getBool('af_use_ra') ?? useRa;
       genres = prefs.getStringList('af_genres') ?? genres;
       pinned = prefs.getBool('af_pinned') ?? pinned;
+      intensity = prefs.getInt('af_intensity') ?? intensity;
+      tempoPinned = prefs.getBool('af_tempo_pin') ?? tempoPinned;
       useBandcamp = prefs.getBool('af_use_bc') ?? useBandcamp;
       useDiscogs = prefs.getBool('af_use_dg') ?? useDiscogs;
       hwTag = prefs.getString('af_hw_tag') ?? hwTag;
@@ -109,6 +117,8 @@ class AutoFetch extends ChangeNotifier {
       await prefs.setBool('af_use_ra', useRa);
       await prefs.setStringList('af_genres', genres);
       await prefs.setBool('af_pinned', pinned);
+      await prefs.setInt('af_intensity', intensity);
+      await prefs.setBool('af_tempo_pin', tempoPinned);
       await prefs.setBool('af_use_bc', useBandcamp);
       await prefs.setBool('af_use_dg', useDiscogs);
       await prefs.setString('af_hw_tag', hwTag);
@@ -804,6 +814,10 @@ class AutoFetch extends ChangeNotifier {
           .where((m) => words.contains(m.group(0)))
           .length;
       tx.sort((a, b) => score(b).compareTo(score(a)));
+    }
+    // Harder tracks wanted: the faster ones in the range come first.
+    if (intensity >= 2) {
+      tx.sort((a, b) => b.bpm.compareTo(a.bpm));
     }
     // Traxsource first (it has the tempo), then Hardwax, alternating.
     final mixed = <Suggestion>[];
