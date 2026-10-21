@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:sidedeck/state/backup_tracks.dart';
 import 'package:sidedeck/state/playlist_store.dart';
 
 /// Local playlists, saved on the phone in app preferences.
@@ -51,6 +52,10 @@ class PlaylistController extends ChangeNotifier {
   }
 
   void _emit() {
+    BackupTracks.setHidden([
+      for (final p in _store.playlists)
+        if (p.name == BackupTracks.name) ...p.paths,
+    ]);
     if (!_disposed) notifyListeners();
   }
 

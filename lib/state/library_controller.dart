@@ -6,6 +6,7 @@ import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
+import 'package:sidedeck/state/backup_tracks.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -77,6 +78,7 @@ class LibraryTrack {
 
 class LibraryController extends ChangeNotifier {
   LibraryController() {
+    BackupTracks.hidden.addListener(_emit);
     restore();
   }
 
@@ -97,12 +99,13 @@ class LibraryController extends ChangeNotifier {
 
   List<LibraryTrack> get filtered {
     final q = query.trim().toLowerCase();
-    if (q.isEmpty) return List.unmodifiable(tracks);
+    final away = BackupTracks.hidden.value;
+    if (q.isEmpty && away.isEmpty) return List.unmodifiable(tracks);
     return tracks
         .where(
-          (t) =>
+          (t) => !away.contains(t.path) && (q.isEmpty ||
               t.title.toLowerCase().contains(q) ||
-              t.artist.toLowerCase().contains(q),
+              t.artist.toLowerCase().contains(q)),
         )
         .toList();
   }
@@ -125,6 +128,7 @@ class LibraryController extends ChangeNotifier {
   void dispose() {
     _disposed = true;
     _cancelAnalyze = true;
+    BackupTracks.hidden.removeListener(_emit);
     super.dispose();
   }
 

@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:sidedeck/state/backup_tracks.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sidedeck/automix/transition_style.dart';
 import 'package:sidedeck/automix/set_flow.dart';
@@ -98,7 +99,8 @@ class _AutomixPullDownState extends State<AutomixPullDown> {
   }
 
   List<String> _pathsFor(String id, List<Playlist> lists) {
-    final tracks = List<LibraryTrack>.of(widget.library.tracks);
+    final away = BackupTracks.hidden.value;
+    final tracks = [for (final t in widget.library.tracks) if (!away.contains(t.path)) t];
     switch (id) {
       case _libShuffle:
         tracks.shuffle();
