@@ -241,9 +241,9 @@ class _AutoFetchPageState extends State<AutoFetchPage> {
               if (_yearFilter)
                 RangeSlider(
                   values: _years,
-                  min: 1960,
+                  min: 1920,
                   max: 2026,
-                  divisions: 66,
+                  divisions: 106,
                   labels: RangeLabels('${_years.start.round()}', '${_years.end.round()}'),
                   onChanged: (v) => setState(() => _years = v),
                 ),
@@ -351,9 +351,9 @@ class _AutoFetchPageState extends State<AutoFetchPage> {
             if (af.useYearRange)
               RangeSlider(
                 values: RangeValues(af.yearFrom.toDouble(), af.yearTo.toDouble()),
-                min: 1960,
+                min: 1920,
                 max: 2026,
-                divisions: 66,
+                divisions: 106,
                 labels: RangeLabels('${af.yearFrom}', '${af.yearTo}'),
                 onChanged: (v) {
                   af.yearFrom = v.start.round();
