@@ -69,7 +69,15 @@ TransitionPlan planFor(
   required double baseSeconds,
   double breakSeconds = 0,
 }) {
-  final kind = kindFor(style, outBpm, inBpm);
+  var kind = kindFor(style, outBpm, inBpm);
+  // On Auto, a blend length of 30 s or more is a deliberate choice: fast
+  // tracks (drum and bass, garage, hip hop) get that long blend instead of a
+  // one-bar cut, so the Timing slider is not ignored.
+  if (style == TransitionStyle.auto &&
+      baseSeconds >= 30 &&
+      (kind == TransitionKind.cut || kind == TransitionKind.quick)) {
+    kind = TransitionKind.smooth;
+  }
   final bpm = inBpm > 1 ? inBpm : (outBpm > 1 ? outBpm : 120.0);
   final bar = 4 * 60.0 / bpm;
   switch (kind) {
