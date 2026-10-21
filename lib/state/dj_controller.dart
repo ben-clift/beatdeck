@@ -1842,8 +1842,11 @@ class DjController extends ChangeNotifier {
     _fadeInBase = inc.fader;
     _engine.setXfader(0.5);
     _engine.setFader(other, 0.0);
-    _eqBaseOut = EqMove(out.eqLow, out.eqMid, out.eqHigh);
-    _eqBaseIn = EqMove(inc.eqLow, inc.eqMid, inc.eqHigh);
+    _eqBaseOut = EqMove(_handEq[cur][0], _handEq[cur][1], _handEq[cur][2]);
+    _eqBaseIn = EqMove(_handEq[other][0], _handEq[other][1], _handEq[other][2]);
+    for (final h in _eqHand) {
+      h.fillRange(0, 3, false);
+    }
     final barReal = (inc.bpm > 1 ? 4 * 60.0 / inc.bpm : 2.0) / (inc.rate <= 0 ? 1 : inc.rate);
     _swapAt = bassSwapAt(_plan?.kind ?? TransitionKind.smooth, _fadeLen, barReal);
     _applyMixEq(cur, other, 0);
@@ -1859,6 +1862,12 @@ class DjController extends ChangeNotifier {
   }
 
   double _fadeOutBase = 1;
+  /// Where the DJ left each deck's EQ knobs (low, mid, high); automix puts them back here.
+  final List<List<double>> _handEq = [[0.0, 0.0, 0.0], [0.0, 0.0, 0.0]];
+
+  /// Bands the DJ touched during the current mix: automix leaves those alone.
+  final List<bool> _filterHand = [false, false];
+  final List<List<bool>> _eqHand = [[false, false, false], [false, false, false]];
   EqMove _eqBaseOut = EqMove.none;
   EqMove _eqBaseIn = EqMove.none;
   double _swapAt = 0.6;
@@ -1914,22 +1923,37 @@ class DjController extends ChangeNotifier {
     double c(double base, double off) => math.max(-24.0, base + off);
     final iL = c(_eqBaseIn.low, inc.low), iM = c(_eqBaseIn.mid, inc.mid), iH = c(_eqBaseIn.high, inc.high);
     final oL = c(_eqBaseOut.low, out.low), oM = c(_eqBaseOut.mid, out.mid), oH = c(_eqBaseOut.high, out.high);
-    _engine.setEq(other, iL, iM, iH);
-    _engine.setEq(cur, oL, oM, oH);
-    // Show the moves on the knobs (they only reach -12 .. +12 on screen).
-    double k(double v) => v.clamp(-12.0, 12.0).toDouble();
     final di = deck(other), dc = deck(cur);
-    di.eqLow = k(iL);
-    di.eqMid = k(iM);
-    di.eqHigh = k(iH);
-    dc.eqLow = k(oL);
-    dc.eqMid = k(oM);
-    dc.eqHigh = k(oH);
+    // Show the moves on the knobs (they only reach -12 .. +12 on screen),
+    // but never fight a band the DJ has taken over by hand.
+    double k(double v) => v.clamp(-12.0, 12.0).toDouble();
+    final iv = [iL, iM, iH], ov = [oL, oM, oH];
+    final ik = [di.eqLow, di.eqMid, di.eqHigh], ok = [dc.eqLow, dc.eqMid, dc.eqHigh];
+    for (var b = 0; b < 3; b++) {
+      if (_eqHand[other][b]) {
+        iv[b] = ik[b];
+      } else {
+        ik[b] = k(iv[b]);
+      }
+      if (_eqHand[cur][b]) {
+        ov[b] = ok[b];
+      } else {
+        ok[b] = k(ov[b]);
+      }
+    }
+    di.eqLow = ik[0];
+    di.eqMid = ik[1];
+    di.eqHigh = ik[2];
+    dc.eqLow = ok[0];
+    dc.eqMid = ok[1];
+    dc.eqHigh = ok[2];
+    _engine.setEq(other, iv[0], iv[1], iv[2]);
+    _engine.setEq(cur, ov[0], ov[1], ov[2]);
     notifyListeners();
     final (fIn, fOut) = filterMoves(_plan?.kind ?? TransitionKind.smooth, t);
     if (fIn != 0 || fOut != 0 || t > 0) {
-      _engine.setFilter(other, fIn != 0 ? fIn : deck(other).filter);
-      _engine.setFilter(cur, fOut != 0 ? fOut : deck(cur).filter);
+      if (!_filterHand[other]) _engine.setFilter(other, fIn != 0 ? fIn : deck(other).filter);
+      if (!_filterHand[cur]) _engine.setFilter(cur, fOut != 0 ? fOut : deck(cur).filter);
     }
   }
 
@@ -1955,14 +1979,23 @@ class DjController extends ChangeNotifier {
   }
 
   void _restoreMixEq(int cur, int other) {
-    deck(other).eqLow = _eqBaseIn.low;
-    deck(other).eqMid = _eqBaseIn.mid;
-    deck(other).eqHigh = _eqBaseIn.high;
-    deck(cur).eqLow = _eqBaseOut.low;
-    deck(cur).eqMid = _eqBaseOut.mid;
-    deck(cur).eqHigh = _eqBaseOut.high;
-    _engine.setEq(other, _eqBaseIn.low, _eqBaseIn.mid, _eqBaseIn.high);
-    _engine.setEq(cur, _eqBaseOut.low, _eqBaseOut.mid, _eqBaseOut.high);
+    for (final e in [(other, _eqBaseIn), (cur, _eqBaseOut)]) {
+      final d = deck(e.$1);
+      final base = [e.$2.low, e.$2.mid, e.$2.high];
+      final now = [d.eqLow, d.eqMid, d.eqHigh];
+      for (var b = 0; b < 3; b++) {
+        if (!_eqHand[e.$1][b]) now[b] = base[b];
+      }
+      d.eqLow = now[0];
+      d.eqMid = now[1];
+      d.eqHigh = now[2];
+      _engine.setEq(e.$1, now[0], now[1], now[2]);
+    }
+    for (final h in _eqHand) {
+      h.fillRange(0, 3, false);
+    }
+    _filterHand.fillRange(0, 2, false);
+    notifyListeners();
     _engine.setFilter(other, deck(other).filter);
     _engine.setFilter(cur, deck(cur).filter);
   }
@@ -2284,12 +2317,20 @@ class DjController extends ChangeNotifier {
     d.eqLow = low ?? d.eqLow;
     d.eqMid = mid ?? d.eqMid;
     d.eqHigh = high ?? d.eqHigh;
+    final vals = [low, mid, high];
+    final mine = [d.eqLow, d.eqMid, d.eqHigh];
+    for (var b = 0; b < 3; b++) {
+      if (vals[b] == null) continue;
+      _handEq[deckIndex][b] = mine[b];
+      if (_automixFading) _eqHand[deckIndex][b] = true; // your move wins over the mix
+    }
     _engine.setEq(deckIndex, d.eqLow, d.eqMid, d.eqHigh);
     notifyListeners();
   }
 
   void setFilter(int deckIndex, double amount) {
     deck(deckIndex).filter = amount;
+    if (_automixFading) _filterHand[deckIndex] = true;
     _engine.setFilter(deckIndex, amount);
     notifyListeners();
   }
