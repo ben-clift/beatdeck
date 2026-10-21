@@ -1479,11 +1479,13 @@ class DjController extends ChangeNotifier {
   }
 
   /// Returns true if something on screen changed.
+  DateTime? _silentSince;
+
   bool _automixTick() {
     if (!automixOn || _automixDeck < 0) return false;
     if (_automixBusy) {
       // A load that never finishes must not freeze automix: give it a minute.
-      if (++_busyTicks > 1200) {
+      if (++_busyTicks > 400) {
         DebugLog.fail('automix', 'a track load took over a minute, carrying on');
         _automixBusy = false;
         _busyTicks = 0;
@@ -1511,7 +1513,21 @@ class DjController extends ChangeNotifier {
         (!d.playing && d.duration > 0 && _engine.position(cur) >= d.duration - 0.6)) {
       return _automixDeckEnded(cur, other);
     }
-    if (!d.playing) return false; // paused by the DJ: wait
+    if (!d.playing) {
+      // The other deck is playing because you started it: it carries on.
+      if (deck(other).loaded && deck(other).playing) return _automixDeckEnded(cur, other);
+      // Paused or stopped: give you a few seconds, then carry on by itself so
+      // the music never just stops.
+      _silentSince ??= DateTime.now();
+      if (DateTime.now().difference(_silentSince!).inSeconds < 6) return false;
+      _silentSince = null;
+      DebugLog.add('automix', 'both decks were silent: carrying on by itself');
+      _engine.play(cur, true);
+      d.playing = true;
+      notifyListeners();
+      return true;
+    }
+    _silentSince = null;
     // The other deck is playing because you started it: leave it alone (never
     // load a new track over it) until the current one ends.
     if (deck(other).loaded && deck(other).playing) return false;
