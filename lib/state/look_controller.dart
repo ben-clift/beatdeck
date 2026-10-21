@@ -107,6 +107,10 @@ class LookController extends ChangeNotifier {
   /// red. At most three per second.
   bool flashOn = true;
 
+  /// Now and then (every 30 s or more) a very quick white flash and a buzz
+  /// of the phone on a big peak. Off until switched on.
+  bool strobeOn = false;
+
   /// Bumped to fire the effects once, for trying them out.
   final ValueNotifier<int> testTrigger = ValueNotifier<int>(0);
   int backgroundIndex = 0;
@@ -206,6 +210,7 @@ class LookController extends ChangeNotifier {
       smokeOn = prefs.getBool('look_smoke') ?? true;
       streamersOn = prefs.getBool('look_streamers') ?? true;
       flashOn = prefs.getBool('look_flash') ?? true;
+      strobeOn = prefs.getBool('look_strobe') ?? false;
       style = LookStyle.values[_clamp(prefs.getInt('look_style') ?? 0, LookStyle.values.length)];
       final saved = prefs.getStringList('look_decks');
       if (saved != null && saved.length == deckAccent.length) {
@@ -230,6 +235,7 @@ class LookController extends ChangeNotifier {
       await prefs.setBool('look_smoke', smokeOn);
       await prefs.setBool('look_streamers', streamersOn);
       await prefs.setBool('look_flash', flashOn);
+      await prefs.setBool('look_strobe', strobeOn);
       await prefs.setStringList('look_decks', [for (final a in deckAccent) '$a']);
     } catch (_) {}
   }
@@ -248,6 +254,12 @@ class LookController extends ChangeNotifier {
 
   void setStreamers(bool on) {
     streamersOn = on;
+    notifyListeners();
+    _save();
+  }
+
+  void setStrobe(bool on) {
+    strobeOn = on;
     notifyListeners();
     _save();
   }
@@ -290,6 +302,7 @@ class LookController extends ChangeNotifier {
     smokeOn = true;
     streamersOn = true;
     flashOn = true;
+    strobeOn = false;
     backgroundIndex = 0;
     bodyIndex = 0;
     for (var i = 0; i < deckAccent.length; i++) {

@@ -74,6 +74,19 @@ class _LookSheet extends StatelessWidget {
                   value: look.flashOn,
                   onChanged: look.setFlash,
                 ),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  dense: true,
+                  title: const Text('Occasional white flash and phone buzz'),
+                  subtitle: const Text(
+                    'On the biggest peaks, at most once every 30 seconds or so: two very '
+                    'quick white flashes and a vibration. Off unless you switch it on. '
+                    'Do not use if flashing lights can affect you.',
+                    style: TextStyle(fontSize: 11),
+                  ),
+                  value: look.strobeOn,
+                  onChanged: look.setStrobe,
+                ),
                 Align(
                   alignment: Alignment.centerLeft,
                   child: OutlinedButton(

@@ -2,6 +2,7 @@ import 'dart:math' as math;
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:sidedeck/state/dj_controller.dart';
 import 'package:sidedeck/state/look_controller.dart';
@@ -89,6 +90,11 @@ class _PartyEffectsState extends State<PartyEffects>
   final _streamers = <_Streamer>[];
   final _flashes = <_Flash>[];
   double _flashCool = 1;
+  // Occasional white flash + buzz: two quick pulses (well under 3 a second).
+  final _strobeAlpha = ValueNotifier<double>(0);
+  double _strobeT = -1;
+  double _strobeCool = 25;
+  bool _buzz2 = false;
   final _repaint = ValueNotifier<int>(0);
   late final Ticker _ticker;
   Duration _last = Duration.zero;
@@ -116,10 +122,18 @@ class _PartyEffectsState extends State<PartyEffects>
   }
 
   void _sync() {
-    widget.dj.setEffectsOn(_look.smokeOn || _look.streamersOn || _look.flashOn);
+    widget.dj.setEffectsOn(_look.smokeOn || _look.streamersOn || _look.flashOn || _look.strobeOn);
+  }
+
+  void _startStrobe() {
+    _strobeT = 0;
+    _buzz2 = false;
+    _strobeCool = 30 + _rnd.nextDouble() * 40;
+    HapticFeedback.heavyImpact();
   }
 
   void _burstNow() {
+    if (_look.strobeOn && _strobeT < 0) _startStrobe();
     if (_size.isEmpty) return;
     if (_look.smokeOn) {
       for (var i = 0; i < 9; i++) {
@@ -141,6 +155,7 @@ class _PartyEffectsState extends State<PartyEffects>
     widget.dj.setEffectsOn(false);
     _ticker.dispose();
     _repaint.dispose();
+    _strobeAlpha.dispose();
     super.dispose();
   }
 
@@ -161,6 +176,25 @@ class _PartyEffectsState extends State<PartyEffects>
     if (_size.isEmpty) return;
 
     final level = _level();
+
+    // The occasional white flash: only on a big peak, then a long rest.
+    if (_strobeT >= 0) {
+      _strobeT += dt;
+      final t = _strobeT;
+      final on = (t < 0.07) || (t >= 0.42 && t < 0.49);
+      if (t >= 0.42 && !_buzz2) {
+        _buzz2 = true;
+        HapticFeedback.heavyImpact();
+      }
+      _strobeAlpha.value = on ? 0.8 : 0.0;
+      if (t > 0.6) {
+        _strobeT = -1;
+        _strobeAlpha.value = 0;
+      }
+    } else if (_look.strobeOn) {
+      _strobeCool -= dt;
+      if (_strobeCool <= 0 && level >= 0.95) _startStrobe();
+    }
 
     // Smoke while the sound is in the red.
     if (_look.smokeOn && level > 0.85) {
@@ -341,9 +375,20 @@ class _PartyEffectsState extends State<PartyEffects>
         child: LayoutBuilder(
           builder: (context, c) {
             _size = Size(c.maxWidth, c.maxHeight);
-            return CustomPaint(
-              painter: _EffectsPainter(_puffs, _streamers, _flashes, _repaint),
-              size: Size.infinite,
+            return Stack(
+              fit: StackFit.expand,
+              children: [
+                CustomPaint(
+                  painter: _EffectsPainter(_puffs, _streamers, _flashes, _repaint),
+                  size: Size.infinite,
+                ),
+                ValueListenableBuilder<double>(
+                  valueListenable: _strobeAlpha,
+                  builder: (_, a, __) => a <= 0
+                      ? const SizedBox.shrink()
+                      : ColoredBox(color: Colors.white.withValues(alpha: a)),
+                ),
+              ],
             );
           },
         ),
