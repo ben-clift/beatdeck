@@ -39,6 +39,11 @@ class StorageGuard {
     } catch (_) {}
   }
 
+  /// Set by the app: deletes recyclable downloads to make room for [need] bytes.
+  static Future<void> Function(int need)? recycle;
+
+  static void forget() => _cachedAt = DateTime.fromMillisecondsSinceEpoch(0);
+
   static int _cachedUsed = 0;
   static String _cachedDir = '';
   static DateTime _cachedAt = DateTime.fromMillisecondsSinceEpoch(0);
@@ -90,7 +95,16 @@ class StorageGuard {
   }
 
   /// A reason not to download [incoming] more bytes, or null when it is fine.
-  static Future<String?> blockReason(String dir, int incoming) async {
+  static Future<String?> blockReason(String dir, int incoming, {bool recycle = true}) async {
+    final r = await _reason(dir, incoming);
+    if (r == null || !recycle || StorageGuard.recycle == null) return r;
+    // Out of room: recycle old downloads, then look again.
+    await StorageGuard.recycle!(incoming);
+    forget();
+    return _reason(dir, incoming);
+  }
+
+  static Future<String?> _reason(String dir, int incoming) async {
     final used = await usedBytes(dir);
     if (used + incoming > maxGb * _gb) {
       return 'Storage limit reached: ${(used / _gb).toStringAsFixed(1)} GB used '

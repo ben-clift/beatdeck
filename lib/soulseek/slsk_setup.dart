@@ -4,6 +4,8 @@ import 'dart:math' as math;
 import 'dart:io';
 import 'package:sidedeck/state/backup_tracks.dart';
 import 'package:sidedeck/state/ratings.dart';
+import 'package:sidedeck/state/dislikes.dart';
+import 'package:sidedeck/state/playlist_controller.dart';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:sidedeck/debug/debug_log.dart';
@@ -85,7 +87,76 @@ class SlskSetup {
     }
   }
 
+  static bool _recycling = false;
+
+  /// Frees room by deleting downloaded tracks, never your own music, never
+  /// starred or loaded ones. Order: Backup tracks first, then disliked ones,
+  /// then the least played (older than a day, so fresh downloads survive).
+  static Future<void> recycle(LibraryController lib, int incoming) async {
+    if (_recycling) return;
+    _recycling = true;
+    try {
+      final dir = dirFor(lib);
+      await Ratings.instance.load();
+      final backup = await BackupTracks.paths();
+      final onDeck = <String>{
+        for (var i = 0; i < 2; i++) if ((dj?.deck(i).path ?? '').isNotEmpty) dj!.deck(i).path!,
+      };
+      bool mine(String path) =>
+          (dir.isNotEmpty && path.startsWith(dir)) || AutoFetch.instance.wasFetched(path);
+      final cand = [
+        for (final t in lib.tracks)
+          if (mine(t.path) && !onDeck.contains(t.path) && Ratings.instance.starsOf(t.path) == 0) t
+      ];
+      int tier(LibraryTrack t) {
+        if (backup.contains(t.path)) return 0;
+        if (Dislikes.instance.hasPath(t.path)) return 1;
+        return 2;
+      }
+      DateTime mod(LibraryTrack t) {
+        try {
+          return File(t.path).lastModifiedSync();
+        } catch (_) {
+          return DateTime.now();
+        }
+      }
+      final dayAgo = DateTime.now().subtract(const Duration(days: 1));
+      final order = cand.where((t) => tier(t) < 2 || mod(t).isBefore(dayAgo)).toList()
+        ..sort((a, b) {
+          final ta = tier(a), tb = tier(b);
+          if (ta != tb) return ta.compareTo(tb);
+          final pa = dj?.playCountOf(a.path) ?? 0, pb = dj?.playCountOf(b.path) ?? 0;
+          if (pa != pb) return pa.compareTo(pb);
+          return mod(a).compareTo(mod(b));
+        });
+      var freed = 0;
+      var n = 0;
+      for (final t in order) {
+        if (await StorageGuard.blockReason(dir, incoming, recycle: false) == null) break;
+        try {
+          final f = File(t.path);
+          if (!await f.exists()) continue;
+          final size = await f.length();
+          await f.delete();
+          freed += size;
+          n++;
+          StorageGuard.forget();
+          DebugLog.add('storage',
+              'recycled (${const ['backup', 'disliked', 'least played'][tier(t)]}): ${t.path.split(RegExp(r'[\\/]')).last}');
+        } catch (_) {}
+      }
+      if (n > 0) {
+        await lib.removeMissing();
+        await PlaylistController.reloadAll();
+        DebugLog.add('storage', 'recycling freed ${(freed / 1048576).round()} MB from $n tracks');
+      }
+    } finally {
+      _recycling = false;
+    }
+  }
+
   static void wire(LibraryController lib) {
+    StorageGuard.recycle = (need) => recycle(lib, need);
     dj?.onTrackDone = (path) => discardPlayed(lib, path);
     library = lib;
     soulseek.downloadDir = () => dirFor(lib);
