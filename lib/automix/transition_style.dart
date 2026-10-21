@@ -162,10 +162,23 @@ double bassSwapAt(TransitionKind kind, double lengthSeconds, double barSeconds) 
     );
   }
   final quick = kind != TransitionKind.smooth;
-  final inMid = quick ? -4.0 : -8.0;
-  final inHigh = quick ? -6.0 : -12.0;
-  final open = quick ? 0.5 : 0.55;
-  final w = quick ? 0.04 : 0.02; // swap ramp, a short fraction of the mix
+  if (!quick) {
+    // Long blend: the new track comes in with no bass and almost no treble
+    // and opens up gradually (slow at first), so a thin minimal track and a
+    // heavy dub track do not fight. The old track's treble and mids are
+    // thinned out from the third of the way in.
+    double ease(double x) => x * x * (3 - 2 * x);
+    final openMid = ease(_ramp(t, 0, 0.8, 0, 1));
+    final openHigh = ease(_ramp(t, 0, 0.88, 0, 1));
+    return (
+      EqMove(_ramp(t, swap, swap + 0.02, _kill, 0), -14 * (1 - openMid), -24 * (1 - openHigh)),
+      EqMove(_ramp(t, swap, swap + 0.02, 0, _kill), _ramp(t, 0.3, 1, 0, -10), _ramp(t, 0.3, 1, 0, -18)),
+    );
+  }
+  final inMid = -4.0;
+  final inHigh = -6.0;
+  final open = 0.5;
+  final w = 0.04;
   final incoming = EqMove(
     _ramp(t, swap, swap + w, _kill, 0),
     _ramp(t, 0, open, inMid, 0),
@@ -173,8 +186,8 @@ double bassSwapAt(TransitionKind kind, double lengthSeconds, double barSeconds) 
   );
   final outgoing = EqMove(
     _ramp(t, swap, swap + w, 0, _kill),
-    _ramp(t, swap, 1, 0, quick ? -4 : -8),
-    _ramp(t, swap, 1, 0, quick ? -6 : -12),
+    _ramp(t, swap, 1, 0, -4),
+    _ramp(t, swap, 1, 0, -6),
   );
   return (incoming, outgoing);
 }
