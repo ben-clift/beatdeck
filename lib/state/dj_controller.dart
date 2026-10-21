@@ -1173,15 +1173,15 @@ class DjController extends ChangeNotifier {
   /// other deck if needed and start it straight away.
   bool _automixDeckEnded(int cur, int other) {
     final waiting = fetchBusy?.call() ?? false;
-    var next = _nextUnplayed(tier: 0) ?? (waiting ? null : _nextUnplayed(tier: 2));
-    if (next == null && _replayPick() != null) next = _nextUnplayed(tier: 2);
-    if (next == null) {
+    int? picked = _nextUnplayed(tier: 0) ?? (waiting ? null : _nextUnplayed(tier: 2));
+    if (picked == null && _replayPick() != null) picked = _nextUnplayed(tier: 2);
+    if (picked == null) {
       // The deck ended and nothing suitable is queued: stay on, ask for a
       // match, and start it the moment it arrives.
       _checkNeedTrack();
       final busy = fetchBusy?.call() ?? false;
       final text = busy
-          ? 'Finding a matching track…'
+          ? (fetchStatus?.call() ?? 'Finding a matching track…')
           : 'No suitable track left. Looking for one (Soulseek helper), or add music.';
       if (automixStatus != text) {
         automixStatus = text;
@@ -1189,6 +1189,7 @@ class DjController extends ChangeNotifier {
       }
       return false;
     }
+    final int next = picked;
     DebugLog.add('automix', 'deck ${cur + 1} finished on its own, starting deck ${other + 1} straight away');
     _automixBusy = true;
     () async {
