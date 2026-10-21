@@ -93,6 +93,10 @@ struct StreamingDecoder {
     // Enough of the first Ogg page to see OpusHead / vorbis after the page hdr.
     unsigned char head[64]{};
     const size_t nHead = readHead(path, head, sizeof(head));
+    if (nHead == 0) {
+      djSetLastError("The app cannot read this file (permission, or it is empty).");
+      return false;
+    }
 
     // Definite containers: try only the matching decoder. Falling through to
     // MP3 on an Ogg Vorbis file makes dr_mp3 scan for frame sync forever
@@ -135,6 +139,13 @@ struct StreamingDecoder {
       if (tryKind(k, path)) {
         return true;
       }
+    }
+    if (djGetLastError()[0] == '\0') {
+      char hex[32];
+      std::snprintf(hex, sizeof(hex), "%02x %02x %02x %02x", head[0], head[1], head[2], head[3]);
+      std::string msg = std::string("Couldn't decode this file (starts with ") + hex + ", " +
+                        std::to_string(nHead) + " bytes read).";
+      djSetLastError(msg.c_str());
     }
     return false;
   }

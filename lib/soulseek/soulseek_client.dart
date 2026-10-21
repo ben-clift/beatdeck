@@ -63,6 +63,7 @@ class SlskDownload {
   int token = 0;
   String? savedPath;
   IOSink? sink;
+  bool finishing = false;
 
   String get user => result.user;
   String get remotePath => result.path;
@@ -698,10 +699,16 @@ class SoulseekClient extends ChangeNotifier {
     return true;
   }
 
-  void _finish(SlskDownload d) {
-    if (d.state == DlState.done) return;
-    d.sink?.close();
+  Future<void> _finish(SlskDownload d) async {
+    if (d.state == DlState.done || d.finishing) return;
+    d.finishing = true;
+    // Wait until every byte is on disk before anything tries to play it.
+    final sink = d.sink;
     d.sink = null;
+    try {
+      await sink?.flush();
+      await sink?.close();
+    } catch (_) {}
     d.state = DlState.done;
     d.message = 'Saved';
     _changed();
