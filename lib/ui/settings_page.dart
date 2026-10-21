@@ -108,6 +108,17 @@ class _SettingsPageState extends State<SettingsPage> {
           ),
           const Divider(height: 32),
           ListTile(
+            title: const Text('Clear automix play history'),
+            subtitle: const Text('Tracks played in the last 24 hours are skipped. This lets them play again.'),
+            onTap: () async {
+              await widget.dj.clearPlayedHistory();
+              if (!mounted) return;
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Play history cleared')),
+              );
+            },
+          ),
+          ListTile(
             contentPadding: EdgeInsets.zero,
             leading: const Icon(Icons.bug_report_outlined),
             title: const Text('Test log'),

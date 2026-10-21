@@ -435,7 +435,7 @@ class DjController extends ChangeNotifier {
     var fits = 0;
     for (var i = _automixIndex + 1; i < _automixQueue.length; i++) {
       final q = _automixQueue[i];
-      if (_automixPlayed.contains(_trackKey(q))) continue;
+      if (_wasPlayed(q)) continue;
       final c = _flowOf(q);
       if (c == null) continue;
       if (c.bpm > 0 && bpmGapPercent(cur.bpm, c.bpm).abs() > 8) continue;
@@ -491,6 +491,61 @@ class DjController extends ChangeNotifier {
   // "Song (1)", so the same track is never mixed in twice.
   final Set<String> _automixPlayed = {};
 
+  // Tracks automix has played in the last 24 hours, kept across restarts, so
+  // the same track is not mixed in again the same day.
+  final Map<String, int> _recentPlayed = {};
+  bool _recentLoaded = false;
+  static const _recentHours = 24;
+
+  Future<void> _loadRecent() async {
+    if (_recentLoaded) return;
+    _recentLoaded = true;
+    try {
+      final p = await SharedPreferences.getInstance();
+      for (final e in p.getStringList('automix_recent') ?? const <String>[]) {
+        final i = e.lastIndexOf('|');
+        if (i <= 0) continue;
+        final t = int.tryParse(e.substring(i + 1));
+        if (t != null) _recentPlayed[e.substring(0, i)] = t;
+      }
+    } catch (_) {}
+    _pruneRecent();
+  }
+
+  void _pruneRecent() {
+    final cutoff = DateTime.now().millisecondsSinceEpoch - _recentHours * 3600 * 1000;
+    _recentPlayed.removeWhere((_, t) => t < cutoff);
+  }
+
+  bool _wasPlayed(String path) {
+    final k = _trackKey(path);
+    if (_automixPlayed.contains(k)) return true;
+    final t = _recentPlayed[k];
+    return t != null &&
+        DateTime.now().millisecondsSinceEpoch - t < _recentHours * 3600 * 1000;
+  }
+
+  void _markPlayed(String path) {
+    final k = _trackKey(path);
+    _automixPlayed.add(k);
+    _recentPlayed[k] = DateTime.now().millisecondsSinceEpoch;
+    _pruneRecent();
+    SharedPreferences.getInstance().then((p) {
+      p.setStringList('automix_recent',
+          [for (final e in _recentPlayed.entries) '${e.key}|${e.value}']);
+    }).catchError((_) {});
+  }
+
+  /// Forget what was played in the last 24 hours.
+  Future<void> clearPlayedHistory() async {
+    _recentPlayed.clear();
+    _automixPlayed.clear();
+    try {
+      (await SharedPreferences.getInstance()).remove('automix_recent');
+    } catch (_) {}
+    notifyListeners();
+  }
+
   static String _trackKey(String path) {
     var name = path.split(RegExp(r'[\\/]')).last;
     name = name.replaceFirst(RegExp(r'\.[^.]+$'), '');
@@ -542,13 +597,13 @@ class DjController extends ChangeNotifier {
       if (held != null &&
           held > _automixIndex &&
           held < _automixQueue.length &&
-          !_automixPlayed.contains(_trackKey(_automixQueue[held]))) {
+          !_wasPlayed(_automixQueue[held])) {
         return held;
       }
       final cands = <(int, FlowTrack)>[];
       for (var i = _automixIndex + 1; i < _automixQueue.length; i++) {
         final path = _automixQueue[i];
-        if (_automixPlayed.contains(_trackKey(path))) continue;
+        if (_wasPlayed(path)) continue;
         cands.add((i, _flowOf(path) ?? FlowTrack(path)));
       }
       if (cands.isEmpty) return null;
@@ -563,7 +618,7 @@ class DjController extends ChangeNotifier {
       return pick.index;
     }
     for (var i = _automixIndex + 1; i < _automixQueue.length; i++) {
-      if (!_automixPlayed.contains(_trackKey(_automixQueue[i]))) return i;
+      if (!_wasPlayed(_automixQueue[i])) return i;
     }
     return null;
   }
@@ -583,15 +638,18 @@ class DjController extends ChangeNotifier {
     stopAutomix();
     // The track already on deck A (if any) starts the set; then the list.
     final onA = deckA.loaded ? deckA.path : null;
+    await _loadRecent();
     final seen = <String>{};
     _automixQueue = [
       if (onA != null && File(onA).existsSync())
         if (seen.add(_trackKey(onA))) onA,
       for (final p in paths)
-        if (File(p).existsSync() && seen.add(_trackKey(p))) p,
+        if (File(p).existsSync() && !_wasPlayed(p) && seen.add(_trackKey(p))) p,
     ];
     if (_automixQueue.isEmpty) {
-      automixStatus = 'No playable files in that list';
+      automixStatus = paths.isNotEmpty && paths.any((q) => File(q).existsSync())
+          ? 'Everything in that list was already played in the last 24 hours'
+          : 'No playable files in that list';
       notifyListeners();
       return;
     }
@@ -641,7 +699,7 @@ class DjController extends ChangeNotifier {
     deckA.playing = true;
     _automixDeck = 0;
     _automixIndex = 0;
-    _automixPlayed.add(_trackKey(_automixQueue.first));
+    _markPlayed(_automixQueue.first);
     DebugLog.flow('Automix start', true);
     DebugLog.ok('automix', 'playing first track on deck 1: ${_automixQueue.first.split(RegExp(r'[\\/]')).last}');
     _automixPreloaded = false;
@@ -908,7 +966,7 @@ class DjController extends ChangeNotifier {
       _automixDeck = other;
       final prevTrack = _flowOf(_automixQueue[_automixIndex]);
       _automixIndex = _automixNextTarget;
-      _automixPlayed.add(_trackKey(_automixQueue[_automixIndex]));
+      _markPlayed(_automixQueue[_automixIndex]);
       if (prevTrack != null) _flow?.played(prevTrack, _flowMove);
       _flowNext = null;
       _automixPreloaded = false;
