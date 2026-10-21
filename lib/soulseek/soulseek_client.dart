@@ -541,7 +541,7 @@ class SoulseekClient extends ChangeNotifier {
     if (_peers[peer.user] == peer) _peers.remove(peer.user);
     final d = peer.download;
     if (d != null && d.state == DlState.downloading) {
-      if (d.size > 0 && d.received >= d.size) {
+      if (d.received > 0 && (d.size <= 0 || d.received >= d.size * 0.999)) {
         _finish(d);
       } else {
         d.sink?.close();
@@ -706,8 +706,8 @@ class SoulseekClient extends ChangeNotifier {
     final sink = d.sink;
     d.sink = null;
     try {
-      await sink?.flush();
-      await sink?.close();
+      await sink?.flush().timeout(const Duration(seconds: 6));
+      await sink?.close().timeout(const Duration(seconds: 6));
     } catch (_) {}
     d.state = DlState.done;
     d.message = 'Saved';

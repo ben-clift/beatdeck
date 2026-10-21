@@ -34,6 +34,8 @@ class _SoulseekPageState extends State<SoulseekPage> {
   void initState() {
     super.initState();
     SlskSetup.wire(widget.library);
+    // Anything already in the save folder joins the library.
+    widget.library.scanDirectory(SlskSetup.dirFor(widget.library), persist: false);
     _loadSaved();
     final q = widget.initialQuery;
     if (q != null && q.isNotEmpty) {
