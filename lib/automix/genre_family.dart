@@ -33,6 +33,10 @@ String? genreFamily(String genre) {
   // "tech house" is house-family first, "dub techno" is techno-family first,
   // so test the most specific wording before the single words.
   if (g.contains('dub techno')) return 'techno';
+  for (final k in const ['techstep', 'darkstep', 'hardstep', 'jazzstep', 'sambass', 'jump up', 'drill and bass']) {
+    if (g.contains(k)) return 'dnb';
+  }
+  if (g.contains('bassline')) return 'house';
   if (g.contains('tech house') || g.contains('deep house')) return 'house';
   if (g.contains('drum') && g.contains('bass')) return 'dnb';
   for (final e in _families.entries) {
