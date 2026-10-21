@@ -66,7 +66,6 @@ class SlskSetup {
     soulseek.storageCheck = (size) => StorageGuard.blockReason(dirFor(lib), size);
     dj?.onFileMissing = (_) => lib.removeMissing();
     dj?.fetchBusy = () => AutoFetch.instance.running || AutoFetch.instance.manualPending > 0;
-    dj?.libraryPaths = () => [for (final t in lib.tracks) t.path];
     dj?.genreOf = (path) {
       final g = lib.genreOf(path);
       return g.isNotEmpty ? g : AutoFetch.instance.hintFor(path);
@@ -93,13 +92,22 @@ class SlskSetup {
         return;
       }
       // One pipeline: shortlist, search, download, library, automix.
-      af.findNext(
-        genre: genre,
-        artist: artist,
-        title: title,
-        bpm: bpm,
-        library: lib,
-      );
+      () async {
+        // Keep searching until a track is found (or automix is stopped).
+        while (true) {
+          await af.findNext(
+            genre: genre,
+            artist: artist,
+            title: title,
+            bpm: bpm,
+            library: lib,
+          );
+          if (af.lastFound || !(dj?.automixOn ?? false) || !autoFetchForAutomix) return;
+          DebugLog.add('automix', 'nothing found yet, searching again');
+          await Future<void>.delayed(const Duration(seconds: 4));
+          if (!(dj?.automixOn ?? false) || af.running) return;
+        }
+      }();
     };
     soulseek.onFileSaved = (path) async {
       // One way in: library first, then automix, and only if it was kept.
