@@ -13,6 +13,7 @@ import 'package:sidedeck/state/dislikes.dart';
 import 'package:sidedeck/automix/genre_family.dart';
 import 'package:sidedeck/suggest/genres.dart';
 import 'package:sidedeck/suggest/hardwax.dart';
+import 'package:sidedeck/suggest/ra.dart';
 import 'package:sidedeck/suggest/taste.dart';
 import 'package:sidedeck/suggest/traxsource.dart';
 import 'package:sidedeck/state/library_controller.dart';
@@ -44,6 +45,7 @@ class AutoFetch extends ChangeNotifier {
   /// Shops the AUTO switch and automix may take tracks from.
   bool useHardwax = true;
   bool useTrax = true;
+  bool useRa = true;
   String hwTag = '';
 
   Future<void> load() async {
@@ -59,6 +61,7 @@ class AutoFetch extends ChangeNotifier {
       hardwax = prefs.getBool('af_hardwax') ?? hardwax;
       useHardwax = prefs.getBool('af_use_hw') ?? useHardwax;
       useTrax = prefs.getBool('af_use_trax') ?? useTrax;
+      useRa = prefs.getBool('af_use_ra') ?? useRa;
       hwTag = prefs.getString('af_hw_tag') ?? hwTag;
       source = prefs.getString('af_source') ?? source;
       chartId = prefs.getInt('af_chart_id') ?? chartId;
@@ -87,6 +90,7 @@ class AutoFetch extends ChangeNotifier {
       await prefs.setBool('af_hardwax', hardwax);
       await prefs.setBool('af_use_hw', useHardwax);
       await prefs.setBool('af_use_trax', useTrax);
+      await prefs.setBool('af_use_ra', useRa);
       await prefs.setString('af_hw_tag', hwTag);
       await prefs.setInt('af_chart_id', chartId);
       await prefs.setString('af_chart_name', chartName);
@@ -732,12 +736,22 @@ class AutoFetch extends ChangeNotifier {
         DebugLog.add('fetch', 'Hardwax list not available: $e');
       }
     }
+    var ra = <Suggestion>[];
+    if (useRa) {
+      try {
+        ra = await RaSource.all();
+      } catch (e) {
+        DebugLog.add('fetch', 'RA list not available: $e');
+      }
+    }
+    ra.shuffle();
     tx.shuffle();
     hw.shuffle();
     // Traxsource first (it has the tempo), then Hardwax, alternating.
     final mixed = <Suggestion>[];
-    for (var i = 0; i < tx.length || i < hw.length; i++) {
+    for (var i = 0; i < tx.length || i < hw.length || i < ra.length; i++) {
       if (i < tx.length) mixed.add(tx[i]);
+      if (i < ra.length) mixed.add(ra[i]);
       if (i < hw.length) mixed.add(hw[i]);
     }
     // Your playlists decide the order: tracks by artists or on labels you
@@ -752,8 +766,8 @@ class AutoFetch extends ChangeNotifier {
     add(liked.skip(4));
     DebugLog.add('fetch',
         'taste: ${Taste.artists.length} artists and ${Taste.labels.length} labels from your playlists, ${liked.length} liked on the shop lists');
-    DebugLog.add('fetch', 'shortlist for "$g": ${tx.length} Traxsource + ${hw.length} Hardwax, ${out.length} usable');
-    if (out.length < 5 && (useTrax || useHardwax)) {
+    DebugLog.add('fetch', 'shortlist for "$g": ${tx.length} Traxsource + ${hw.length} Hardwax + ${ra.length} RA, ${out.length} usable');
+    if (out.length < 5 && (useTrax || useHardwax || useRa)) {
       DebugLog.add('fetch', 'shop lists are short, adding the underground list');
       try {
         add(await _service.underground(g, bpmMin: lo, bpmMax: hi, skip: seen, want: 10));

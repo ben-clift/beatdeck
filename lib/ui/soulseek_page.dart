@@ -345,6 +345,16 @@ class _SoulseekPageState extends State<SoulseekPage> {
                         ),
                         const SizedBox(width: 6),
                         FilterChip(
+                          label: const Text('RA'),
+                          selected: af.useRa,
+                          onSelected: (v) {
+                            af.useRa = v;
+                            af.save();
+                            af.refresh();
+                          },
+                        ),
+                        const SizedBox(width: 6),
+                        FilterChip(
                           label: const Text('Traxsource'),
                           selected: af.useTrax,
                           onSelected: (v) {
