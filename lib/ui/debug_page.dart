@@ -2,16 +2,28 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:sidedeck/debug/debug_log.dart';
 
-class DebugPage extends StatelessWidget {
+class DebugPage extends StatefulWidget {
   const DebugPage({super.key});
+
+  @override
+  State<DebugPage> createState() => _DebugPageState();
+}
+
+class _DebugPageState extends State<DebugPage> {
+  bool _failsOnly = false;
 
   @override
   Widget build(BuildContext context) {
     final log = DebugLog.instance;
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Debug log'),
+        title: const Text('Test log'),
         actions: [
+          IconButton(
+            icon: Icon(_failsOnly ? Icons.filter_alt : Icons.filter_alt_outlined),
+            tooltip: 'Show only failures',
+            onPressed: () => setState(() => _failsOnly = !_failsOnly),
+          ),
           IconButton(
             icon: const Icon(Icons.copy),
             tooltip: 'Copy all',
@@ -31,19 +43,45 @@ class DebugPage extends StatelessWidget {
       ),
       body: ListenableBuilder(
         listenable: log,
-        builder: (context, _) => log.lines.isEmpty
-            ? const Center(child: Text('Nothing logged yet'))
-            : ListView.builder(
-                padding: const EdgeInsets.all(10),
-                itemCount: log.lines.length,
-                itemBuilder: (_, i) {
-                  final l = log.lines[log.lines.length - 1 - i];
-                  return Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 3),
-                    child: SelectableText(l, style: const TextStyle(fontSize: 11)),
-                  );
-                },
+        builder: (context, _) {
+          final shown = [
+            for (final e in log.entries.reversed)
+              if (!_failsOnly || e.level == LogLevel.fail) e,
+          ];
+          if (shown.isEmpty) return const Center(child: Text('Nothing logged yet'));
+          return Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(10, 8, 10, 0),
+                child: Text(
+                  'Saved to: ${log.filePath ?? 'not available'}',
+                  style: const TextStyle(fontSize: 10),
+                ),
               ),
+              Expanded(
+                child: ListView.builder(
+                  padding: const EdgeInsets.all(10),
+                  itemCount: shown.length,
+                  itemBuilder: (_, i) {
+                    final e = shown[i];
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 3),
+                      child: SelectableText(
+                        e.text,
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: e.level == LogLevel.ok
+                              ? const Color(0xFF3DDC57)
+                              : (e.level == LogLevel.fail ? const Color(0xFFFF6B6B) : null),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
+          );
+        },
       ),
     );
   }

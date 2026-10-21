@@ -255,7 +255,11 @@ class SoulseekClient extends ChangeNotifier {
   // ---------------------------------------------------------------- search
 
   void search(String query) {
-    if (!online || query.trim().isEmpty) return;
+    if (!online || query.trim().isEmpty) {
+      DebugLog.fail('search', 'search ignored (${online ? 'empty query' : 'not signed in'})');
+      return;
+    }
+    DebugLog.add('search', 'searching: $query');
     results.clear();
     _usersSeen.clear();
     resultUsers = 0;

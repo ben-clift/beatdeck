@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sidedeck/engine/usb_output.dart';
+import 'package:sidedeck/debug/debug_log.dart';
 import 'package:sidedeck/ui/debug_page.dart';
 import 'package:sidedeck/state/dj_controller.dart';
 import 'package:sidedeck/subsonic/subsonic_client.dart';
@@ -108,11 +109,23 @@ class _SettingsPageState extends State<SettingsPage> {
           ListTile(
             contentPadding: EdgeInsets.zero,
             leading: const Icon(Icons.bug_report_outlined),
-            title: const Text('Debug log'),
-            subtitle: const Text('Downloads, library and load problems. Copy it to send.'),
+            title: const Text('Test log'),
+            subtitle: const Text('Every step with OK or FAIL. Copy it to send.'),
             onTap: () => Navigator.of(context).push(
               MaterialPageRoute<void>(builder: (_) => const DebugPage()),
             ),
+          ),
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            title: const Text('Live trace on screen'),
+            subtitle: const Text(
+              'Shows each step as it happens: green worked, red failed.',
+            ),
+            value: DebugLog.instance.live,
+            onChanged: (v) async {
+              await DebugLog.instance.setLive(v);
+              if (mounted) setState(() {});
+            },
           ),
           const Divider(height: 32),
           SwitchListTile(

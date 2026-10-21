@@ -1,3 +1,4 @@
+import 'package:sidedeck/debug/debug_log.dart';
 import 'dart:io';
 import 'dart:async';
 
@@ -77,6 +78,7 @@ class AutoFetch extends ChangeNotifier {
 
   /// The AUTO switch: on starts fetching with the saved settings, off stops.
   void toggle(bool on, LibraryController library) {
+    DebugLog.add('fetch', 'AUTO ${on ? 'ON' : 'OFF'} (source $source)');
     if (on && source == 'chart') {
       startChart(
         id: chartId,
@@ -114,6 +116,7 @@ class AutoFetch extends ChangeNotifier {
   LibraryController? _lib;
 
   void _say(String s) {
+    if (!s.contains('%')) DebugLog.add('fetch', s);
     status = s;
     notifyListeners();
   }
@@ -580,6 +583,7 @@ class AutoFetch extends ChangeNotifier {
       if (dl.state == DlState.done) {
         final sp = dl.savedPath;
         if (sp != null) _fetched.add(sp);
+        DebugLog.ok('fetch', 'downloaded and verified: ${sp ?? '?'}');
         return sp;
       }
       if (dl.state == DlState.failed) {

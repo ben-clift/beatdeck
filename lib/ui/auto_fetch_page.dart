@@ -5,6 +5,7 @@ import 'package:sidedeck/soulseek/soulseek_client.dart';
 import 'package:sidedeck/state/library_controller.dart';
 import 'package:sidedeck/soulseek/slsk_setup.dart';
 import 'package:sidedeck/soulseek/storage_guard.dart';
+import 'package:sidedeck/debug/debug_log.dart';
 import 'package:sidedeck/suggest/auto_fetch.dart';
 import 'package:sidedeck/suggest/genres.dart';
 import 'package:sidedeck/suggest/hardwax.dart';
@@ -125,7 +126,9 @@ class _AutoFetchPageState extends State<AutoFetchPage> {
 
   void _download(List<Suggestion> list) {
     if (list.isEmpty) return;
+    DebugLog.add('charts', 'download tapped: ${list.length} track(s), first ${list.first.artist} - ${list.first.title}');
     if (!soulseek.online) {
+      DebugLog.fail('charts', 'not signed in to Soulseek');
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Sign in to Soulseek first')),
       );

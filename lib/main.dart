@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:sidedeck/theme/sidedeck_theme.dart';
 import 'package:sidedeck/ui/home_page.dart';
+import 'package:sidedeck/ui/live_trace.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -16,6 +17,9 @@ class SideDeckApp extends StatelessWidget {
       title: 'SideDeck',
       debugShowCheckedModeBanner: false,
       theme: SideDeckTheme.dark(),
+      builder: (context, child) => Stack(
+        children: [if (child != null) child, const LiveTrace()],
+      ),
       home: const HomePage(),
     );
   }

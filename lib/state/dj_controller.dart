@@ -563,6 +563,7 @@ class DjController extends ChangeNotifier {
       await _flowLearn(p);
     }
     automixStartOffset = startOffsetSeconds.clamp(0.0, 90.0).toDouble();
+    DebugLog.add('automix', 'start with ${_automixQueue.length} tracks, flow ${arc.label}');
     automixOn = true;
     automixStatus = 'Loading first track';
     _automixBusy = true;
@@ -583,6 +584,7 @@ class DjController extends ChangeNotifier {
     if (!automixOn) return; // stopped while loading
     if (!ok) {
       automixOn = false;
+      DebugLog.fail('automix', 'none of the tracks would load');
       automixStatus = 'None of the tracks would load';
       notifyListeners();
       return;
@@ -597,6 +599,7 @@ class DjController extends ChangeNotifier {
     _automixDeck = 0;
     _automixIndex = 0;
     _automixPlayed.add(_trackKey(_automixQueue.first));
+    DebugLog.ok('automix', 'playing first track on deck 1: ${_automixQueue.first.split(RegExp(r'[\\/]')).last}');
     _automixPreloaded = false;
     _automixFading = false;
     automixStatus = null;
@@ -618,12 +621,14 @@ class DjController extends ChangeNotifier {
     _automixIndex = 0;
     _flowNext = null;
     _automixPreloaded = false;
+    DebugLog.ok('automix', 'switched list, ${_automixQueue.length - 1} tracks follow');
     automixStatus = 'Switched: new list plays after this track';
     notifyListeners();
   }
 
   void stopAutomix() {
     final wasOn = automixOn;
+    if (wasOn) DebugLog.add('automix', 'stopped');
     automixOn = false;
     _automixFading = false;
     _automixPreloaded = false;
@@ -656,6 +661,7 @@ class DjController extends ChangeNotifier {
     final next = _nextUnplayed();
     if (next == null) {
       if (remaining <= 0.5) {
+        DebugLog.ok('automix', 'finished, no more tracks');
         automixOn = false;
         automixStatus = 'Automix finished';
         return true;
@@ -670,9 +676,11 @@ class DjController extends ChangeNotifier {
           _automixBusy = false;
           if (!automixOn) return;
           if (ok) {
+            DebugLog.ok('automix', 'next track ready on deck ${other + 1}');
             _automixPreloaded = true;
           } else {
             // Skip a track that will not load.
+            DebugLog.fail('automix', 'next track would not load, skipped: ${_automixQueue[next].split(RegExp(r'[\\/]')).last}');
             _automixQueue.removeAt(next);
             _flowNext = null;
             automixStatus = 'Skipped a track that would not load';
@@ -723,6 +731,7 @@ class DjController extends ChangeNotifier {
     _engine.play(other, true);
     inc.playing = true;
     _automixFadeStart = DateTime.now();
+    DebugLog.add('automix', 'mixing deck ${cur + 1} into deck ${other + 1} over ${automixFadeSeconds.round()} s');
     _automixNextTarget = next;
     _automixFading = true;
     automixStatus = null;
@@ -743,6 +752,7 @@ class DjController extends ChangeNotifier {
     if (elapsed >= automixFadeSeconds) {
       _engine.play(cur, false);
       deck(cur).playing = false;
+      DebugLog.ok('automix', 'mix finished, deck ${other + 1} now playing');
       _automixDeck = other;
       final prevTrack = _flowOf(_automixQueue[_automixIndex]);
       _automixIndex = _automixNextTarget;
@@ -763,6 +773,7 @@ class DjController extends ChangeNotifier {
     String? title,
     String? artist,
   }) async {
+    DebugLog.add('load', 'deck ${deckIndex + 1} requested: ${path.split(RegExp(r'[\\/]')).last}');
     loadingDeck = deckIndex;
     loadingTitle = title ?? path.split(RegExp(r'[\\/]')).last;
     loadingPath = path;
@@ -819,6 +830,7 @@ class DjController extends ChangeNotifier {
       return false;
     }
     loadedPaths.add(path);
+    DebugLog.ok('load', 'deck ${deckIndex + 1} loaded: ${path.split(RegExp(r'[\\/]')).last}');
     d.path = path;
     d.title = title ?? path.split(RegExp(r'[\\/]')).last;
     d.artist = artist ?? '';
@@ -892,10 +904,14 @@ class DjController extends ChangeNotifier {
 
   void playPause(int deckIndex) {
     final d = deck(deckIndex);
-    if (!d.loaded) return;
+    if (!d.loaded) {
+      DebugLog.fail('deck', 'play pressed on deck ${deckIndex + 1} but nothing is loaded');
+      return;
+    }
     final next = !d.playing;
     _engine.play(deckIndex, next);
     d.playing = next;
+    DebugLog.ok('deck', 'deck ${deckIndex + 1} ${next ? 'playing' : 'paused'}: ${d.title}');
     // A synced deck finds the master's beat again every time it starts.
     if (next && d.synced) _alignPhase(deckIndex);
     if (next) _logTrack(deckIndex);

@@ -1,5 +1,6 @@
 
 import 'package:flutter/material.dart';
+import 'package:sidedeck/debug/debug_log.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sidedeck/soulseek/playable.dart';
 import 'package:sidedeck/soulseek/slsk_setup.dart';
@@ -423,6 +424,7 @@ class _SoulseekPageState extends State<SoulseekPage> {
           trailing: IconButton(
             icon: const Icon(Icons.download),
             onPressed: () {
+              DebugLog.add('download', 'tapped: ${r.fileName} from ${r.user}');
               soulseek.download(r);
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(content: Text('Downloading ${r.fileName}')),
