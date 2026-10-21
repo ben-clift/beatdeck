@@ -674,27 +674,98 @@ class DjController extends ChangeNotifier {
   String? automixSkip(int deckIndex) {
     if (!automixOn || _automixDeck < 0) return 'Automix is not running.';
     if (_automixFading) return 'Wait for the mix to finish.';
-    if (deckIndex == _automixDeck) {
-      _skipAt = DateTime.now();
-      DebugLog.add('automix', 'skip: mixing into the next track now');
-      automixStatus = 'Skipping…';
+    final playingDeck = deck(_automixDeck);
+    final heard = playingDeck.bpm > 1 ? playingDeck.bpm * playingDeck.rate : 0.0;
+    final pressed = deck(deckIndex).path;
+    final onPlaying = deckIndex == _automixDeck;
+    // The replacement: the unplayed library track with the closest tempo to
+    // what is playing now (key and genre break ties).
+    final keep = onPlaying ? _upNext : null;
+    String? best;
+    if (keep != null && _isLoadedNext(keep) && _tempoGap(heard, keep) <= 8) {
+      best = keep; // the track already waiting on the other deck fits: use it
+    } else {
+      best = _closestTempoPick(heard, exclude: {if (pressed != null) pressed});
+    }
+    if (pressed != null && !onPlaying) {
+      _markPlayed(pressed);
+    }
+    if (best == null) {
+      DebugLog.add('automix', 'skip: nothing unplayed in the library, asking Soulseek');
+      if (onPlaying) {
+        _skipAt = DateTime.now();
+      } else {
+        _clearUpNext();
+        if (pressed != null) _rejected.add(pressed);
+      }
+      _loadHold = DateTime(2000);
+      automixStatus = 'Skipped: nothing in the library, getting one from Soulseek…';
+      _setMoreLike('Skip: nothing unplayed in the library, asking Soulseek for one.', seconds: 20);
       _askForTrackNow();
       notifyListeners();
       return null;
     }
-    final path = deck(deckIndex).path;
-    DebugLog.add('automix', 'skip: choosing another track for deck ${deckIndex + 1}');
-    _clearUpNext(); // (this also empties the turned-down list)
-    _flowNext = null;
-    if (path != null) {
-      _markPlayed(path);
-      _rejected.add(path);
-      _loadHold = DateTime(2000); // pick the replacement straight away
+    final name = best.split(RegExp(r'[\\/]')).last.replaceFirst(RegExp(r'\.[^.]+$'), '');
+    DebugLog.add('automix', 'skip: ${onPlaying ? 'mixing into' : 'loading on deck ${deckIndex + 1}'} $name');
+    if (best != keep) {
+      _clearUpNext(); // (this also empties the turned-down list)
+      if (pressed != null && !onPlaying) _rejected.add(pressed);
+      _forcePath = best;
+      _forceAnyTempo = true;
+      _upNext = best;
+      _automixPreloaded = false;
+      _flowNext = null;
+      _rejected.remove(best);
     }
-    automixStatus = 'Skipped: choosing another track…';
-    _askForTrackNow();
+    _loadHold = DateTime(2000);
+    if (onPlaying) _skipAt = DateTime.now();
+    automixStatus = 'Skipped: $name';
+    _setMoreLike('Skip: ${onPlaying ? 'mixing in' : 'loading'} $name', seconds: 15);
     notifyListeners();
     return null;
+  }
+
+  bool _forceAnyTempo = false;
+
+  bool _isLoadedNext(String path) => _automixPreloaded && _upNext == path;
+
+  /// Tempo gap in % between a heard tempo and a track's own tempo (999 when
+  /// either is unknown).
+  double _tempoGap(double heard, String path) {
+    final c = _flowOf(path);
+    if (heard <= 1 || c == null || c.bpm <= 1) return 999;
+    return bpmGapPercent(heard, c.bpm).abs();
+  }
+
+  /// The unplayed track in the queue whose tempo is closest to [heard]; a
+  /// track of unknown tempo only when nothing known is left.
+  String? _closestTempoPick(double heard, {Set<String> exclude = const {}}) {
+    final onDeck = <String>{
+      for (var i = 0; i < 2; i++) if ((deck(i).path ?? '').isNotEmpty) _trackKey(deck(i).path!),
+    };
+    final ex = {for (final e in exclude) _trackKey(e)};
+    final ref = _automixIndex >= 0 && _automixIndex < _automixQueue.length ? _flowOf(_automixQueue[_automixIndex]) : null;
+    String? best;
+    var bestScore = 1e18;
+    for (var pass = 0; pass < 2 && best == null; pass++) {
+      for (final q in _automixQueue) {
+        final k = _trackKey(q);
+        if (onDeck.contains(k) || ex.contains(k) || _wasPlayed(q) || failedPaths.contains(q)) continue;
+        if (Dislikes.instance.hasPath(q) || !File(q).existsSync() || _avoided(q)) continue;
+        if (pass == 0 && _rejected.contains(q)) continue;
+        final gap = _tempoGap(heard, q);
+        var score = gap;
+        final c = _flowOf(q);
+        if (ref?.key != null && c?.key != null) {
+          score -= keyMatch(ref!.key!, c!.key!).score / 100.0;
+        }
+        if (score < bestScore) {
+          bestScore = score;
+          best = q;
+        }
+      }
+    }
+    return best;
   }
 
   /// After a skip, look for a track at once (queue first, then Soulseek)
@@ -1128,6 +1199,7 @@ class DjController extends ChangeNotifier {
     _upNext = null;
     _automixPreloaded = false;
     _flowNext = null;
+    _forceAnyTempo = false;
     _rejected.clear();
   }
 
@@ -1570,7 +1642,7 @@ class DjController extends ChangeNotifier {
           }
         }
       }
-      final tol = forced ? 9.0 : (tier == 0 ? 6.0 : (tier == 1 ? 9.0 : 1e9));
+      final tol = forced ? (_forceAnyTempo ? 1e9 : 9.0) : (tier == 0 ? 6.0 : (tier == 1 ? 9.0 : 1e9));
       if (out.bpm > 1 && inc.bpm > 1 && bpmGapPercent(out.bpm, inc.bpm).abs() > tol) {
         DebugLog.add('automix',
             'turned down ${path.split(RegExp(r'[\\/]')).last}: ${inc.bpm.round()} BPM against ${out.bpm.round()}, choosing another');
