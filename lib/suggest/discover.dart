@@ -98,6 +98,7 @@ abstract class Discover {
   /// Discogs: artists of the most wanted releases in a style. Needs a free
   /// personal token (Discogs asks for one on searches).
   static String token = '';
+  static bool _warned = false;
 
   static Future<void> loadToken() async {
     try {
@@ -115,7 +116,8 @@ abstract class Discover {
   static Future<List<Suggestion>> discogs(String genre) async {
     if (token.isEmpty) await loadToken();
     if (token.isEmpty) {
-      DebugLog.add('discogs', 'no Discogs token set (free at discogs.com/settings/developers), skipped');
+      if (!_warned) DebugLog.add('discogs', 'no Discogs token set (free at discogs.com/settings/developers), skipped');
+      _warned = true;
       return [];
     }
     return _through('discogs', genre, (s) async {

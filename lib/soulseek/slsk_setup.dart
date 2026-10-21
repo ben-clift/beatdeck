@@ -120,7 +120,6 @@ class SlskSetup {
       final af = AutoFetch.instance;
       if (!autoFetchForAutomix) return;
       if (af.running) {
-        DebugLog.add('automix', 'cannot fetch a match: auto-fetch is busy');
         return;
       }
       // One pipeline: shortlist, search, download, library, automix.

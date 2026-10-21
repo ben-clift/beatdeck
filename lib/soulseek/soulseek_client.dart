@@ -170,7 +170,7 @@ class SoulseekClient extends ChangeNotifier {
             .frame(1),
       );
     } catch (e) {
-      _serverLost('Could not reach the Soulseek server');
+      _serverLost('Could not reach the Soulseek server ($e)');
     }
   }
 

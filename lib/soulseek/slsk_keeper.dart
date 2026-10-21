@@ -108,7 +108,7 @@ class SlskKeeper extends ChangeNotifier with WidgetsBindingObserver {
         notifyListeners();
         return;
       }
-      final waits = [5, 10, 20, 40, 60];
+      final waits = [3, 5, 10, 15, 20];
       _next = DateTime.now().add(Duration(seconds: waits[_fails.clamp(0, waits.length - 1)]));
       _fails++;
       note = _fails <= 1 ? 'Connecting…' : 'Reconnecting (try $_fails)…';

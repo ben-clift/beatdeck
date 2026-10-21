@@ -1,3 +1,4 @@
+import 'package:sidedeck/engine/tags.dart';
 import 'dart:math' as math;
 import 'package:sidedeck/debug/debug_log.dart';
 import 'dart:io';
@@ -976,6 +977,21 @@ class AutoFetch extends ChangeNotifier {
             // Look at the file before it goes anywhere near a deck.
             final bad = await AudioCheck.problem(f.dl.savedPath!);
             if (bad == null) {
+              // The file's own genre tag must fit what was asked for (a
+              // search by artist name can return something else entirely).
+              String tag = '';
+              try {
+                tag = (await readTrackTags(f.dl.savedPath!)).genre;
+              } catch (_) {}
+              if (tag.isNotEmpty && !genresSimilar(g, tag)) {
+                DebugLog.add('fetch', 'rejected ${f.name}: tagged "$tag", wanted "$g". Deleting it and trying another');
+                flights.remove(f);
+                try {
+                  await File(f.dl.savedPath!).delete();
+                } catch (_) {}
+                soulseek.removeDownload(f.dl);
+                continue;
+              }
               winner = f.dl.savedPath;
               break;
             }
