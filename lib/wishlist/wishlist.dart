@@ -81,6 +81,22 @@ class WishParser {
       }
       return out;
     }
+    // Text copied from a record shop page (Hardwax and similar): releases
+    // read "Artist: Title" and the rest is catalogue numbers, prices and
+    // descriptions, so only those lines are kept.
+    final shop = text.contains('€') || text.contains('Label Catalog') || text.contains('MP3');
+    if (shop) {
+      final seen = <String>{};
+      for (final raw in lines) {
+        final m = RegExp(r'^([^:\n]{2,50}):\s+(.{1,80})$').firstMatch(raw.trim());
+        if (m == null) continue;
+        final artist = m.group(1)!.trim();
+        final title = m.group(2)!.trim();
+        if (title.split(' ').length > 9) continue; // a description, not a title
+        if (seen.add('$artist $title'.toLowerCase())) out.add(WishItem(artist, title));
+      }
+      if (out.isNotEmpty) return out;
+    }
     for (final raw in lines) {
       final line = raw.trim();
       if (line.isEmpty) continue;
