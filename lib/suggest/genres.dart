@@ -10,6 +10,32 @@ class GenreInfo {
 /// Current dance and electronic genres, grouped by speed. Tempo ranges are
 /// typical, not strict; the Auto-fetch page lets you change them.
 const List<(String, List<GenreInfo>)> genreGroups = [
+  ('Breakbeat', [
+    GenreInfo('breakbeat', 120, 140),
+    GenreInfo('breaks', 120, 140),
+    GenreInfo('big beat', 100, 135),
+    GenreInfo('nu skool breaks', 125, 140),
+    GenreInfo('nu school breaks', 125, 140),
+    GenreInfo('old skool breaks', 115, 135),
+    GenreInfo('florida breaks', 125, 135),
+    GenreInfo('progressive breaks', 125, 135),
+    GenreInfo('acid breaks', 120, 135),
+    GenreInfo('funky breaks', 115, 135),
+    GenreInfo('electro breaks', 115, 135),
+    GenreInfo('techno breaks', 125, 140),
+    GenreInfo('tech breaks', 125, 140),
+    GenreInfo('uk breaks', 120, 140),
+    GenreInfo('west coast breaks', 120, 135),
+    GenreInfo('chemical breaks', 100, 135),
+    GenreInfo('breakbeat hardcore', 135, 150),
+    GenreInfo('rave breaks', 130, 150),
+    GenreInfo('hip hop breaks', 85, 115),
+    GenreInfo('trip hop', 70, 110),
+    GenreInfo('miami bass', 115, 135),
+    GenreInfo('breakcore', 150, 220),
+    GenreInfo('drum and breaks', 150, 175),
+    GenreInfo('broken beat', 105, 125),
+  ]),
   ('Under 125', [
     GenreInfo('amapiano', 108, 115),
     GenreInfo('afro house', 118, 124),

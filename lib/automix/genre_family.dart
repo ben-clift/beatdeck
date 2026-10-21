@@ -5,7 +5,7 @@ const _families = <String, List<String>>{
   'house': ['house', 'disco', 'garage', 'balearic', 'afro', 'soulful', 'funk', 'amapiano'],
   'techno': ['techno', 'minimal', 'acid', 'industrial', 'schranz', 'tech'],
   'trance': ['trance', 'progressive', 'psy', 'goa'],
-  'breaks': ['breaks', 'breakbeat', 'electro', 'big beat', 'bass', 'dubstep', 'grime', 'uk funky'],
+  'breaks': ['breaks', 'breakbeat', 'breakcore', 'electro', 'big beat', 'bigbeat', 'trip hop', 'miami bass', 'broken beat', 'bass', 'dubstep', 'grime', 'uk funky'],
   'dnb': ['drum', 'dnb', 'd&b', 'jungle', 'liquid', 'neurofunk', 'hardcore'],
   'dub': ['dub', 'reggae', 'dancehall', 'roots'],
   'ambient': ['ambient', 'downtempo', 'chill', 'electronica', 'idm', 'new age', 'trip'],
@@ -37,6 +37,8 @@ String? genreFamily(String genre) {
     if (g.contains(k)) return 'dnb';
   }
   if (g.contains('bassline')) return 'house';
+  if (g.contains('bigbeat') || g.contains('big beat') || g.contains('breakbeat hardcore')) return 'breaks';
+  if (g.contains('break') && !g.contains('garage') && !g.contains('drum')) return 'breaks';
   if (g.contains('tech house') || g.contains('deep house')) return 'house';
   if (g.contains('drum') && g.contains('bass')) return 'dnb';
   for (final e in _families.entries) {
