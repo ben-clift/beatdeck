@@ -89,16 +89,17 @@ struct Unit {
       wl = lpL;
       wr = lpR;
       // ping-pong feedback
-      echoL[echoPos] = l + wr * 0.55f;
-      echoR[echoPos] = r + wl * 0.55f;
+      const float efb = 0.30f + 0.5f * a;
+      echoL[echoPos] = l + wr * efb;
+      echoR[echoPos] = r + wl * efb;
       if (++echoPos >= kEchoMax) echoPos = 0;
       l += wl * a;
       r += wr * a;
     } else if (type == 2) {
       const float in = (l + r) * 0.015f;
       float oL = 0, oR = 0;
-      const float fb = 0.84f;
-      const float damp = 0.25f;
+      const float fb = 0.80f + 0.12f * a;
+      const float damp = 0.35f;
       for (int i = 0; i < kCombs; ++i) {
         oL += combL[i].process(in, fb, damp);
         oR += combR[i].process(in, fb, damp);
@@ -135,7 +136,7 @@ struct Unit {
 };
 
 // Per-deck effect rack. Up to eight effects can be on at once, in this
-// order: echo, reverb, flanger, phaser, gate, crush, wobble, roll.
+// order: echo, reverb, flanger, phaser, filter, gate, noise sweep, roll.
 struct DeckFx {
   Unit base; // echo, reverb and flanger share the master unit's code
   int sr = 0;
@@ -147,10 +148,13 @@ struct DeckFx {
   // filter (low pass whose cutoff drops as the amount rises)
   Biquad fltL, fltR;
   float fltAmount = -1;
-  // crush
-  int crushCount = 0;
-  float crushL = 0;
-  float crushR = 0;
+  // trance gate
+  float gatePhase = 0;
+  float gateG = 1;
+  // smoothed amount, and the tail that rings on after the effect is switched off
+  float sa = -1;
+  int tail = 0;
+  int lastMask = 0;
   // noise sweep (white noise through a rising high pass)
   Biquad nzL, nzR;
   float nzPhase = 0;
@@ -180,9 +184,23 @@ struct DeckFx {
   // 6 noise sweep, 7 roll. timeSec is the length of one beat.
   void process(int mask, float amount, float timeSec, float& l, float& r) {
     if (sr == 0) return;
+    if (sa < 0) sa = amount;
+    sa += (amount - sa) * 0.0015f; // no zipper noise when the slider moves
+    float a = std::max(0.0f, std::min(1.0f, sa));
+    // Echo, reverb, flanger, phaser and filter ring out for a moment after
+    // they are switched off, instead of being cut dead.
+    const float tailLen = 1.5f * (float)sr;
+    if (mask != 0) {
+      lastMask = mask;
+      tail = (int)tailLen;
+    } else if (tail > 0) {
+      mask = lastMask & (1 | 2 | 4 | 8 | 16);
+      --tail;
+      a *= (float)tail / tailLen;
+      if (mask == 0) tail = 0;
+    }
     if (!(mask & 128)) rollActive = false;
     if (mask == 0) return;
-    const float a = std::max(0.0f, std::min(1.0f, amount));
     const float beat = std::max(0.1f, std::min(2.5f, timeSec));
     if (mask & 1) base.process(1, a, beat, l, r);
     if (mask & 2) base.process(2, a, beat, l, r);
@@ -219,16 +237,13 @@ struct DeckFx {
       r = fltR.process(r);
     }
     if (mask & 32) {
-      const int step = 1 + (int)(a * 20.0f);
-      if (crushCount <= 0) {
-        const float levels = std::exp2(12.0f - a * 7.0f);
-        crushL = std::round(l * levels) / levels;
-        crushR = std::round(r * levels) / levels;
-        crushCount = step;
-      }
-      --crushCount;
-      l = crushL;
-      r = crushR;
+      // Trance gate: chops the sound into sixteenths; the amount is how deep.
+      gatePhase += 1.0f / (beat * 0.25f * (float)sr);
+      if (gatePhase >= 1.0f) gatePhase -= 1.0f;
+      const float target = gatePhase < 0.55f ? 1.0f : 1.0f - a;
+      gateG += (target - gateG) * 0.02f;
+      l *= gateG;
+      r *= gateG;
     }
     if (mask & 64) {
       // Sweep rises over four beats, then starts again.

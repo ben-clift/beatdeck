@@ -822,7 +822,7 @@ struct Engine : public oboe::AudioStreamDataCallback,
       l = d.filtL.process(l);
       r = d.filtR.process(r);
       const int fxM = d.fxMask.load(std::memory_order_relaxed);
-      if (fxM != 0 || d.fxRack.rollActive) {
+      if (fxM != 0 || d.fxRack.rollActive || d.fxRack.tail > 0) {
         d.fxRack.prepare(std::max(8000, engineSampleRate.load()));
         d.fxRack.process(fxM, d.fxAmount.load(std::memory_order_relaxed),
                          d.fxTime.load(std::memory_order_relaxed), l, r);

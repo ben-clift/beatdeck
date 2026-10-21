@@ -868,7 +868,7 @@ class _DeckPanelState extends State<_DeckPanel> {
                 ),
               ),
               const SizedBox(width: 6),
-              SizedBox(width: 124, child: _pads(d)),
+              SizedBox(width: _mode == _PadMode.fx ? 196 : 124, child: _pads(d)),
             ],
           ),
         ),
@@ -1165,24 +1165,10 @@ class _DeckPanelState extends State<_DeckPanel> {
           final b = _jumpBeats[k];
           pads.add(_pad(
             _jumpLabel(b),
-            widget.dj.deckFxOn[widget.index].isNotEmpty && _lastJumpPad == k,
-            () {
-              void jump(double x) => x.abs() >= 1
-                  ? widget.dj.beatJump(widget.index, x.round())
-                  : widget.dj.nudgeBeats(widget.index, x);
-              final now = DateTime.now();
-              if (_lastJumpPad == k && now.difference(_lastJumpAt).inMilliseconds < 380) {
-                // Double tap: undo the first jump and switch the effects
-                // on or off, using this pad's length as the effect setting.
-                jump(-b);
-                _lastJumpAt = DateTime(2000);
-                widget.dj.toggleDeckFxAll(widget.index, beats: b.abs());
-              } else {
-                _lastJumpPad = k;
-                _lastJumpAt = now;
-                jump(b);
-              }
-            },
+            false,
+            () => b.abs() >= 1
+                ? widget.dj.beatJump(widget.index, b.round())
+                : widget.dj.nudgeBeats(widget.index, b),
           ));
       }
     }
@@ -1193,7 +1179,7 @@ class _DeckPanelState extends State<_DeckPanel> {
         final rows = _mode == _PadMode.jump ? 3 : 4;
         final cellW = (c.maxWidth - gap * (cols - 1)) / cols;
         final cellH = (c.maxHeight - gap * (rows - 1)) / rows;
-        return GridView.count(
+        final grid = GridView.count(
           crossAxisCount: cols,
           childAspectRatio: cellW / math.max(1.0, cellH),
           mainAxisSpacing: gap,
@@ -1201,6 +1187,30 @@ class _DeckPanelState extends State<_DeckPanel> {
           physics: const NeverScrollableScrollPhysics(),
           padding: EdgeInsets.zero,
           children: pads,
+        );
+        if (_mode != _PadMode.fx) return grid;
+        // Effects: the pads switch them on and off, the sliders beside them
+        // set how strong (AMT) and how long (LEN, in beats) they are.
+        const lens = [0.125, 0.25, 0.5, 1.0, 2.0, 4.0];
+        const lenLabels = ['1/8', '1/4', '1/2', '1', '2', '4'];
+        var li = 0;
+        for (var i = 0; i < lens.length; i++) {
+          if ((lens[i] - widget.dj.fxBeats).abs() < (lens[li] - widget.dj.fxBeats).abs()) li = i;
+        }
+        return Row(
+          children: [
+            Expanded(child: grid),
+            const SizedBox(width: 4),
+            _fxSlider('AMT', widget.dj.fxAmount, (v) => widget.dj.setFx(amount: v)),
+            _fxSlider(
+              lenLabels[li],
+              li.toDouble(),
+              (v) => widget.dj.setFx(beats: lens[v.round()]),
+              min: 0,
+              max: 5,
+              divisions: 5,
+            ),
+          ],
         );
       },
     );
@@ -1238,8 +1248,41 @@ class _DeckPanelState extends State<_DeckPanel> {
     if (picked != null) widget.dj.assignPadFx(widget.index, pad, picked);
   }
 
-  int _lastJumpPad = -1;
-  DateTime _lastJumpAt = DateTime(2000);
+  Widget _fxSlider(String label, double value, ValueChanged<double> onChanged,
+      {double min = 0, double max = 1, int? divisions}) {
+    return SizedBox(
+      width: 30,
+      child: Column(
+        children: [
+          Expanded(
+            child: RotatedBox(
+              quarterTurns: 3,
+              child: SliderTheme(
+                data: SliderTheme.of(context).copyWith(
+                  trackHeight: 6,
+                  thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 9),
+                  overlayShape: SliderComponentShape.noOverlay,
+                  activeTrackColor: _accent,
+                  thumbColor: _accent,
+                ),
+                child: Slider(
+                  value: value.clamp(min, max).toDouble(),
+                  min: min,
+                  max: max,
+                  divisions: divisions,
+                  onChanged: _d.loaded ? onChanged : null,
+                ),
+              ),
+            ),
+          ),
+          Text(
+            label,
+            style: const TextStyle(fontSize: 9, fontWeight: FontWeight.w800, color: SideDeckTheme.muted),
+          ),
+        ],
+      ),
+    );
+  }
 
   Widget _pad(String label, bool on, VoidCallback onTap, {VoidCallback? onLong}) {
     return GestureDetector(
