@@ -13,6 +13,7 @@ import 'package:sidedeck/state/dislikes.dart';
 import 'package:sidedeck/automix/genre_family.dart';
 import 'package:sidedeck/suggest/genres.dart';
 import 'package:sidedeck/suggest/hardwax.dart';
+import 'package:sidedeck/suggest/traxsource.dart';
 import 'package:sidedeck/state/library_controller.dart';
 import 'package:sidedeck/suggest/harmony.dart';
 import 'package:sidedeck/wishlist/wishlist.dart';
@@ -101,6 +102,8 @@ class AutoFetch extends ChangeNotifier {
     DebugLog.add('fetch', 'AUTO ${on ? 'ON' : 'OFF'} (source $source)');
     if (on && source == 'chart') {
       startHardwax(tag: hwTag, library: library, count: count, endless: endless);
+    } else if (on && source == 'trax') {
+      startTraxsource(library: library, count: count, endless: endless);
     } else if (on && source == 'list') {
       startList(text: pasted, library: library);
     } else if (on) {
@@ -385,6 +388,32 @@ class AutoFetch extends ChangeNotifier {
     );
   }
 
+  /// Traxsource: the whole library (every genre's Top 100, read once a day),
+  /// in random order.
+  Future<void> startTraxsource({
+    required LibraryController library,
+    required int count,
+    required bool endless,
+  }) {
+    var given = false;
+    return _runSource(
+      label: 'Traxsource (whole library)',
+      more: (tried) async {
+        if (given) return <Suggestion>[];
+        given = true;
+        final all = await Traxsource.all();
+        return all
+            .where((s) => !tried.contains(s.query.toLowerCase()) && !Dislikes.instance.hasTrack(s.artist, s.title))
+            .toList()
+          ..shuffle();
+      },
+      library: library,
+      count: count,
+      endless: endless,
+      useYears: false,
+    );
+  }
+
   Future<void> startChart({
     required int id,
     required String name,
@@ -546,7 +575,7 @@ class AutoFetch extends ChangeNotifier {
     final slug = _hardwaxSlug(g);
     var hwDone = false;
     await _runSource(
-      label: '$g${bpm > 1 ? ', ${bpm.round()} BPM' : ''}, Hardwax then underground',
+      label: '$g${bpm > 1 ? ', ${bpm.round()} BPM' : ''}, Hardwax then Traxsource',
       more: (tried) async {
         if (!hwDone) {
           hwDone = true;
@@ -557,7 +586,18 @@ class AutoFetch extends ChangeNotifier {
             if (fresh.isNotEmpty) return fresh.take(12).toList();
           } catch (_) {}
         }
-        return _service.underground(g, bpmMin: lo, bpmMax: hi, skip: tried, want: 12);
+        // Traxsource (read once a day) instead of Deezer, by genre family and tempo.
+        try {
+          final tx = (await Traxsource.matching(g, bpmMin: lo, bpmMax: hi))
+              .where((s) =>
+                  !tried.contains(s.query.toLowerCase()) &&
+                  !Dislikes.instance.hasTrack(s.artist, s.title))
+              .toList()
+            ..shuffle();
+          return tx.take(12).toList();
+        } catch (_) {
+          return <Suggestion>[];
+        }
       },
       library: library,
       count: count,

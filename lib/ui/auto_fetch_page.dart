@@ -238,6 +238,7 @@ class _AutoFetchPageState extends State<AutoFetchPage> {
             SegmentedButton<String>(
               segments: const [
                 ButtonSegment(value: 'chart', label: Text('Hardwax')),
+                ButtonSegment(value: 'trax', label: Text('Traxsource')),
                 ButtonSegment(value: 'genre', label: Text('Genre')),
                 ButtonSegment(value: 'list', label: Text('My list')),
               ],
@@ -248,6 +249,12 @@ class _AutoFetchPageState extends State<AutoFetchPage> {
               },
             ),
             const SizedBox(height: 10),
+            if (_source == 'trax')
+              const Text(
+                'Every Traxsource genre Top 100, read once a day and kept on the phone. '
+                'Names, genre and tempo only. AUTO fetches them in random order.',
+                style: TextStyle(fontSize: 12, color: SideDeckTheme.muted),
+              ),
             if (_source == 'chart') ...[
               Text(
                 _hardwax
