@@ -35,9 +35,23 @@ class AutoFetch extends ChangeNotifier {
   int count = 5;
   bool endless = true;
 
+  /// Hardwax is the default source for the AUTO switch. [hwTag] is a tag
+  /// page slug, or empty for the whole shop (every tag in turn).
+  bool hardwax = true;
+  String hwTag = '';
+
   Future<void> load() async {
     try {
       final prefs = await SharedPreferences.getInstance();
+      if (!(prefs.getBool('af_hw_v1') ?? false)) {
+        // One-time switch of the default from the Dance chart to Hardwax.
+        await prefs.setBool('af_hw_v1', true);
+        await prefs.setString('af_source', 'chart');
+        await prefs.setBool('af_hardwax', true);
+        await prefs.setString('af_hw_tag', '');
+      }
+      hardwax = prefs.getBool('af_hardwax') ?? hardwax;
+      hwTag = prefs.getString('af_hw_tag') ?? hwTag;
       source = prefs.getString('af_source') ?? source;
       chartId = prefs.getInt('af_chart_id') ?? chartId;
       chartName = prefs.getString('af_chart_name') ?? chartName;
@@ -62,6 +76,8 @@ class AutoFetch extends ChangeNotifier {
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString('af_source', source);
+      await prefs.setBool('af_hardwax', hardwax);
+      await prefs.setString('af_hw_tag', hwTag);
       await prefs.setInt('af_chart_id', chartId);
       await prefs.setString('af_chart_name', chartName);
       await prefs.setBool('af_chart_tempo', chartTempo);
@@ -83,7 +99,9 @@ class AutoFetch extends ChangeNotifier {
   /// The AUTO switch: on starts fetching with the saved settings, off stops.
   void toggle(bool on, LibraryController library) {
     DebugLog.add('fetch', 'AUTO ${on ? 'ON' : 'OFF'} (source $source)');
-    if (on && source == 'chart') {
+    if (on && source == 'chart' && hardwax) {
+      startHardwax(tag: hwTag, library: library, count: count, endless: endless);
+    } else if (on && source == 'chart') {
       startChart(
         id: chartId,
         name: chartName,
@@ -342,6 +360,40 @@ class AutoFetch extends ChangeNotifier {
       running = false;
       notifyListeners();
     }
+  }
+
+  /// Hardwax releases: one tag page, or with an empty [tag] every tag page
+  /// in turn (the whole shop), in random order.
+  Future<void> startHardwax({
+    required String tag,
+    required LibraryController library,
+    required int count,
+    required bool endless,
+  }) {
+    final slugs = tag.isEmpty
+        ? ([for (final t in Hardwax.tags) t.$2]..shuffle())
+        : [tag];
+    var next = 0;
+    return _runSource(
+      label: tag.isEmpty ? 'Hardwax (whole shop)' : 'Hardwax ($tag)',
+      more: (tried) async {
+        while (next < slugs.length) {
+          final slug = slugs[next++];
+          try {
+            final l = (await Hardwax.fetch(slug, skip: tried))
+                .where((s) => !Dislikes.instance.hasTrack(s.artist, s.title))
+                .toList()
+              ..shuffle();
+            if (l.isNotEmpty) return l;
+          } catch (_) {}
+        }
+        return <Suggestion>[];
+      },
+      library: library,
+      count: count,
+      endless: endless,
+      useYears: false,
+    );
   }
 
   Future<void> startChart({

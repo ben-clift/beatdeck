@@ -42,8 +42,8 @@ class _AutoFetchPageState extends State<AutoFetchPage> {
   final Set<int> _picked = {};
   bool _underground = false;
   bool _classics = false;
-  bool _hardwax = true; // Hardwax is the default source
-  String _hwTag = 'this-week';
+  late bool _hardwax = AutoFetch.instance.hardwax; // Hardwax is the default source
+  late String _hwTag = AutoFetch.instance.hwTag; // empty = whole shop
   String? _loadError;
   int _loadSeq = 0;
   int _era = 1950; // decade start; 0 means everything before 1960
@@ -95,7 +95,7 @@ class _AutoFetchPageState extends State<AutoFetchPage> {
     List<Suggestion> t;
     if (_hardwax) {
       try {
-        t = await Hardwax.fetch(_hwTag, skip: onlyNew ? _seen : const {});
+        t = await Hardwax.fetch(_hwTag.isEmpty ? 'this-week' : _hwTag, skip: onlyNew ? _seen : const {});
         if (t.isEmpty) {
           _loadError = onlyNew
               ? 'No new releases left on this tag. Hardwax lists refresh once a day; try another tag.'
@@ -188,6 +188,8 @@ class _AutoFetchPageState extends State<AutoFetchPage> {
     af.count = _count.round();
     af.endless = _endless;
     af.source = _source;
+    af.hardwax = _hardwax;
+    af.hwTag = _hwTag;
     af.pasted = _pasted.text;
     af.chartTempo = _chartTempo;
     af.save();
@@ -303,6 +305,17 @@ class _AutoFetchPageState extends State<AutoFetchPage> {
                 Wrap(
                   spacing: 6,
                   children: [
+                    ChoiceChip(
+                      label: const Text('Whole shop'),
+                      selected: _hwTag.isEmpty,
+                      onSelected: (_) {
+                        setState(() {
+                          _hwTag = '';
+                          _tracks = const [];
+                        });
+                        _loadTracks();
+                      },
+                    ),
                     for (final t in Hardwax.tags)
                       ChoiceChip(
                         label: Text(t.$1),

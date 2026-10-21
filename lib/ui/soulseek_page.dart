@@ -312,7 +312,7 @@ class _SoulseekPageState extends State<SoulseekPage> {
                       child: Text(
                         af.running && af.status.isNotEmpty
                             ? '${af.status}  (${af.fetched})'
-                            : '${af.genre}  ${af.bpmMin.round()}-${af.bpmMax.round()} BPM'
+                            : '${af.source == 'chart' && af.hardwax ? (af.hwTag.isEmpty ? 'Hardwax, whole shop' : 'Hardwax: ${af.hwTag}') : '${af.genre}  ${af.bpmMin.round()}-${af.bpmMax.round()} BPM'}'
                                 '${af.endless ? '  ·  keeps going' : '  ·  ${af.count} tracks'}',
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
