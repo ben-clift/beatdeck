@@ -87,6 +87,35 @@ class _LookSheet extends StatelessWidget {
                   value: look.strobeOn,
                   onChanged: look.setStrobe,
                 ),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  dense: true,
+                  title: const Text('Cosmic visuals'),
+                  subtitle: const Text(
+                    'Stars, planets, mystic shapes and psychedelic spirals that float '
+                    'over the decks, fade away and come back now and then.',
+                    style: TextStyle(fontSize: 11),
+                  ),
+                  value: look.cosmicOn,
+                  onChanged: look.setCosmic,
+                ),
+                if (look.cosmicOn)
+                  Wrap(
+                    spacing: 8,
+                    children: [
+                      for (final k in const [
+                        (1, 'Stars'),
+                        (2, 'Planets'),
+                        (4, 'Mystic'),
+                        (8, 'Psy'),
+                      ])
+                        FilterChip(
+                          label: Text(k.$2, style: const TextStyle(fontSize: 12)),
+                          selected: look.cosmicMask & k.$1 != 0,
+                          onSelected: (_) => look.toggleCosmicKind(k.$1),
+                        ),
+                    ],
+                  ),
                 Align(
                   alignment: Alignment.centerLeft,
                   child: OutlinedButton(

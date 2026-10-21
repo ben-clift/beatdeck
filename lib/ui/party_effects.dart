@@ -122,7 +122,7 @@ class _PartyEffectsState extends State<PartyEffects>
   }
 
   void _sync() {
-    widget.dj.setEffectsOn(_look.smokeOn || _look.streamersOn || _look.flashOn || _look.strobeOn);
+    widget.dj.setEffectsOn(_look.smokeOn || _look.streamersOn || _look.flashOn || _look.strobeOn || _look.cosmicOn);
   }
 
   void _startStrobe() {

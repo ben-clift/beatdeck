@@ -111,6 +111,11 @@ class LookController extends ChangeNotifier {
   /// of the phone on a big peak. Off until switched on.
   bool strobeOn = false;
 
+  /// Stars, planets, mystic geometry and psychedelic spirals that float over
+  /// the decks now and then. [cosmicMask]: 1 stars, 2 planets, 4 mystic, 8 psy.
+  bool cosmicOn = true;
+  int cosmicMask = 15;
+
   /// Bumped to fire the effects once, for trying them out.
   final ValueNotifier<int> testTrigger = ValueNotifier<int>(0);
   int backgroundIndex = 0;
@@ -211,6 +216,8 @@ class LookController extends ChangeNotifier {
       streamersOn = prefs.getBool('look_streamers') ?? true;
       flashOn = prefs.getBool('look_flash') ?? true;
       strobeOn = prefs.getBool('look_strobe') ?? false;
+      cosmicOn = prefs.getBool('look_cosmic') ?? true;
+      cosmicMask = prefs.getInt('look_cosmic_mask') ?? 15;
       style = LookStyle.values[_clamp(prefs.getInt('look_style') ?? 0, LookStyle.values.length)];
       final saved = prefs.getStringList('look_decks');
       if (saved != null && saved.length == deckAccent.length) {
@@ -236,6 +243,8 @@ class LookController extends ChangeNotifier {
       await prefs.setBool('look_streamers', streamersOn);
       await prefs.setBool('look_flash', flashOn);
       await prefs.setBool('look_strobe', strobeOn);
+      await prefs.setBool('look_cosmic', cosmicOn);
+      await prefs.setInt('look_cosmic_mask', cosmicMask);
       await prefs.setStringList('look_decks', [for (final a in deckAccent) '$a']);
     } catch (_) {}
   }
@@ -260,6 +269,18 @@ class LookController extends ChangeNotifier {
 
   void setStrobe(bool on) {
     strobeOn = on;
+    notifyListeners();
+    _save();
+  }
+
+  void setCosmic(bool on) {
+    cosmicOn = on;
+    notifyListeners();
+    _save();
+  }
+
+  void toggleCosmicKind(int bit) {
+    cosmicMask ^= bit;
     notifyListeners();
     _save();
   }
@@ -303,6 +324,8 @@ class LookController extends ChangeNotifier {
     streamersOn = true;
     flashOn = true;
     strobeOn = false;
+    cosmicOn = true;
+    cosmicMask = 15;
     backgroundIndex = 0;
     bodyIndex = 0;
     for (var i = 0; i < deckAccent.length; i++) {
