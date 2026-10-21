@@ -4,6 +4,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:sidedeck/debug/debug_log.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:sidedeck/soulseek/slsk_keeper.dart';
 import 'package:sidedeck/soulseek/soulseek_client.dart';
 import 'package:sidedeck/suggest/auto_fetch.dart';
 import 'package:sidedeck/soulseek/storage_guard.dart';
@@ -66,12 +67,23 @@ class SlskSetup {
     dj?.onFileMissing = (_) => lib.removeMissing();
     dj?.fetchBusy = () => AutoFetch.instance.running || AutoFetch.instance.manualPending > 0;
     dj?.genreOf = lib.genreOf;
+    // Starting automix switches AUTO on and makes sure Soulseek is signed in.
+    dj?.onAutomixStart = () {
+      if (!autoFetchForAutomix) return;
+      soulseek.manualDisconnect = false;
+      SlskKeeper.instance.setEnabled(true);
+      AutoFetch.instance.followAutomix = true;
+      AutoFetch.instance.refresh();
+    };
+    dj?.onAutomixStop = () {
+      AutoFetch.instance.followAutomix = false;
+      AutoFetch.instance.refresh();
+    };
     dj?.onNeedTrack = (artist, bpm, key, title, genre) {
       final af = AutoFetch.instance;
       if (!autoFetchForAutomix) return;
-      if (af.running || !soulseek.online) {
-        DebugLog.add('automix',
-            'cannot fetch a match: ${af.running ? 'auto-fetch is busy' : 'not signed in to Soulseek'}');
+      if (af.running) {
+        DebugLog.add('automix', 'cannot fetch a match: auto-fetch is busy');
         return;
       }
       // Underground tracks with the playing track's genre and tempo.

@@ -122,11 +122,18 @@ class AutoFetch extends ChangeNotifier {
         endless: endless,
       );
     } else {
-      stop();
+      followAutomix = false;
+      if (running) stop();
+      notifyListeners();
     }
   }
 
   bool running = false;
+
+  /// AUTO is switched on by automix: nothing runs all the time, but a
+  /// matching track is fetched whenever automix asks for one.
+  bool followAutomix = false;
+  bool get active => running || followAutomix;
 
   void refresh() => notifyListeners();
   String status = '';
@@ -303,8 +310,19 @@ class AutoFetch extends ChangeNotifier {
   }) async {
     if (running) return;
     if (!soulseek.online) {
-      _say('Sign in to Soulseek first');
-      return;
+      // Signing in is automatic: wait for it instead of switching off.
+      running = true;
+      _stop = false;
+      _say('Waiting for Soulseek to sign in…');
+      for (var i = 0; i < 60 && !_stop && !soulseek.online; i++) {
+        await Future<void>.delayed(const Duration(seconds: 2));
+      }
+      final ready = soulseek.online && !_stop;
+      running = false;
+      if (!ready) {
+        _say(_stop ? 'Stopped' : 'Could not sign in to Soulseek (check name and password)');
+        return;
+      }
     }
     running = true;
     _lib = library;

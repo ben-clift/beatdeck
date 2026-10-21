@@ -883,6 +883,7 @@ class DjController extends ChangeNotifier {
     _automixFading = false;
     automixStatus = null;
     notifyListeners();
+    onAutomixStart?.call();
   }
 
   /// Switches what comes next while automix keeps running: the track now
@@ -919,6 +920,7 @@ class DjController extends ChangeNotifier {
     if (wasOn) {
       automixStatus = null;
       notifyListeners();
+      onAutomixStop?.call();
     }
   }
 
@@ -977,10 +979,10 @@ class DjController extends ChangeNotifier {
       return remaining <= 45;
     }
     if (!_automixPreloaded) {
-      if (shouldPreload(remaining: remaining, fadeSeconds: automixFadeSeconds) || tier > 0) {
-        _automixBusy = true;
-        _loadNext(other, _automixQueue[next], tier);
-      }
+      // Load the next track on the other deck as soon as one is chosen, so
+      // both decks are loaded from the start.
+      _automixBusy = true;
+      _loadNext(other, _automixQueue[next], tier);
       return false;
     }
     if (shouldStartFade(remaining: remaining, fadeSeconds: automixFadeSeconds)) {
@@ -1063,6 +1065,10 @@ class DjController extends ChangeNotifier {
 
   /// True while tracks are still being downloaded for automix.
   bool Function()? fetchBusy;
+
+  /// Automix started or stopped (the app switches AUTO and Soulseek with it).
+  void Function()? onAutomixStart;
+  void Function()? onAutomixStop;
 
   /// A deck finished by itself (no mix happened, for example because the next
   /// track was not ready or a mix was cancelled): load a fitting track on the

@@ -223,7 +223,7 @@ class _SoulseekPageState extends State<SoulseekPage> {
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
-                          af.running
+                          af.active
                               ? 'AUTO ON  ·  ${af.status.isEmpty ? af.genre : af.status}  (${af.fetched})'
                               : 'Download settings  ·  AUTO off',
                           maxLines: 1,
@@ -231,12 +231,12 @@ class _SoulseekPageState extends State<SoulseekPage> {
                           style: TextStyle(
                             fontSize: 13,
                             fontWeight: FontWeight.w700,
-                            color: af.running ? const Color(0xFF3DDC57) : SideDeckTheme.muted,
+                            color: af.active ? const Color(0xFF3DDC57) : SideDeckTheme.muted,
                           ),
                         ),
                       ),
                       Switch(
-                        value: af.running,
+                        value: af.active,
                         onChanged: (v) => af.toggle(v, widget.library),
                       ),
                     ],
@@ -274,9 +274,9 @@ class _SoulseekPageState extends State<SoulseekPage> {
                 margin: const EdgeInsets.fromLTRB(12, 4, 12, 4),
                 padding: const EdgeInsets.fromLTRB(14, 6, 6, 6),
                 decoration: BoxDecoration(
-                  color: af.running ? const Color(0xFF2E7D32) : const Color(0xFF1E1E1E),
+                  color: af.active ? const Color(0xFF2E7D32) : const Color(0xFF1E1E1E),
                   border: Border.all(
-                    color: af.running ? const Color(0xFF3DDC57) : SideDeckTheme.muted,
+                    color: af.active ? const Color(0xFF3DDC57) : SideDeckTheme.muted,
                     width: 2,
                   ),
                 ),
@@ -290,31 +290,33 @@ class _SoulseekPageState extends State<SoulseekPage> {
                       style: TextStyle(
                         fontSize: 20,
                         fontWeight: FontWeight.w900,
-                        color: af.running ? Colors.white : SideDeckTheme.muted,
+                        color: af.active ? Colors.white : SideDeckTheme.muted,
                       ),
                     ),
                     const SizedBox(width: 10),
                     Text(
-                      af.running ? 'ON' : 'OFF',
+                      af.active ? 'ON' : 'OFF',
                       style: TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.w800,
-                        color: af.running ? const Color(0xFF3DDC57) : SideDeckTheme.muted,
+                        color: af.active ? const Color(0xFF3DDC57) : SideDeckTheme.muted,
                       ),
                     ),
                     const SizedBox(width: 6),
                     Transform.scale(
                       scale: 1.3,
                       child: Switch(
-                        value: af.running,
+                        value: af.active,
                         onChanged: (v) => af.toggle(v, widget.library),
                       ),
                     ),
                     const SizedBox(width: 6),
                     Expanded(
                       child: Text(
-                        af.running && af.status.isNotEmpty
+                        af.active && af.status.isNotEmpty
                             ? '${af.status}  (${af.fetched})'
+                            : af.followAutomix
+                                ? 'Following automix: fetches a match when it needs one'
                             : '${af.source == 'trax' || af.source == 'chart' ? [if (af.useHardwax) 'Hardwax', if (af.useTrax) 'Traxsource'].join(' + ') : '${af.genre}  ${af.bpmMin.round()}-${af.bpmMax.round()} BPM'}'
                                 '${af.endless ? '  ·  keeps going' : '  ·  ${af.count} tracks'}',
                         maxLines: 2,
