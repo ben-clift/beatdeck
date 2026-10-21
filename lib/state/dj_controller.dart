@@ -781,6 +781,13 @@ class DjController extends ChangeNotifier {
     final cur = _automixDeck;
     final other = 1 - cur;
     final d = deck(cur);
+    // The playing deck ran to its end without a mix: carry on at once.
+    if (d.loaded &&
+        !d.playing &&
+        d.duration > 0 &&
+        _engine.position(cur) >= d.duration - 0.6) {
+      return _automixDeckEnded(cur, other);
+    }
     if (!d.loaded || !d.playing) return false; // paused by the DJ: wait
     final jump = _skipJump(cur);
     if (jump != 0) {
@@ -857,6 +864,71 @@ class DjController extends ChangeNotifier {
       return true;
     }
     return false;
+  }
+
+  /// True while tracks are still being downloaded for automix.
+  bool Function()? fetchBusy;
+
+  /// A deck finished by itself (no mix happened, for example because the next
+  /// track was not ready or a mix was cancelled): load a fitting track on the
+  /// other deck if needed and start it straight away.
+  bool _automixDeckEnded(int cur, int other) {
+    final next = _nextUnplayed();
+    if (next == null) {
+      _checkNeedTrack();
+      if (fetchBusy?.call() ?? false) {
+        automixStatus = 'Waiting for the next track to download';
+        return true;
+      }
+      DebugLog.ok('automix', 'finished, no more tracks');
+      automixOn = false;
+      automixStatus = 'Automix finished';
+      return true;
+    }
+    DebugLog.add('automix', 'deck ${cur + 1} finished on its own, starting deck ${other + 1} straight away');
+    _automixBusy = true;
+    () async {
+      try {
+        if (!_automixPreloaded) {
+          final ok = await loadFile(other, _automixQueue[next]);
+          if (!automixOn) return;
+          if (!ok) {
+            DebugLog.flow('Automix mix to next deck', false, 'next track would not load');
+            DebugLog.fail('automix', 'next track would not load, skipped: ${_automixQueue[next].split(RegExp(r'[\\/]')).last}');
+            _automixQueue.removeAt(next);
+            _flowNext = null;
+            automixStatus = 'Skipped a track that would not load';
+            return;
+          }
+        }
+        final inc = deck(other);
+        inc.synced = false;
+        _engine.setFader(other, inc.fader);
+        _engine.setFader(cur, deck(cur).fader);
+        _engine.setEq(other, inc.eqLow, inc.eqMid, inc.eqHigh);
+        _engine.setFilter(other, inc.filter);
+        _engine.setXfader(crossfaderEndFor(other));
+        xfader = crossfaderEndFor(other);
+        final start = inc.beatOffset > 0 ? inc.beatOffset : 0.0;
+        _engine.seek(other, start);
+        inc.position = start;
+        _engine.play(other, true);
+        inc.playing = true;
+        DebugLog.flow('Automix mix to next deck', true);
+        final prevTrack = _flowOf(_automixQueue[_automixIndex]);
+        _automixDeck = other;
+        _automixIndex = next;
+        _markPlayed(_automixQueue[next]);
+        if (prevTrack != null) _flow?.played(prevTrack, _flowMove);
+        _flowNext = null;
+        _automixPreloaded = false;
+        automixStatus = null;
+      } finally {
+        _automixBusy = false;
+        notifyListeners();
+      }
+    }();
+    return true;
   }
 
   void _automixBeginFade(int cur, int other, int next) {

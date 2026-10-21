@@ -53,6 +53,7 @@ class SlskSetup {
     soulseek.downloadDir = () => dirFor(lib);
     soulseek.storageCheck = (size) => StorageGuard.blockReason(dirFor(lib), size);
     dj?.onFileMissing = (_) => lib.removeMissing();
+    dj?.fetchBusy = () => AutoFetch.instance.running || AutoFetch.instance.manualPending > 0;
     dj?.onNeedTrack = (artist, bpm, key, title) {
       final af = AutoFetch.instance;
       if (af.running || !soulseek.online || artist.isEmpty) {
