@@ -113,6 +113,7 @@ int compareTrackSort(
     case TrackSort.year:
     case TrackSort.length:
     case TrackSort.added:
+    case TrackSort.plays:
       return byName(); // handled by the library, which has the details
     case TrackSort.bpm:
       final a = bpmA == null || bpmA <= 0 ? 1e9 : bpmA;
