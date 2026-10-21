@@ -1199,6 +1199,9 @@ class DjController extends ChangeNotifier {
       return _automixDeckEnded(cur, other);
     }
     if (!d.playing) return false; // paused by the DJ: wait
+    // The other deck is playing because you started it: leave it alone (never
+    // load a new track over it) until the current one ends.
+    if (deck(other).loaded && deck(other).playing) return false;
     final jump = _skipJump(cur);
     if (jump != 0) {
       DebugLog.add('automix', 'you moved the playing track ${jump > 0 ? 'forward' : 'back'} ${jump.abs().toStringAsFixed(0)} s, timing worked out again');
@@ -1431,6 +1434,26 @@ class DjController extends ChangeNotifier {
   /// track was not ready or a mix was cancelled): load a fitting track on the
   /// other deck if needed and start it straight away.
   bool _automixDeckEnded(int cur, int other) {
+    // You started the other deck yourself: it carries on as the playing deck.
+    final od = deck(other);
+    if (od.loaded && od.playing && (od.path ?? '').isNotEmpty) {
+      final p = od.path!;
+      var idx = _automixQueue.indexWhere((q) => _trackKey(q) == _trackKey(p));
+      if (idx < 0) {
+        _automixQueue.add(p);
+        idx = _automixQueue.length - 1;
+      }
+      DebugLog.add('automix', 'deck ${other + 1} was started by hand: it carries on as the playing deck');
+      final donePath = _automixIndex >= 0 && _automixIndex < _automixQueue.length ? _automixQueue[_automixIndex] : null;
+      _automixDeck = other;
+      _automixIndex = idx;
+      if (donePath != null) onTrackDone?.call(donePath);
+      _markPlayed(p);
+      _clearUpNext();
+      automixStatus = null;
+      notifyListeners();
+      return true;
+    }
     final waiting = fetchBusy?.call() ?? false;
     int? picked = _nextUnplayed(tier: 0) ?? (waiting ? null : _nextUnplayed(tier: 2));
     if (picked == null && _replayPick() != null) picked = _nextUnplayed(tier: 2);

@@ -161,6 +161,7 @@ class AutoFetch extends ChangeNotifier {
       startGenreMode(library);
     } else {
       genreMode = false;
+      _genreGen++;
       followAutomix = false;
       if (running) stop();
       notifyListeners();
@@ -1092,21 +1093,24 @@ class AutoFetch extends ChangeNotifier {
 
   /// The Genre tab: fetch tracks of the chosen genre and tempo through the
   /// same pipeline. With automix running, the first one plays next.
+  int _genreGen = 0;
+
   Future<void> startGenreMode(LibraryController library) async {
-    if (genreMode) return;
+    final gen = ++_genreGen; // a restart ends the older loop instead of doubling it
+    bool live() => genreMode && gen == _genreGen;
     genreMode = true;
     notifyListeners();
     var got = 0;
     try {
-      while (genreMode && (endless || got < count)) {
+      while (live() && (endless || got < count)) {
         final dj = SlskSetup.dj;
         // Enough already waiting: pause until automix needs more (not for the
         // first one, which is wanted at once).
-        while (genreMode && got > 0 && dj != null && dj.automixOn && dj.automixWaiting >= buffer) {
+        while (live() && got > 0 && dj != null && dj.automixOn && dj.automixWaiting >= buffer) {
           _say('Genre: ${dj.automixWaiting} tracks waiting, holding on');
           await Future<void>.delayed(const Duration(seconds: 3));
         }
-        if (!genreMode) break;
+        if (!live()) break;
         await findNext(
           genre: pickGenre(),
           artist: '',
@@ -1121,13 +1125,13 @@ class AutoFetch extends ChangeNotifier {
           got++;
         } else {
           // Nothing this time: wait a little, then try the next candidates.
-          for (var i = 0; i < 10 && genreMode; i++) {
+          for (var i = 0; i < 10 && live(); i++) {
             await Future<void>.delayed(const Duration(seconds: 1));
           }
         }
       }
     } finally {
-      genreMode = false;
+      if (gen == _genreGen) genreMode = false;
       notifyListeners();
     }
   }
