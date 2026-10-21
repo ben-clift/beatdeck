@@ -65,6 +65,12 @@ class _AutomixPullDownState extends State<AutomixPullDown> {
   }
 
   void _saveTimes() {
+    widget.dj.automixLive(
+      fadeSeconds: _fade,
+      startOffsetSeconds: _offset,
+      arc: _arc,
+      lengthMinutes: _len,
+    );
     SharedPreferences.getInstance().then((p) {
       p.setDouble('automix_fade', _fade);
       p.setDouble('automix_offset', _offset);
@@ -455,12 +461,10 @@ class _AutomixPullDownState extends State<AutomixPullDown> {
                                 ChoiceChip(
                                   label: Text(a.label, style: const TextStyle(fontSize: 12)),
                                   selected: _arc == a,
-                                  onSelected: on
-                                      ? null
-                                      : (_) {
-                                          setState(() => _arc = a);
-                                          _saveTimes();
-                                        },
+                                  onSelected: (_) {
+                                    setState(() => _arc = a);
+                                    _saveTimes();
+                                  },
                                 ),
                             ],
                           ),
@@ -505,12 +509,10 @@ class _AutomixPullDownState extends State<AutomixPullDown> {
             max: max,
             divisions: divisions,
             label: shown,
-            onChanged: locked
-                ? null
-                : (v) {
-                    onChanged(v);
-                    _saveTimes();
-                  },
+            onChanged: (v) {
+              onChanged(v);
+              _saveTimes();
+            },
           ),
         ),
         SizedBox(width: 46, child: Text(shown, style: const TextStyle(fontSize: 12))),

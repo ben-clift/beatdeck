@@ -781,6 +781,28 @@ class DjController extends ChangeNotifier {
 
   // ---- Set flow ----------------------------------------------------------
   SetFlow? _flow;
+
+  /// Applies timing and set-order changes while automix is already running.
+  Future<void> automixLive({
+    required double fadeSeconds,
+    required double startOffsetSeconds,
+    required FlowArc arc,
+    required double lengthMinutes,
+  }) async {
+    automixFadeSeconds = fadeSeconds.clamp(4.0, 180.0).toDouble();
+    _baseFade = automixFadeSeconds;
+    automixStartOffset = startOffsetSeconds.clamp(0.0, 90.0).toDouble();
+    if (!automixOn) return;
+    if (arc == FlowArc.off) {
+      _flow = null;
+    } else if (_flow == null || _flow!.arc != arc || _flow!.lengthMinutes != lengthMinutes) {
+      _flow = SetFlow(arc, lengthMinutes: lengthMinutes);
+      _flowNext = null;
+      for (final q in List.of(_automixQueue)) {
+        await _flowLearn(q);
+      }
+    }
+  }
   double _baseFade = 20;
   int? _flowNext;
   String _flowMove = '?';
