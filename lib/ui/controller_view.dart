@@ -8,6 +8,7 @@ import 'package:share_plus/share_plus.dart';
 import 'package:sidedeck/debug/debug_log.dart';
 import 'package:sidedeck/engine/music_utils.dart';
 import 'package:sidedeck/state/dj_controller.dart';
+import 'package:sidedeck/suggest/auto_fetch.dart';
 import 'package:sidedeck/state/dislikes.dart';
 import 'package:sidedeck/state/library_controller.dart';
 import 'package:sidedeck/state/look_controller.dart';
@@ -567,30 +568,38 @@ class _DeckPanelState extends State<_DeckPanel> {
     }
     final path = d.path;
     final name = d.title;
-    final ok = await showDialog<bool>(
+    // 0 cancel, 1 remove for good, 2 remove and fetch it again
+    final choice = await showDialog<int>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Remove this track?'),
         content: Text(
-            '$name\n\nIt comes off the deck, is deleted from this phone, and will not be played or searched for again.'),
+            '$name\n\nIt comes off the deck and is deleted from this phone.\n\n'
+            '"Remove and get it again" keeps it on your wish list: a fresh copy is '
+            'downloaded from Soulseek in the background (use it for a bad or partial '
+            'download). "Remove for good" means it is never played or searched for again.'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          TextButton(onPressed: () => Navigator.pop(ctx, 0), child: const Text('Cancel')),
+          TextButton(onPressed: () => Navigator.pop(ctx, 2), child: const Text('Remove and get it again')),
           FilledButton(
             style: FilledButton.styleFrom(backgroundColor: Colors.red.shade700),
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Remove'),
+            onPressed: () => Navigator.pop(ctx, 1),
+            child: const Text('Remove for good'),
           ),
         ],
       ),
     );
-    if (ok != true || !mounted) return;
+    if (choice == null || choice == 0 || !mounted) return;
+    final forGood = choice == 1;
+    final deckArtist = d.artist;
+    final deckTitle = d.title;
     final err = widget.dj.removeFromDeck(widget.index);
     if (err != null) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(err)));
       return;
     }
     if (path != null && path.isNotEmpty) {
-      await Dislikes.instance.add(path);
+      if (forGood) await Dislikes.instance.add(path);
       final match = widget.library.tracks.where((t) => t.path == path).toList();
       if (match.isNotEmpty) {
         await widget.library.deleteTracks(match);
@@ -600,9 +609,29 @@ class _DeckPanelState extends State<_DeckPanel> {
         } catch (_) {}
       }
     }
+    if (!forGood) {
+      // Search by artist and title from the name on the deck (or the file name).
+      var artist = deckArtist;
+      var title = deckTitle;
+      if (artist.isEmpty && path != null) {
+        final base = path.split(RegExp(r'[\\/]')).last.replaceFirst(RegExp(r'\.[^.]+$'), '');
+        final dash = base.indexOf(' - ');
+        if (dash > 0) {
+          artist = base.substring(0, dash).replaceFirst(RegExp(r'^\d+[\.\s-]+'), '').trim();
+          title = base.substring(dash + 3).trim();
+        } else {
+          title = base;
+        }
+      }
+      AutoFetch.instance.refetch(artist, title, widget.library);
+    }
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Removed. It will not be played or searched for again.')),
+      SnackBar(
+        content: Text(forGood
+            ? 'Removed. It will not be played or searched for again.'
+            : 'Removed. Getting a fresh copy from Soulseek in the background.'),
+      ),
     );
   }
 

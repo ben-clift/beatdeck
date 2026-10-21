@@ -1208,6 +1208,40 @@ class AutoFetch extends ChangeNotifier {
     return lib.tracks.any((x) => x.title.toLowerCase() == t);
   }
 
+  /// Fetch one particular track again (for example after deleting a bad copy).
+  /// It is not blocked by the "deleted before" list. Runs in the background;
+  /// the finished file joins the library like any other download.
+  Future<void> refetch(String artist, String title, LibraryController library) async {
+    _lib = library;
+    _stop = false;
+    var tries = 0;
+    for (final s in [
+      Suggestion(artist, title, 0, 'Fetching again'),
+      if (artist.isNotEmpty) Suggestion('', title, 0, 'Fetching again'),
+    ]) {
+      _triedThisSession.remove(s.query.toLowerCase());
+      for (var w = 0; w < 60 && !soulseek.online; w++) {
+        await Future<void>.delayed(const Duration(seconds: 2));
+      }
+      if (!soulseek.online) break;
+      tries++;
+      DebugLog.add('fetch', 'getting it again: ${s.query}');
+      soulseek.search(s.query);
+      var waited = 0;
+      await Future<void>.delayed(const Duration(seconds: 2));
+      while (soulseek.searching && waited < 12) {
+        await Future<void>.delayed(const Duration(seconds: 1));
+        waited++;
+      }
+      final best = _pick(s, null);
+      if (best == null) continue;
+      soulseek.download(best);
+      DebugLog.add('fetch', 'downloading again: ${best.fileName}');
+      return;
+    }
+    DebugLog.add('fetch', 'could not find it again after $tries search(es)');
+  }
+
   /// Searches, picks the best match, waits until it has downloaded. Returns
   /// the saved path, or null when nothing usable turned up.
   Future<String?> _fetchOne(Suggestion s, CamelotKey? seedKey) async {

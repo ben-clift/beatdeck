@@ -2,6 +2,8 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:shared_preferences/shared_preferences.dart';
+
 import 'package:sidedeck/debug/debug_log.dart';
 import 'package:sidedeck/soulseek/ingest.dart';
 import 'dart:math' as math;
@@ -139,6 +141,7 @@ class SoulseekClient extends ChangeNotifier {
   Future<void> connect(String user, String password) async {
     if (status != SlskStatus.offline) return;
     manualDisconnect = false;
+    sweepPartials();
     username = user;
     status = SlskStatus.connecting;
     error = null;
@@ -385,7 +388,46 @@ class SoulseekClient extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// A download that did not finish leaves half a file behind: delete it so
+  /// it never turns up in the library or on a deck.
+  void _discardPartial(SlskDownload d) {
+    final path = d.savedPath;
+    if (path == null || d.state == DlState.done) return;
+    final sink = d.sink;
+    d.sink = null;
+    Future<void>(() async {
+      try {
+        await sink?.close();
+      } catch (_) {}
+      try {
+        final f = File(path);
+        if (await f.exists()) await f.delete();
+        DebugLog.add('download', 'deleted the unfinished file $path');
+      } catch (_) {}
+      await _Partials.remove(path);
+    });
+  }
+
+  /// Once per start: delete half-downloaded files left by a crash or a
+  /// closed app.
+  static bool _swept = false;
+  Future<void> sweepPartials() async {
+    if (_swept) return;
+    _swept = true;
+    for (final path in await _Partials.all()) {
+      try {
+        final f = File(path);
+        if (await f.exists()) {
+          await f.delete();
+          DebugLog.add('download', 'deleted a half-downloaded file left from before: $path');
+        }
+      } catch (_) {}
+      await _Partials.remove(path);
+    }
+  }
+
   void removeDownload(SlskDownload d) {
+    _discardPartial(d);
     d.sink?.close();
     _byToken.remove(d.token);
     downloads.remove(d);
@@ -576,8 +618,8 @@ class SoulseekClient extends ChangeNotifier {
       } else {
         DebugLog.add('download',
             'interrupted: received ${d.received} of ${d.size} from ${d.user}');
-        d.sink?.close();
         d.state = DlState.failed;
+        _discardPartial(d);
         d.message = 'Transfer interrupted';
         _changed();
       }
@@ -725,6 +767,7 @@ class SoulseekClient extends ChangeNotifier {
     }
     d.savedPath = file.path;
     d.sink = file.openWrite();
+    _Partials.add(file.path);
     DebugLog.add('download', 'start ${file.path} (expect ${d.size} bytes) from ${d.user}');
     d.state = DlState.downloading;
     d.message = '';
@@ -759,6 +802,7 @@ class SoulseekClient extends ChangeNotifier {
     }
     d.state = DlState.done;
     d.message = 'Saved';
+    if (saved != null) _Partials.remove(saved);
     DebugLog.flow('Download to library', true);
     _changed();
     if (saved != null) {
@@ -775,6 +819,35 @@ class SoulseekClient extends ChangeNotifier {
     _searchTimer?.cancel();
     _serverLost('');
     super.dispose();
+  }
+}
+
+/// Paths of downloads still in progress, kept so a crash cannot leave a
+/// half file in the library.
+class _Partials {
+  static const _key = 'slsk_partials';
+  static Future<List<String>> all() async {
+    try {
+      return (await SharedPreferences.getInstance()).getStringList(_key) ?? [];
+    } catch (_) {
+      return [];
+    }
+  }
+
+  static Future<void> add(String path) async {
+    try {
+      final p = await SharedPreferences.getInstance();
+      final l = p.getStringList(_key) ?? [];
+      if (!l.contains(path)) await p.setStringList(_key, [...l, path]);
+    } catch (_) {}
+  }
+
+  static Future<void> remove(String path) async {
+    try {
+      final p = await SharedPreferences.getInstance();
+      final l = p.getStringList(_key) ?? [];
+      if (l.remove(path)) await p.setStringList(_key, l);
+    } catch (_) {}
   }
 }
 
