@@ -17,6 +17,7 @@ import 'package:sidedeck/ui/suggest_page.dart';
 import 'package:sidedeck/ui/wishlist_page.dart';
 import 'package:sidedeck/subsonic/subsonic_client.dart';
 import 'package:sidedeck/state/backup_tracks.dart';
+import 'package:sidedeck/ui/export_sheet.dart';
 import 'package:sidedeck/state/ratings.dart';
 import 'package:sidedeck/suggest/auto_fetch.dart';
 import 'package:sidedeck/suggest/genres.dart';
@@ -446,6 +447,14 @@ class _LibraryOverlayState extends State<LibraryOverlay> {
                         lib.sortDesc ? Icons.arrow_downward : Icons.arrow_upward,
                         size: 20,
                       ),
+                    ),
+                    IconButton(
+                      tooltip: 'Send tracks to Google Drive',
+                      visualDensity: VisualDensity.compact,
+                      onPressed: lib.filtered.isEmpty
+                          ? null
+                          : () => showExportSheet(context, lib.filtered),
+                      icon: const Icon(Icons.cloud_upload_outlined, size: 22),
                     ),
                     IconButton(
                       tooltip: 'Filters',
