@@ -518,7 +518,7 @@ class DjController extends ChangeNotifier {
       var score = 0.0;
       if (src != null && src.bpm > 0 && c != null && c.bpm > 0) {
         final gap = bpmGapPercent(src.bpm, c.bpm).abs();
-        if (gap > 8) continue;
+        if (gap > 6) continue;
         score -= gap * 4;
         if (src.key != null && c.key != null) {
           final km = keyMatch(src.key!, c.key!).score;
@@ -770,10 +770,27 @@ class DjController extends ChangeNotifier {
   final List<String> _replayPool = [];
   final Set<String> _replayOk = {};
 
+  /// How far a track's tempo is from the playing one, in 4 % steps (unknown
+  /// tempo counts as far, so known close tracks win).
+  int _tempoBucket(String path) {
+    final curPath = _automixIndex >= 0 && _automixIndex < _automixQueue.length
+        ? _automixQueue[_automixIndex]
+        : null;
+    final cur = curPath == null ? null : _flowOf(curPath);
+    final c = _flowOf(path);
+    if (cur == null || c == null || cur.bpm <= 1 || c.bpm <= 1) return 50;
+    return (bpmGapPercent(cur.bpm, c.bpm).abs() / 4).floor();
+  }
+
   int? _replayPick() {
     while (_replayPool.isNotEmpty) {
-      _replayPool.sort((a, b) =>
-          (_recentPlayed[_trackKey(a)] ?? 0).compareTo(_recentPlayed[_trackKey(b)] ?? 0));
+      // Closest tempo first (in 4 % steps), then the one heard longest ago.
+      _replayPool.sort((a, b) {
+        final c = _tempoBucket(a).compareTo(_tempoBucket(b));
+        return c != 0
+            ? c
+            : (_recentPlayed[_trackKey(a)] ?? 0).compareTo(_recentPlayed[_trackKey(b)] ?? 0);
+      });
       final path = _replayPool.removeAt(0);
       if (!File(path).existsSync() || Dislikes.instance.hasPath(path)) continue;
       if (_automixQueue.any((q) => _trackKey(q) == _trackKey(path))) continue;
@@ -795,12 +812,15 @@ class DjController extends ChangeNotifier {
     };
     String? best;
     var bestAt = 1 << 62;
+    var bestBucket = 1 << 30;
     for (final q in _automixQueue) {
       final k = _trackKey(q);
       if (onDeck.contains(k) || Dislikes.instance.hasPath(q) || failedPaths.contains(q)) continue;
       if (!File(q).existsSync()) continue;
       final at = _recentPlayed[k] ?? 0;
-      if (at < bestAt) {
+      final bucket = _tempoBucket(q);
+      if (bucket < bestBucket || (bucket == bestBucket && at < bestAt)) {
+        bestBucket = bucket;
         bestAt = at;
         best = q;
       }
@@ -1022,7 +1042,7 @@ class DjController extends ChangeNotifier {
     if (curPath == null || tier >= 2) return true;
     final cur = _flowOf(curPath);
     final c = _flowOf(path);
-    final tol = tier == 0 ? 8.0 : 15.0;
+    final tol = tier == 0 ? 5.0 : 8.0;
     // A tempo not known yet does not rule a track out: it is loaded, read by
     // the engine, and checked before the mix (see _loadNext).
     if (cur != null && cur.bpm > 0 && c != null && c.bpm > 0) {
@@ -1490,7 +1510,7 @@ class DjController extends ChangeNotifier {
           }
         }
       }
-      final tol = forced ? 30.0 : (tier == 0 ? 10.0 : (tier == 1 ? 16.0 : 1e9));
+      final tol = forced ? 9.0 : (tier == 0 ? 6.0 : (tier == 1 ? 9.0 : 1e9));
       if (out.bpm > 1 && inc.bpm > 1 && bpmGapPercent(out.bpm, inc.bpm).abs() > tol) {
         DebugLog.add('automix',
             'turned down ${path.split(RegExp(r'[\\/]')).last}: ${inc.bpm.round()} BPM against ${out.bpm.round()}, choosing another');
