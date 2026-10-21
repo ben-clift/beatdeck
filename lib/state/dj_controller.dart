@@ -554,6 +554,7 @@ class DjController extends ChangeNotifier {
   }
 
   void _markPlayed(String path) {
+    _countPlay(path);
     final k = _trackKey(path);
     _automixPlayed.add(k);
     _recentPlayed[k] = DateTime.now().millisecondsSinceEpoch;
@@ -567,10 +568,45 @@ class DjController extends ChangeNotifier {
   /// Loads the saved play history so screens can show what was played today.
   Future<void> loadPlayedHistory() async {
     await _loadRecent();
+    await loadPlayCounts();
     notifyListeners();
   }
 
   bool playedRecently(String path) => _wasPlayed(path);
+
+  // ---- Play counts (for the "Most played" sort) ----------------------------
+  final Map<String, int> _plays = {};
+  final Map<String, int> _playCountedAt = {};
+  bool _playsLoaded = false;
+
+  int playCountOf(String path) => _plays[_trackKey(path)] ?? 0;
+
+  Future<void> loadPlayCounts() async {
+    if (_playsLoaded) return;
+    _playsLoaded = true;
+    try {
+      final p = await SharedPreferences.getInstance();
+      for (final e in p.getStringList('play_counts_v1') ?? const <String>[]) {
+        final i = e.lastIndexOf('|');
+        final n = i > 0 ? int.tryParse(e.substring(i + 1)) : null;
+        if (n != null) _plays[e.substring(0, i)] = n;
+      }
+    } catch (_) {}
+  }
+
+  /// One more play for a track (not counted again within ten minutes, so
+  /// pausing and resuming does not add up).
+  void _countPlay(String path) {
+    final k = _trackKey(path);
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final last = _playCountedAt[k];
+    if (last != null && now - last < 10 * 60 * 1000) return;
+    _playCountedAt[k] = now;
+    _plays[k] = (_plays[k] ?? 0) + 1;
+    SharedPreferences.getInstance().then((p) {
+      p.setStringList('play_counts_v1', [for (final e in _plays.entries) '${e.key}|${e.value}']);
+    }).catchError((_) {});
+  }
 
   /// The DJ deleted this track: take it out of the automix queue if it has
   /// not played yet.
@@ -1495,6 +1531,7 @@ class DjController extends ChangeNotifier {
     // A synced deck finds the master's beat again every time it starts.
     if (next && d.synced) _alignPhase(deckIndex);
     if (next) _logTrack(deckIndex);
+    if (next && d.path != null) _countPlay(d.path!);
     notifyListeners();
   }
 

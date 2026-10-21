@@ -472,7 +472,7 @@ class LibraryController extends ChangeNotifier {
   void setSort(TrackSort value) {
     if (sort == value) return;
     sort = value;
-    sortDesc = value == TrackSort.added; // newest first by default
+    sortDesc = value == TrackSort.added || value == TrackSort.plays; // newest / most played first
     _emit();
   }
 
@@ -493,6 +493,7 @@ class LibraryController extends ChangeNotifier {
   /// Set by the screen: whether automix played a track in the last 24 hours,
   /// and the key now on a deck (-1 when nothing is loaded).
   bool Function(String path)? playedCheck;
+  int Function(String path)? playsOf;
   int Function(int deck)? deckKey;
 
   bool get hasFilters =>
@@ -588,6 +589,10 @@ class LibraryController extends ChangeNotifier {
           break;
         case TrackSort.added:
           c = a.modifiedMs.compareTo(b.modifiedMs);
+          break;
+        case TrackSort.plays:
+          c = (playsOf?.call(a.path) ?? 0).compareTo(playsOf?.call(b.path) ?? 0);
+          if (c == 0) c = a.title.toLowerCase().compareTo(b.title.toLowerCase());
           break;
         case TrackSort.genre:
           // Tracks with no genre go last; same genre by name.

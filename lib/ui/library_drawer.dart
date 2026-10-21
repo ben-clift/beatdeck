@@ -61,6 +61,7 @@ class _LibraryOverlayState extends State<LibraryOverlay> {
     super.initState();
     _loadClient();
     widget.library.playedCheck = widget.dj.playedRecently;
+    widget.library.playsOf = widget.dj.playCountOf;
     widget.library.deckKey = (i) {
       final d = widget.dj.deck(i);
       return d.loaded ? d.key : -1;
@@ -429,6 +430,7 @@ class _LibraryOverlayState extends State<LibraryOverlay> {
                       _sortItem(TrackSort.year, 'Year'),
                       _sortItem(TrackSort.length, 'Length'),
                       _sortItem(TrackSort.added, 'Newest'),
+                      _sortItem(TrackSort.plays, 'Most played'),
                     ],
                   ),
                   if (_tab == 0) ...[

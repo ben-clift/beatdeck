@@ -88,7 +88,7 @@ String formatDuration(double seconds) {
   );
 }
 
-enum TrackSort { name, artist, bpm, key, genre, year, length, added }
+enum TrackSort { name, artist, bpm, key, genre, year, length, added, plays }
 
 int compareTrackSort(
   TrackSort sort,
