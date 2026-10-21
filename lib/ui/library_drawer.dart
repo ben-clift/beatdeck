@@ -17,6 +17,8 @@ import 'package:sidedeck/ui/suggest_page.dart';
 import 'package:sidedeck/ui/wishlist_page.dart';
 import 'package:sidedeck/subsonic/subsonic_client.dart';
 import 'package:sidedeck/state/backup_tracks.dart';
+import 'package:sidedeck/suggest/auto_fetch.dart';
+import 'package:sidedeck/suggest/genres.dart';
 import 'package:sidedeck/theme/sidedeck_theme.dart';
 
 /// Modal library overlay (opened from the Library button).
@@ -787,6 +789,73 @@ class _LibraryOverlayState extends State<LibraryOverlay> {
     );
   }
 
+  /// Tap the genre: why it was fetched, what it is tagged as, and a list to
+  /// change it.
+  void _genreMenu(LibraryTrack t) {
+    final asked = AutoFetch.instance.askedFor[t.path] ?? '';
+    final typed = TextEditingController();
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: SideDeckTheme.panel,
+      builder: (ctx) {
+        Future<void> pick(String g) async {
+          Navigator.pop(ctx);
+          await widget.library.setGenre(t.path, g);
+        }
+
+        return SafeArea(
+          child: Padding(
+            padding: EdgeInsets.fromLTRB(16, 12, 16, 16 + MediaQuery.of(ctx).viewInsets.bottom),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(t.title,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 6),
+                  Text('Genre now: ${t.genre.isEmpty ? 'not set' : t.genre}',
+                      style: const TextStyle(fontSize: 12)),
+                  if (asked.isNotEmpty)
+                    Text('Downloaded while looking for: $asked',
+                        style: const TextStyle(fontSize: 12, color: SideDeckTheme.muted)),
+                  const SizedBox(height: 10),
+                  TextField(
+                    controller: typed,
+                    decoration: const InputDecoration(
+                        labelText: 'Type a genre and press enter', isDense: true),
+                    onSubmitted: (v) => pick(v),
+                  ),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 2,
+                    children: [
+                      for (final grp in genreGroups)
+                        for (final g in grp.$2)
+                          ActionChip(
+                            label: Text(g.name),
+                            visualDensity: VisualDensity.compact,
+                            onPressed: () => pick(g.name),
+                          ),
+                    ],
+                  ),
+                  TextButton(
+                    onPressed: () => pick(''),
+                    child: const Text('Back to the genre in the file'),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   /// Hold a track: a small sheet with Backup and Delete.
   void _trackMenu(LibraryTrack t) {
     showModalBottomSheet<void>(
@@ -1050,6 +1119,8 @@ class _LibraryOverlayState extends State<LibraryOverlay> {
     required double durationSec,
     required List<Widget> actions,
     VoidCallback? onLongPress,
+    String? genre,
+    VoidCallback? onGenreTap,
   }) {
     return InkWell(
       onLongPress: onLongPress,
@@ -1081,7 +1152,38 @@ class _LibraryOverlayState extends State<LibraryOverlay> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(title, maxLines: 1, overflow: TextOverflow.ellipsis),
-                ?_trackArtist(artist, status: status),
+                Row(
+                  children: [
+                    if (_trackArtist(artist, status: status) != null)
+                      Flexible(child: _trackArtist(artist, status: status)!),
+                    if (onGenreTap != null) ...[
+                      const SizedBox(width: 6),
+                      InkWell(
+                        onTap: onGenreTap,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                          decoration: BoxDecoration(
+                            border: Border.all(
+                                color: (genre ?? '').isEmpty ? SideDeckTheme.muted : const Color(0xFFFF9F1C)),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text((genre ?? '').isEmpty ? 'set genre' : genre!,
+                                  style: TextStyle(
+                                      fontSize: 11,
+                                      color: (genre ?? '').isEmpty
+                                          ? SideDeckTheme.muted
+                                          : const Color(0xFFFF9F1C))),
+                              const Icon(Icons.arrow_drop_down, size: 14),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
               ],
             ),
           ),
@@ -1126,6 +1228,8 @@ class _LibraryOverlayState extends State<LibraryOverlay> {
               : 'Analyze BPM / key',
           onAnalyze: busy ? null : () => _analyzeLocal(t),
           onLongPress: () => _trackMenu(t),
+          genre: t.genre,
+          onGenreTap: () => _genreMenu(t),
           title: t.title,
           artist: t.artist,
           bpm: t.bpm,

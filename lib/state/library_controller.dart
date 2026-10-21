@@ -415,12 +415,55 @@ class LibraryController extends ChangeNotifier {
   /// The tagged genre of a library file, empty when unknown.
   String genreOf(String path) => _genreByPath[path] ?? '';
 
+  /// Genres you set by hand (they win over the file's tag).
+  Map<String, String> _genreOverrides = {};
+
+  Future<void> _loadOverrides() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final m = jsonDecode(prefs.getString('lib_genre_override_v1') ?? '{}') as Map<String, dynamic>;
+      _genreOverrides = {for (final e in m.entries) e.key: e.value as String};
+    } catch (_) {}
+  }
+
+  /// Sets (or with an empty [genre], clears) a track's genre by hand.
+  Future<void> setGenre(String path, String genre) async {
+    await _loadOverrides();
+    final g = genre.trim();
+    if (g.isEmpty) {
+      _genreOverrides.remove(path);
+    } else {
+      _genreOverrides[path] = g;
+    }
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('lib_genre_override_v1', jsonEncode(_genreOverrides));
+    } catch (_) {}
+    final at = tracks.indexWhere((x) => x.path == path);
+    if (at >= 0) {
+      var shown = g;
+      if (shown.isEmpty) {
+        try {
+          shown = (await readTrackTags(path)).genre;
+        } catch (_) {}
+      }
+      tracks[at] = tracks[at].withTags(shown, tracks[at].year);
+      if (shown.isNotEmpty) {
+        _genreByPath[path] = shown;
+      } else {
+        _genreByPath.remove(path);
+      }
+    }
+    _emit();
+  }
+
   /// Reads genre and year for tracks that have not been read yet, a few at a
   /// time in the background. Results are saved so the next start is instant.
   Future<void> readTags() async {
     if (_readingTags) return;
     _readingTags = true;
     try {
+      await _loadOverrides();
       final prefs = await SharedPreferences.getInstance();
       Map<String, dynamic> saved = {};
       try {
@@ -446,6 +489,8 @@ class LibraryController extends ChangeNotifier {
           }
           saved[t.path] = [genre, year];
         }
+        final hand = _genreOverrides[t.path];
+        if (hand != null && hand.isNotEmpty) genre = hand;
         final at = tracks.indexWhere((x) => x.path == t.path);
         if (at >= 0) tracks[at] = tracks[at].withTags(genre, year);
         if (genre.isNotEmpty) _genreByPath[t.path] = genre;

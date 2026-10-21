@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:sidedeck/engine/tags.dart';
 import 'dart:math' as math;
 import 'package:sidedeck/debug/debug_log.dart';
@@ -63,6 +64,10 @@ class AutoFetch extends ChangeNotifier {
   bool useHardwax = true;
   bool useTrax = true;
   bool useRa = true;
+
+  /// The genre each download was searched for (path to genre), kept so the
+  /// library can say why a track was fetched.
+  Map<String, String> askedFor = {};
   bool useBandcamp = true;
   bool useDiscogs = true;
   String hwTag = '';
@@ -82,6 +87,10 @@ class AutoFetch extends ChangeNotifier {
       useTrax = prefs.getBool('af_use_trax') ?? useTrax;
       useRa = prefs.getBool('af_use_ra') ?? useRa;
       genres = prefs.getStringList('af_genres') ?? genres;
+      try {
+        final m = jsonDecode(prefs.getString('af_asked_for') ?? '{}') as Map<String, dynamic>;
+        askedFor = {for (final e in m.entries) e.key: e.value as String};
+      } catch (_) {}
       pinned = prefs.getBool('af_pinned') ?? pinned;
       intensity = prefs.getInt('af_intensity') ?? intensity;
       tempoPinned = prefs.getBool('af_tempo_pin') ?? tempoPinned;
@@ -1036,6 +1045,11 @@ class AutoFetch extends ChangeNotifier {
       }
       if (winner != null) {
         _fetched.add(winner);
+        askedFor[winner] = g;
+        if (askedFor.length > 400) askedFor.remove(askedFor.keys.first);
+        try {
+          (await SharedPreferences.getInstance()).setString('af_asked_for', jsonEncode(askedFor));
+        } catch (_) {}
         fetched = 1;
         lastFound = true;
         DebugLog.ok('fetch', 'next track downloaded: $winner');
