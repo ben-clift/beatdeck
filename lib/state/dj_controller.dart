@@ -495,6 +495,84 @@ class DjController extends ChangeNotifier {
     cb(artist, cur.bpm, cur.key, title, genreOf?.call(path) ?? '');
   }
 
+  /// "More like this": look through the library (the automix list) for a
+  /// track that fits this deck's track and play it next; if there is none,
+  /// ask Soulseek for one like it. Returns what happened, for the screen.
+  String automixMoreLike(int deckIndex) {
+    if (!automixOn || _automixDeck < 0) return 'Start Auto DJ first.';
+    final path = deck(deckIndex).path;
+    if (path == null || path.isEmpty) return 'Load a track first.';
+    final src = _flowOf(path);
+    final srcGenre = genreOf?.call(path) ?? '';
+    final onDeck = <String>{
+      for (var i = 0; i < 2; i++) if ((deck(i).path ?? '').isNotEmpty) _trackKey(deck(i).path!),
+    };
+    String? best;
+    var bestScore = -1e9;
+    for (final q in _automixQueue) {
+      final k = _trackKey(q);
+      if (onDeck.contains(k) || _wasPlayed(q) || failedPaths.contains(q)) continue;
+      if (Dislikes.instance.hasPath(q) || !File(q).existsSync()) continue;
+      final c = _flowOf(q);
+      var score = 0.0;
+      if (src != null && src.bpm > 0 && c != null && c.bpm > 0) {
+        final gap = bpmGapPercent(src.bpm, c.bpm).abs();
+        if (gap > 8) continue;
+        score -= gap * 4;
+        if (src.key != null && c.key != null) {
+          final km = keyMatch(src.key!, c.key!).score;
+          if (km < 50) continue;
+          score += km * 0.3;
+        }
+      } else {
+        score -= 20; // tempo not known yet: after the known fits
+      }
+      final g = genreOf?.call(q) ?? '';
+      if (srcGenre.isNotEmpty && g.isNotEmpty) {
+        if (!genresSimilar(srcGenre, g)) continue;
+        score += 15;
+      }
+      if (score > bestScore) {
+        bestScore = score;
+        best = q;
+      }
+    }
+    if (best != null) {
+      _forcePath = best;
+      _upNext = best;
+      _automixPreloaded = false;
+      _rejected.remove(best);
+      _flowNext = null;
+      if (deckIndex == _automixDeck) _mixNow = true;
+      final name = best.split(RegExp(r'[\\/]')).last;
+      DebugLog.add('automix', 'more like this: found one in the library: $name');
+      notifyListeners();
+      final shown = name.replaceFirst(RegExp(r'\.[^.]+$'), '');
+      return 'Found one in your library: ' + shown;
+    }
+    // Nothing similar in the library: ask Soulseek.
+    final cb = onNeedTrack;
+    if (cb == null || !(fetchWanted?.call() ?? true)) {
+      return 'Nothing like it in the library, and fetching from Soulseek is off.';
+    }
+    final name = path.split(RegExp(r'[\\/]')).last.replaceFirst(RegExp(r'\.[^.]+$'), '');
+    final dash = name.indexOf(' - ');
+    var artist = src?.artist ?? '';
+    var title = dash > 0 ? name.substring(dash + 3).trim() : name;
+    if (artist.isEmpty) {
+      final cut = RegExp(r'\s*[\(\[]|\s-').firstMatch(name);
+      artist = (cut != null && cut.start > 1 ? name.substring(0, cut.start) : name)
+          .replaceFirst(RegExp(r'^\d+[\.\s-]+'), '')
+          .trim();
+      title = name;
+    }
+    armPlayNext();
+    DebugLog.add('automix', 'more like this: nothing in the library, asking Soulseek like $name');
+    cb(artist, src?.bpm ?? 0, src?.key, title, srcGenre);
+    notifyListeners();
+    return 'Nothing like it in the library, so asking Soulseek. It will play next.';
+  }
+
   /// A new track (for example a finished Soulseek download) joins the end of
   /// the automix queue if automix is running.
   void automixAppend(String path) {

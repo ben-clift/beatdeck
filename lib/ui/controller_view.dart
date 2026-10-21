@@ -628,6 +628,18 @@ class _DeckPanelState extends State<_DeckPanel> {
                     }
                   },
                 ),
+              if (d.loaded && widget.dj.automixOn)
+                IconButton(
+                  tooltip: 'More like this: library first, then Soulseek',
+                  visualDensity: VisualDensity.compact,
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                  icon: const Icon(Icons.auto_awesome, size: 20),
+                  onPressed: () {
+                    final msg = widget.dj.automixMoreLike(widget.index);
+                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+                  },
+                ),
               if (d.loaded)
                 IconButton(
                   tooltip: 'Put in Backup tracks to come back to another time',
