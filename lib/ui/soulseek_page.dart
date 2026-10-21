@@ -280,7 +280,10 @@ class _SoulseekPageState extends State<SoulseekPage> {
                     width: 2,
                   ),
                 ),
-                child: Row(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Row(
                   children: [
                     Text(
                       'AUTO',
@@ -312,7 +315,7 @@ class _SoulseekPageState extends State<SoulseekPage> {
                       child: Text(
                         af.running && af.status.isNotEmpty
                             ? '${af.status}  (${af.fetched})'
-                            : '${af.source == 'trax' ? 'Traxsource, whole library' : af.source == 'chart' && af.hardwax ? (af.hwTag.isEmpty ? 'Hardwax, whole shop' : 'Hardwax: ${af.hwTag}') : '${af.genre}  ${af.bpmMin.round()}-${af.bpmMax.round()} BPM'}'
+                            : '${af.source == 'trax' || af.source == 'chart' ? [if (af.useHardwax) 'Hardwax', if (af.useTrax) 'Traxsource'].join(' + ') : '${af.genre}  ${af.bpmMin.round()}-${af.bpmMax.round()} BPM'}'
                                 '${af.endless ? '  ·  keeps going' : '  ·  ${af.count} tracks'}',
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
@@ -322,6 +325,33 @@ class _SoulseekPageState extends State<SoulseekPage> {
                     TextButton(
                       onPressed: _openAuto,
                       child: const Text('Set up'),
+                    ),
+                  ],
+                ),
+                    Row(
+                      children: [
+                        const Text('Take tracks from:', style: TextStyle(fontSize: 12)),
+                        const SizedBox(width: 8),
+                        FilterChip(
+                          label: const Text('Hardwax'),
+                          selected: af.useHardwax,
+                          onSelected: (v) {
+                            af.useHardwax = v;
+                            af.save();
+                            af.refresh();
+                          },
+                        ),
+                        const SizedBox(width: 6),
+                        FilterChip(
+                          label: const Text('Traxsource'),
+                          selected: af.useTrax,
+                          onSelected: (v) {
+                            af.useTrax = v;
+                            af.save();
+                            af.refresh();
+                          },
+                        ),
+                      ],
                     ),
                   ],
                 ),

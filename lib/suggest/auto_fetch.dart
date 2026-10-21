@@ -39,6 +39,10 @@ class AutoFetch extends ChangeNotifier {
   /// Hardwax is the default source for the AUTO switch. [hwTag] is a tag
   /// page slug, or empty for the whole shop (every tag in turn).
   bool hardwax = true;
+
+  /// Shops the AUTO switch and automix may take tracks from.
+  bool useHardwax = true;
+  bool useTrax = true;
   String hwTag = '';
 
   Future<void> load() async {
@@ -52,6 +56,8 @@ class AutoFetch extends ChangeNotifier {
         await prefs.setString('af_hw_tag', '');
       }
       hardwax = prefs.getBool('af_hardwax') ?? hardwax;
+      useHardwax = prefs.getBool('af_use_hw') ?? useHardwax;
+      useTrax = prefs.getBool('af_use_trax') ?? useTrax;
       hwTag = prefs.getString('af_hw_tag') ?? hwTag;
       source = prefs.getString('af_source') ?? source;
       chartId = prefs.getInt('af_chart_id') ?? chartId;
@@ -78,6 +84,8 @@ class AutoFetch extends ChangeNotifier {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString('af_source', source);
       await prefs.setBool('af_hardwax', hardwax);
+      await prefs.setBool('af_use_hw', useHardwax);
+      await prefs.setBool('af_use_trax', useTrax);
       await prefs.setString('af_hw_tag', hwTag);
       await prefs.setInt('af_chart_id', chartId);
       await prefs.setString('af_chart_name', chartName);
@@ -100,10 +108,8 @@ class AutoFetch extends ChangeNotifier {
   /// The AUTO switch: on starts fetching with the saved settings, off stops.
   void toggle(bool on, LibraryController library) {
     DebugLog.add('fetch', 'AUTO ${on ? 'ON' : 'OFF'} (source $source)');
-    if (on && source == 'chart') {
-      startHardwax(tag: hwTag, library: library, count: count, endless: endless);
-    } else if (on && source == 'trax') {
-      startTraxsource(library: library, count: count, endless: endless);
+    if (on && (source == 'chart' || source == 'trax')) {
+      startShops(library: library, count: count, endless: endless);
     } else if (on && source == 'list') {
       startList(text: pasted, library: library);
     } else if (on) {
@@ -121,6 +127,8 @@ class AutoFetch extends ChangeNotifier {
   }
 
   bool running = false;
+
+  void refresh() => notifyListeners();
   String status = '';
   int fetched = 0;
   int limit = 5;
@@ -388,6 +396,59 @@ class AutoFetch extends ChangeNotifier {
     );
   }
 
+  /// Hardwax and/or Traxsource (the toggles under the AUTO switch), mixed
+  /// together in random order.
+  Future<void> startShops({
+    required LibraryController library,
+    required int count,
+    required bool endless,
+  }) {
+    var given = false;
+    final names = [if (useHardwax) 'Hardwax', if (useTrax) 'Traxsource'].join(' + ');
+    return _runSource(
+      label: names.isEmpty ? 'nothing (both shops are off)' : names,
+      more: (tried) async {
+        if (given) return <Suggestion>[];
+        given = true;
+        final lists = <List<Suggestion>>[];
+        if (useHardwax) {
+          final slugs = hwTag.isEmpty ? [for (final t in Hardwax.tags) t.$2] : [hwTag];
+          final hw = <Suggestion>[];
+          for (final slug in slugs) {
+            try {
+              hw.addAll(await Hardwax.fetch(slug, skip: tried));
+            } catch (_) {}
+          }
+          lists.add(hw);
+        }
+        if (useTrax) {
+          try {
+            lists.add(await Traxsource.all());
+          } catch (_) {}
+        }
+        final seen = <String>{};
+        final all = <Suggestion>[];
+        for (final l in lists) {
+          l.shuffle();
+        }
+        for (var i = 0; lists.any((l) => i < l.length); i++) {
+          for (final l in lists) {
+            if (i >= l.length) continue;
+            final x = l[i];
+            if (tried.contains(x.query.toLowerCase())) continue;
+            if (Dislikes.instance.hasTrack(x.artist, x.title)) continue;
+            if (seen.add(x.query.toLowerCase())) all.add(x);
+          }
+        }
+        return all;
+      },
+      library: library,
+      count: count,
+      endless: endless,
+      useYears: false,
+    );
+  }
+
   /// Traxsource: the whole library (every genre's Top 100, read once a day),
   /// in random order.
   Future<void> startTraxsource({
@@ -577,7 +638,7 @@ class AutoFetch extends ChangeNotifier {
     await _runSource(
       label: '$g${bpm > 1 ? ', ${bpm.round()} BPM' : ''}, Hardwax then Traxsource',
       more: (tried) async {
-        if (!hwDone) {
+        if (!hwDone && useHardwax) {
           hwDone = true;
           try {
             final hw = await Hardwax.fetch(slug, skip: tried);
@@ -587,6 +648,7 @@ class AutoFetch extends ChangeNotifier {
           } catch (_) {}
         }
         // Traxsource (read once a day) instead of Deezer, by genre family and tempo.
+        if (!useTrax) return <Suggestion>[];
         try {
           final tx = (await Traxsource.matching(g, bpmMin: lo, bpmMax: hi))
               .where((s) =>
