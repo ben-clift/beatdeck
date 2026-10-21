@@ -267,7 +267,10 @@ class _AutomixPullDownState extends State<AutomixPullDown> {
                       child: ChoiceChip(
                         label: Text(label),
                         selected: choice == id,
-                        onSelected: on ? null : (_) => setState(() => _selectedId = id),
+                        onSelected: (_) {
+                          setState(() => _selectedId = id);
+                          if (on) widget.dj.automixSwitchTo(_pathsFor(id, lists));
+                        },
                       ),
                     ),
                   for (final pl in lists)
@@ -276,7 +279,10 @@ class _AutomixPullDownState extends State<AutomixPullDown> {
                       child: ChoiceChip(
                         label: Text('${pl.name} · ${pl.paths.length}'),
                         selected: choice == pl.id,
-                        onSelected: on ? null : (_) => setState(() => _selectedId = pl.id),
+                        onSelected: (_) {
+                          setState(() => _selectedId = pl.id);
+                          if (on) widget.dj.automixSwitchTo(_pathsFor(pl.id, lists));
+                        },
                       ),
                     ),
                 ],

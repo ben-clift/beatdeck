@@ -584,6 +584,25 @@ class DjController extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Switches what comes next while automix keeps running: the track now
+  /// playing carries on, then the new list follows.
+  void automixSwitchTo(List<String> paths) {
+    if (!automixOn || _automixIndex < 0 || _automixIndex >= _automixQueue.length) return;
+    if (_automixFading) return; // wait for the mix in progress to finish
+    final current = _automixQueue[_automixIndex];
+    final seen = <String>{_trackKey(current)};
+    _automixQueue = [
+      current,
+      for (final p in paths)
+        if (seen.add(_trackKey(p))) p,
+    ];
+    _automixIndex = 0;
+    _flowNext = null;
+    _automixPreloaded = false;
+    automixStatus = 'Switched: new list plays after this track';
+    notifyListeners();
+  }
+
   void stopAutomix() {
     final wasOn = automixOn;
     automixOn = false;
