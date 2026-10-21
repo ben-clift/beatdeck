@@ -5,6 +5,11 @@ on:
     branches: [main]
   workflow_dispatch:
 
+# One build at a time, so an older build can never overwrite the newer release.
+concurrency:
+  group: beatdeck-build
+  cancel-in-progress: false
+
 jobs:
   build:
     runs-on: ubuntu-latest
