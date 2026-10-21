@@ -563,7 +563,7 @@ class DjController extends ChangeNotifier {
       await _flowLearn(p);
     }
     automixStartOffset = startOffsetSeconds.clamp(0.0, 90.0).toDouble();
-    DebugLog.add('automix', 'start with ${_automixQueue.length} tracks, flow ${arc.label}');
+    DebugLog.add('automix', 'start with ${_automixQueue.length} tracks, flow ${arc.label}, mix starts ${automixFadeSeconds.round()} s from the end, next track starts ${automixStartOffset.round()} s in');
     automixOn = true;
     automixStatus = 'Loading first track';
     _automixBusy = true;

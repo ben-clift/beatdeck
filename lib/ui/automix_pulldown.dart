@@ -40,6 +40,12 @@ class _AutomixPullDownState extends State<AutomixPullDown> {
     SharedPreferences.getInstance().then((p) {
       if (!mounted) return;
       setState(() {
+        // One-time reset so everyone starts from 20 s and 10 s.
+        if (p.getBool('automix_times_v2') != true) {
+          p.setBool('automix_times_v2', true);
+          p.setDouble('automix_fade', 20);
+          p.setDouble('automix_offset', 10);
+        }
         _fade = p.getDouble('automix_fade') ?? _fade;
         _offset = p.getDouble('automix_offset') ?? _offset;
         _arc = FlowArc.values[(p.getInt('automix_arc') ?? 0).clamp(0, FlowArc.values.length - 1)];
