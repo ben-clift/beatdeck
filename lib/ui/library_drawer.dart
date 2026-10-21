@@ -6,6 +6,7 @@ import 'package:sidedeck/engine/analysis_cache.dart';
 import 'package:sidedeck/engine/app_launcher.dart';
 import 'package:sidedeck/engine/music_utils.dart';
 import 'package:sidedeck/engine/track_analyzer.dart';
+import 'package:sidedeck/state/dislikes.dart';
 import 'package:sidedeck/state/dj_controller.dart';
 import 'package:sidedeck/state/library_controller.dart';
 import 'package:sidedeck/state/playlist_controller.dart';
@@ -781,6 +782,63 @@ class _LibraryOverlayState extends State<LibraryOverlay> {
     );
   }
 
+  /// Hold a track: a small sheet with a delete button.
+  void _trackMenu(LibraryTrack t) {
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: SideDeckTheme.panel,
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(t.title, maxLines: 2, overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
+              if (t.artist.isNotEmpty)
+                Text(t.artist, style: const TextStyle(fontSize: 12, color: SideDeckTheme.muted)),
+              const SizedBox(height: 14),
+              FilledButton.icon(
+                style: FilledButton.styleFrom(backgroundColor: Colors.red.shade700),
+                onPressed: () {
+                  Navigator.pop(ctx);
+                  _deleteTrack(t);
+                },
+                icon: const Icon(Icons.delete_outline),
+                label: const Text('Delete and never play or search for it again'),
+              ),
+              const SizedBox(height: 4),
+              const Text(
+                'Removes the file from this phone and your library. Automix will not pick it and auto-fetch will not look for it.',
+                style: TextStyle(fontSize: 11, color: SideDeckTheme.muted),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _deleteTrack(LibraryTrack t) async {
+    for (var i = 0; i < widget.dj.visibleDecks; i++) {
+      final d = widget.dj.deck(i);
+      if (d.loaded && d.path == t.path) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('It is loaded on deck ${i + 1}. Load something else first.')),
+        );
+        return;
+      }
+    }
+    await Dislikes.instance.add(t.path);
+    widget.dj.automixDrop(t.path);
+    await widget.library.deleteTracks([t]);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Deleted. It will not be picked or searched for again.')),
+    );
+  }
+
   CheckedPopupMenuItem<TrackSort> _sortItem(TrackSort value, String label) {
     return CheckedPopupMenuItem(
       value: value,
@@ -967,8 +1025,11 @@ class _LibraryOverlayState extends State<LibraryOverlay> {
     required int? key,
     required double durationSec,
     required List<Widget> actions,
+    VoidCallback? onLongPress,
   }) {
-    return Padding(
+    return InkWell(
+      onLongPress: onLongPress,
+      child: Padding(
       padding: const EdgeInsets.fromLTRB(2, 4, 8, 4),
       child: Row(
         children: [
@@ -1005,6 +1066,7 @@ class _LibraryOverlayState extends State<LibraryOverlay> {
           ...actions,
         ],
       ),
+      ),
     );
   }
 
@@ -1039,6 +1101,7 @@ class _LibraryOverlayState extends State<LibraryOverlay> {
               ? 'Re-analyze BPM / grid'
               : 'Analyze BPM / key',
           onAnalyze: busy ? null : () => _analyzeLocal(t),
+          onLongPress: () => _trackMenu(t),
           title: t.title,
           artist: t.artist,
           bpm: t.bpm,

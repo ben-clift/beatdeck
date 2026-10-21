@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:path/path.dart' as p;
 import 'package:sidedeck/state/dislikes.dart';
@@ -355,24 +357,38 @@ class _PlaylistsPanelState extends State<PlaylistsPanel> {
                           } else if (v == 'automix') {
                             dj.startAutomix(paths.sublist(i), fadeSeconds: _fade);
                           } else if (v == 'remove') {
-                            // Deleting means "not for me": never picked or searched again.
+                            // Delete means "not for me": off the phone, out of
+                            // the library, never picked or searched again.
                             final removed = path;
-                            widget.playlists.removeAt(pl.id, i);
-                            Dislikes.instance.add(removed);
-                            dj.automixDrop(removed);
-                            ScaffoldMessenger.of(context)
-                              ..hideCurrentSnackBar()
-                              ..showSnackBar(SnackBar(
-                                content: const Text(
-                                    'Deleted. It will not be picked or searched for again.'),
-                                action: SnackBarAction(
-                                  label: 'UNDO',
-                                  onPressed: () {
-                                    Dislikes.instance.remove(removed);
-                                    widget.playlists.add(pl.id, removed);
-                                  },
-                                ),
+                            final loadedOn = [
+                              for (var k = 0; k < dj.visibleDecks; k++)
+                                if (dj.deck(k).loaded && dj.deck(k).path == removed) k + 1,
+                            ];
+                            if (loadedOn.isNotEmpty) {
+                              ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                                content: Text('It is loaded on deck ${loadedOn.first}. Load something else first.'),
                               ));
+                            } else {
+                              widget.playlists.removeAt(pl.id, i);
+                              Dislikes.instance.add(removed);
+                              dj.automixDrop(removed);
+                              final lt = widget.library.tracks
+                                  .where((t) => t.path == removed)
+                                  .toList();
+                              if (lt.isNotEmpty) {
+                                widget.library.deleteTracks(lt);
+                              } else {
+                                try {
+                                  File(removed).delete();
+                                } catch (_) {}
+                              }
+                              ScaffoldMessenger.of(context)
+                                ..hideCurrentSnackBar()
+                                ..showSnackBar(const SnackBar(
+                                  content: Text(
+                                      'Deleted from the phone. It will not be picked or searched for again.'),
+                                ));
+                            }
                           }
                         },
                         itemBuilder: (context) => const [
@@ -382,7 +398,7 @@ class _PlaylistsPanelState extends State<PlaylistsPanel> {
                             value: 'automix',
                             child: Text('Automix from here'),
                           ),
-                          PopupMenuItem(value: 'remove', child: Text('Delete (never play again)')),
+                          PopupMenuItem(value: 'remove', child: Text('Delete from phone')),
                         ],
                       ),
                     );
