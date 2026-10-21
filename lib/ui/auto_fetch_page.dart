@@ -7,6 +7,7 @@ import 'package:sidedeck/soulseek/slsk_setup.dart';
 import 'package:sidedeck/soulseek/storage_guard.dart';
 import 'package:sidedeck/suggest/auto_fetch.dart';
 import 'package:sidedeck/suggest/genres.dart';
+import 'package:sidedeck/suggest/hardwax.dart';
 import 'package:sidedeck/suggest/suggest_service.dart';
 import 'package:sidedeck/theme/sidedeck_theme.dart';
 
@@ -39,6 +40,9 @@ class _AutoFetchPageState extends State<AutoFetchPage> {
   final Set<int> _picked = {};
   bool _underground = false;
   bool _classics = false;
+  bool _hardwax = false;
+  String _hwTag = 'this-week';
+  String? _loadError;
   int _era = 1950; // decade start; 0 means everything before 1960
   final _style = TextEditingController();
   bool _yearFilter = false;
@@ -52,14 +56,38 @@ class _AutoFetchPageState extends State<AutoFetchPage> {
   Future<void> _loadTracks() async {
     final af = AutoFetch.instance;
     final id = _charts.any((c) => c.$1 == af.chartId) ? af.chartId : (_charts.isEmpty ? -1 : _charts.first.$1);
-    if (id < 0 || _loadingTracks) return;
-    final name = _charts.firstWhere((c) => c.$1 == id).$2;
+    if ((id < 0 && !_hardwax) || _loadingTracks) return;
+    final name = id < 0 ? '' : _charts.firstWhere((c) => c.$1 == id).$2;
     setState(() {
       _loadingTracks = true;
-      _loadedFor = id;
+      _loadedFor = id < 0 ? 0 : id;
       _picked.clear();
     });
     final svc = SuggestService();
+    _loadError = null;
+    List<Suggestion> t;
+    if (_hardwax) {
+      try {
+        t = await Hardwax.fetch(_hwTag, skip: _seen);
+        if (t.isEmpty) _loadError = 'No releases found on that Hardwax page.';
+      } catch (e) {
+        t = const [];
+        _loadError = 'Could not read Hardwax: $e';
+      }
+    } else {
+      t = await _loadOther(svc, id, name);
+    }
+    for (final s in t) {
+      _seen.add('${s.artist} ${s.title}'.toLowerCase());
+    }
+    if (!mounted) return;
+    setState(() {
+      _tracks = t;
+      _loadingTracks = false;
+    });
+  }
+
+  Future<List<Suggestion>> _loadOther(SuggestService svc, int id, String name) async {
     final t = _classics
         ? await svc.classics(
             _era == 0 ? 1920 : _era,
@@ -83,14 +111,7 @@ class _AutoFetchPageState extends State<AutoFetchPage> {
             needDetails: true,
             skip: _seen,
           );
-    for (final s in t) {
-      _seen.add('${s.artist} ${s.title}'.toLowerCase());
-    }
-    if (!mounted) return;
-    setState(() {
-      _tracks = t;
-      _loadingTracks = false;
-    });
+    return t;
   }
 
   void _download(List<Suggestion> list) {
@@ -213,6 +234,49 @@ class _AutoFetchPageState extends State<AutoFetchPage> {
                     });
                     _loadTracks();
                   },
+                ),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Hardwax (Berlin record shop)'),
+                subtitle: const Text(
+                    'Release names from their tag pages. Names only, nothing is taken from the shop.',
+                    style: TextStyle(fontSize: 12)),
+                value: _hardwax,
+                onChanged: (v) {
+                  setState(() {
+                    _hardwax = v;
+                    if (v) {
+                      _classics = false;
+                      _underground = false;
+                    }
+                    _tracks = const [];
+                  });
+                  _loadTracks();
+                },
+              ),
+              if (_hardwax)
+                Wrap(
+                  spacing: 6,
+                  children: [
+                    for (final t in Hardwax.tags)
+                      ChoiceChip(
+                        label: Text(t.$1),
+                        selected: _hwTag == t.$2,
+                        onSelected: (_) {
+                          setState(() {
+                            _hwTag = t.$2;
+                            _tracks = const [];
+                          });
+                          _loadTracks();
+                        },
+                      ),
+                  ],
+                ),
+              if (_loadError != null)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 6),
+                  child: Text(_loadError!,
+                      style: const TextStyle(fontSize: 12, color: Colors.redAccent)),
                 ),
               SwitchListTile(
                 contentPadding: EdgeInsets.zero,
