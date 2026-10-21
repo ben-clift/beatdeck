@@ -59,6 +59,12 @@ class _LibraryOverlayState extends State<LibraryOverlay> {
   void initState() {
     super.initState();
     _loadClient();
+    widget.library.playedCheck = widget.dj.playedRecently;
+    widget.library.deckKey = (i) {
+      final d = widget.dj.deck(i);
+      return d.loaded ? d.key : -1;
+    };
+    widget.dj.loadPlayedHistory();
     widget.library.addListener(_onLib);
     widget.dj.addListener(_onLib);
   }
@@ -358,11 +364,8 @@ class _LibraryOverlayState extends State<LibraryOverlay> {
 
   @override
   Widget build(BuildContext context) {
-    final tracks = _sorted(
-      widget.library.filtered,
-      (t) => (title: t.title, artist: t.artist, bpm: t.bpm, key: t.key),
-    );
     final lib = widget.library;
+    final tracks = lib.organised;
 
     return Material(
       color: SideDeckTheme.panel,
@@ -418,10 +421,34 @@ class _LibraryOverlayState extends State<LibraryOverlay> {
                     onSelected: widget.library.setSort,
                     itemBuilder: (context) => [
                       _sortItem(TrackSort.name, 'Name'),
+                      _sortItem(TrackSort.artist, 'Artist'),
                       _sortItem(TrackSort.bpm, 'BPM'),
                       _sortItem(TrackSort.key, 'Key'),
+                      _sortItem(TrackSort.length, 'Length'),
+                      _sortItem(TrackSort.added, 'Newest'),
                     ],
                   ),
+                  if (_tab == 0) ...[
+                    IconButton(
+                      tooltip: lib.sortDesc ? 'Descending' : 'Ascending',
+                      visualDensity: VisualDensity.compact,
+                      onPressed: () => lib.setSortDesc(!lib.sortDesc),
+                      icon: Icon(
+                        lib.sortDesc ? Icons.arrow_downward : Icons.arrow_upward,
+                        size: 20,
+                      ),
+                    ),
+                    IconButton(
+                      tooltip: 'Filters',
+                      visualDensity: VisualDensity.compact,
+                      onPressed: _openFilters,
+                      icon: Icon(
+                        lib.hasFilters ? Icons.filter_alt : Icons.filter_alt_outlined,
+                        size: 22,
+                        color: lib.hasFilters ? SideDeckTheme.accentA : null,
+                      ),
+                    ),
+                  ],
                   if (_tab == 0) ...[
                     if (lib.analyzing)
                       IconButton(
@@ -577,6 +604,137 @@ class _LibraryOverlayState extends State<LibraryOverlay> {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  void _openFilters() {
+    final lib = widget.library;
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: SideDeckTheme.panel,
+      isScrollControlled: true,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setSheet) {
+          var lo = lib.bpmMin ?? 60;
+          var hi = lib.bpmMax ?? 200;
+          lo = lo.clamp(60, 200).toDouble();
+          hi = hi.clamp(60, 200).toDouble();
+          final bpmOn = lib.bpmMin != null || lib.bpmMax != null;
+          return SafeArea(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      const Text('Filters',
+                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+                      const Spacer(),
+                      TextButton(
+                        onPressed: lib.hasFilters
+                            ? () {
+                                lib.clearFilters();
+                                setSheet(() {});
+                              }
+                            : null,
+                        child: const Text('Clear all'),
+                      ),
+                    ],
+                  ),
+                  Text(
+                    bpmOn ? 'Tempo ${lo.round()} to ${hi.round()} BPM' : 'Tempo: any',
+                    style: const TextStyle(fontSize: 13),
+                  ),
+                  RangeSlider(
+                    values: RangeValues(lo, hi),
+                    min: 60,
+                    max: 200,
+                    divisions: 140,
+                    labels: RangeLabels('${lo.round()}', '${hi.round()}'),
+                    onChanged: (v) {
+                      lib.setFilters(bpmMin: v.start, bpmMax: v.end);
+                      setSheet(() {});
+                    },
+                  ),
+                  Wrap(
+                    spacing: 6,
+                    children: [
+                      for (final r in const [
+                        ('House 118-128', 118.0, 128.0),
+                        ('Breaks 128-140', 128.0, 140.0),
+                        ('DnB 160-180', 160.0, 180.0),
+                        ('Slow 60-100', 60.0, 100.0),
+                      ])
+                        ActionChip(
+                          label: Text(r.$1, style: const TextStyle(fontSize: 12)),
+                          onPressed: () {
+                            lib.setFilters(bpmMin: r.$2, bpmMax: r.$3);
+                            setSheet(() {});
+                          },
+                        ),
+                      if (bpmOn)
+                        ActionChip(
+                          label: const Text('Any tempo', style: TextStyle(fontSize: 12)),
+                          onPressed: () {
+                            lib.setFilters(clearBpm: true);
+                            setSheet(() {});
+                          },
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  const Text('Key', style: TextStyle(fontSize: 13)),
+                  Wrap(
+                    spacing: 6,
+                    children: [
+                      ChoiceChip(
+                        label: const Text('Any', style: TextStyle(fontSize: 12)),
+                        selected: lib.keyDeck < 0,
+                        onSelected: (_) {
+                          lib.setFilters(keyDeck: -1);
+                          setSheet(() {});
+                        },
+                      ),
+                      for (var i = 0; i < 2; i++)
+                        ChoiceChip(
+                          label: Text('Mixes with deck ${i + 1}',
+                              style: const TextStyle(fontSize: 12)),
+                          selected: lib.keyDeck == i,
+                          onSelected: (_) {
+                            lib.setFilters(keyDeck: i);
+                            setSheet(() {});
+                          },
+                        ),
+                    ],
+                  ),
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('Not analysed yet only'),
+                    value: lib.onlyUnanalyzed,
+                    onChanged: (v) {
+                      lib.setFilters(onlyUnanalyzed: v);
+                      setSheet(() {});
+                    },
+                  ),
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('Hide tracks played in the last 24 hours'),
+                    value: lib.hidePlayed,
+                    onChanged: (v) {
+                      lib.setFilters(hidePlayed: v);
+                      setSheet(() {});
+                    },
+                  ),
+                  Text('${lib.organised.length} of ${lib.tracks.length} tracks shown',
+                      style: const TextStyle(fontSize: 12, color: SideDeckTheme.muted)),
+                ],
+              ),
+            ),
+          );
+        },
       ),
     );
   }

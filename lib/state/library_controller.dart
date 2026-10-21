@@ -20,6 +20,7 @@ class LibraryTrack {
     this.durationMs = 0,
     this.bpm,
     this.key,
+    this.modifiedMs = 0,
   });
 
   final String path;
@@ -28,6 +29,9 @@ class LibraryTrack {
   final int durationMs;
   final double? bpm;
   final int? key;
+
+  /// File date, for sorting by newest.
+  final int modifiedMs;
 
   bool get hasAnalysis => bpm != null && bpm! > 0;
 
@@ -39,6 +43,7 @@ class LibraryTrack {
       durationMs: durationMs,
       bpm: bpm ?? this.bpm,
       key: key ?? this.key,
+      modifiedMs: modifiedMs,
     );
   }
 }
@@ -350,8 +355,10 @@ class LibraryController extends ChangeNotifier {
     final parsed = splitTitleArtist(name);
     double? bpm;
     int? key;
+    var modified = 0;
     try {
       final stat = await File(path).stat();
+      modified = stat.modified.millisecondsSinceEpoch;
       final cached = await _cache.get(
         path,
         stat.size,
@@ -369,6 +376,7 @@ class LibraryController extends ChangeNotifier {
       durationMs: (fileDurationSec(path) * 1000).round(),
       bpm: bpm,
       key: key,
+      modifiedMs: modified,
     ));
   }
 
@@ -380,7 +388,92 @@ class LibraryController extends ChangeNotifier {
   void setSort(TrackSort value) {
     if (sort == value) return;
     sort = value;
+    sortDesc = value == TrackSort.added; // newest first by default
     _emit();
+  }
+
+  // ---- Sorting and filters -------------------------------------------------
+  bool sortDesc = false;
+  double? bpmMin;
+  double? bpmMax;
+
+  /// Only tracks whose key fits the track on this deck (-1 = off).
+  int keyDeck = -1;
+  bool onlyUnanalyzed = false;
+  bool hidePlayed = false;
+
+  /// Set by the screen: whether automix played a track in the last 24 hours,
+  /// and the key now on a deck (-1 when nothing is loaded).
+  bool Function(String path)? playedCheck;
+  int Function(int deck)? deckKey;
+
+  bool get hasFilters =>
+      bpmMin != null || bpmMax != null || keyDeck >= 0 || onlyUnanalyzed || hidePlayed;
+
+  void setSortDesc(bool v) {
+    sortDesc = v;
+    _emit();
+  }
+
+  void setFilters({
+    double? bpmMin,
+    double? bpmMax,
+    int? keyDeck,
+    bool? onlyUnanalyzed,
+    bool? hidePlayed,
+    bool clearBpm = false,
+  }) {
+    if (clearBpm) {
+      this.bpmMin = null;
+      this.bpmMax = null;
+    } else {
+      this.bpmMin = bpmMin ?? this.bpmMin;
+      this.bpmMax = bpmMax ?? this.bpmMax;
+    }
+    this.keyDeck = keyDeck ?? this.keyDeck;
+    this.onlyUnanalyzed = onlyUnanalyzed ?? this.onlyUnanalyzed;
+    this.hidePlayed = hidePlayed ?? this.hidePlayed;
+    _emit();
+  }
+
+  void clearFilters() {
+    bpmMin = null;
+    bpmMax = null;
+    keyDeck = -1;
+    onlyUnanalyzed = false;
+    hidePlayed = false;
+    _emit();
+  }
+
+  /// The tracks shown: search text and filters applied, then sorted.
+  List<LibraryTrack> get organised {
+    final deckKeyNow = keyDeck >= 0 ? (deckKey?.call(keyDeck) ?? -1) : -1;
+    final list = filtered.where((t) {
+      if (onlyUnanalyzed && t.hasAnalysis) return false;
+      if (bpmMin != null && (t.bpm == null || t.bpm! < bpmMin!)) return false;
+      if (bpmMax != null && (t.bpm == null || t.bpm! > bpmMax!)) return false;
+      if (keyDeck >= 0 && deckKeyNow >= 0) {
+        if (t.key == null || t.key! < 0 || !keysCompatible(deckKeyNow, t.key!)) return false;
+      }
+      if (hidePlayed && (playedCheck?.call(t.path) ?? false)) return false;
+      return true;
+    }).toList();
+    list.sort((a, b) {
+      int c;
+      switch (sort) {
+        case TrackSort.length:
+          c = a.durationMs.compareTo(b.durationMs);
+          break;
+        case TrackSort.added:
+          c = a.modifiedMs.compareTo(b.modifiedMs);
+          break;
+        default:
+          c = compareTrackSort(sort, a.title, a.artist, a.bpm, a.key, b.title,
+              b.artist, b.bpm, b.key);
+      }
+      return sortDesc ? -c : c;
+    });
+    return list;
   }
 
   void upsertAnalysis(String path, {double? bpm, int? key}) {

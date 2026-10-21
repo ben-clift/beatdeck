@@ -536,6 +536,14 @@ class DjController extends ChangeNotifier {
     }).catchError((_) {});
   }
 
+  /// Loads the saved play history so screens can show what was played today.
+  Future<void> loadPlayedHistory() async {
+    await _loadRecent();
+    notifyListeners();
+  }
+
+  bool playedRecently(String path) => _wasPlayed(path);
+
   /// Forget what was played in the last 24 hours.
   Future<void> clearPlayedHistory() async {
     _recentPlayed.clear();

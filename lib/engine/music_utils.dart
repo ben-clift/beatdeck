@@ -88,7 +88,7 @@ String formatDuration(double seconds) {
   );
 }
 
-enum TrackSort { name, bpm, key }
+enum TrackSort { name, artist, bpm, key, length, added }
 
 int compareTrackSort(
   TrackSort sort,
@@ -106,6 +106,12 @@ int compareTrackSort(
     case TrackSort.name:
       final c = byName();
       return c != 0 ? c : artistA.toLowerCase().compareTo(artistB.toLowerCase());
+    case TrackSort.artist:
+      final c = artistA.toLowerCase().compareTo(artistB.toLowerCase());
+      return c != 0 ? c : byName();
+    case TrackSort.length:
+    case TrackSort.added:
+      return byName(); // handled by the library, which has the details
     case TrackSort.bpm:
       final a = bpmA == null || bpmA <= 0 ? 1e9 : bpmA;
       final b = bpmB == null || bpmB <= 0 ? 1e9 : bpmB;
