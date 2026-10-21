@@ -127,9 +127,14 @@ class RaSource {
       return fresh;
     }
     final prefs = await SharedPreferences.getInstance();
+    if (!(prefs.getBool('ra_gate_v2') ?? false)) {
+      await prefs.setBool('ra_gate_v2', true);
+      await prefs.remove(_tryKey);
+    }
     final t = prefs.getInt(_tryKey);
     if (t != null &&
         DateTime.now().difference(DateTime.fromMillisecondsSinceEpoch(t)) < _retryAfter) {
+      DebugLog.add('ra', 'last read failed, waiting before trying RA again');
       return await _cached(stale: true) ?? <Suggestion>[];
     }
     await prefs.setInt(_tryKey, DateTime.now().millisecondsSinceEpoch);

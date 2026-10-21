@@ -118,6 +118,11 @@ class Traxsource {
     // A recent failed read: use the old copy and leave the site alone.
     try {
       final p = await SharedPreferences.getInstance();
+      // One fresh try after this update (the reader and its log are new).
+      if (!(p.getBool('traxsource_gate_v2') ?? false)) {
+        await p.setBool('traxsource_gate_v2', true);
+        await p.remove(_tryKey);
+      }
       final t = p.getInt(_tryKey);
       if (t != null &&
           DateTime.now().difference(DateTime.fromMillisecondsSinceEpoch(t)) <

@@ -1,3 +1,5 @@
+import 'package:sidedeck/soulseek/slsk_setup.dart';
+import 'package:sidedeck/debug/debug_log.dart';
 import 'dart:math' as math;
 
 import 'package:shared_preferences/shared_preferences.dart';
@@ -80,14 +82,38 @@ class Taste {
         cache = jsonDecode(prefs.getString('taste_labels_v1') ?? '{}') as Map<String, dynamic>;
       } catch (_) {}
       var reads = 0;
-      for (final pl in store.playlists) {
-        for (final path in pl.paths) {
+      var total = 0;
+      // Your playlists (the "Backup tracks" shelf is music you are bored of).
+      final sources = <String>[
+        for (final pl in store.playlists)
+          if (pl.name != 'Backup tracks') ...pl.paths,
+      ];
+      total = sources.length;
+      // Nothing saved: the tracks you play most stand in for your taste.
+      if (sources.isEmpty) {
+        final dj = SlskSetup.dj;
+        if (dj != null) {
+          final top = [for (final t in lib.tracks) if (dj.playCountOf(t.path) >= 2) t.path];
+          sources.addAll(top);
+          DebugLog.add('taste', 'no playlist tracks, using ${top.length} most played tracks instead');
+        }
+      }
+      for (final path in sources) {
+        {
           var artist = byPath[path]?.artist ?? '';
           if (artist.trim().isEmpty) {
             final name = path.split(RegExp(r'[\\/]')).last.replaceFirst(RegExp(r'\.[^.]+$'), '');
             final dash = name.indexOf(' - ');
-            if (dash > 0) artist = name.substring(0, dash);
+            if (dash > 0) {
+              artist = name.substring(0, dash);
+            } else {
+              // "baby ford & zip (glidin' along)-[perl 061]" gives "baby ford & zip".
+              final cut = RegExp(r'\s*[\(\[]|\s-|-\[').firstMatch(name);
+              if (cut != null && cut.start > 1) artist = name.substring(0, cut.start);
+            }
           }
+          artist = artist.replaceFirst(RegExp(r'^\d+[\.\s-]+'), '');
+          if (_norm(artist) == 'va' || _norm(artist) == 'various artists') continue;
           final n = _norm(artist);
           if (n.length < 2) continue;
           found.add(n);
@@ -112,9 +138,13 @@ class Taste {
       }
       artists = found;
       labels = foundLabels;
+      DebugLog.add('taste',
+          '${store.playlists.length} playlists, $total tracks in them, ${found.length} artists and ${foundLabels.length} labels read');
       try {
         await prefs.setString('taste_labels_v1', jsonEncode(cache));
       } catch (_) {}
-    } catch (_) {}
+    } catch (e) {
+      DebugLog.add('taste', 'could not read your playlists: $e');
+    }
   }
 }
