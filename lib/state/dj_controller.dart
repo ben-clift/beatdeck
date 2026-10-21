@@ -1814,8 +1814,20 @@ class DjController extends ChangeNotifier {
   void _applyMixEq(int cur, int other, double t) {
     final (inc, out) = eqMoves(_plan?.kind ?? TransitionKind.smooth, t, _swapAt);
     double c(double base, double off) => math.max(-24.0, base + off);
-    _engine.setEq(other, c(_eqBaseIn.low, inc.low), c(_eqBaseIn.mid, inc.mid), c(_eqBaseIn.high, inc.high));
-    _engine.setEq(cur, c(_eqBaseOut.low, out.low), c(_eqBaseOut.mid, out.mid), c(_eqBaseOut.high, out.high));
+    final iL = c(_eqBaseIn.low, inc.low), iM = c(_eqBaseIn.mid, inc.mid), iH = c(_eqBaseIn.high, inc.high);
+    final oL = c(_eqBaseOut.low, out.low), oM = c(_eqBaseOut.mid, out.mid), oH = c(_eqBaseOut.high, out.high);
+    _engine.setEq(other, iL, iM, iH);
+    _engine.setEq(cur, oL, oM, oH);
+    // Show the moves on the knobs (they only reach -12 .. +12 on screen).
+    double k(double v) => v.clamp(-12.0, 12.0).toDouble();
+    final di = deck(other), dc = deck(cur);
+    di.eqLow = k(iL);
+    di.eqMid = k(iM);
+    di.eqHigh = k(iH);
+    dc.eqLow = k(oL);
+    dc.eqMid = k(oM);
+    dc.eqHigh = k(oH);
+    notifyListeners();
     final (fIn, fOut) = filterMoves(_plan?.kind ?? TransitionKind.smooth, t);
     if (fIn != 0 || fOut != 0 || t > 0) {
       _engine.setFilter(other, fIn != 0 ? fIn : deck(other).filter);
@@ -1845,6 +1857,12 @@ class DjController extends ChangeNotifier {
   }
 
   void _restoreMixEq(int cur, int other) {
+    deck(other).eqLow = _eqBaseIn.low;
+    deck(other).eqMid = _eqBaseIn.mid;
+    deck(other).eqHigh = _eqBaseIn.high;
+    deck(cur).eqLow = _eqBaseOut.low;
+    deck(cur).eqMid = _eqBaseOut.mid;
+    deck(cur).eqHigh = _eqBaseOut.high;
     _engine.setEq(other, _eqBaseIn.low, _eqBaseIn.mid, _eqBaseIn.high);
     _engine.setEq(cur, _eqBaseOut.low, _eqBaseOut.mid, _eqBaseOut.high);
     _engine.setFilter(other, deck(other).filter);
