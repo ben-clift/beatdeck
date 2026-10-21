@@ -753,10 +753,21 @@ class DjController extends ChangeNotifier {
       final name = title ?? path.split(RegExp(r'[\\/]')).last;
       var detail = _engine.lastError();
       try {
-        final ext = path.contains('.') ? path.split('.').last.toLowerCase() : '?';
-        final mb = (File(path).lengthSync() / 1048576).toStringAsFixed(1);
-        detail = detail.isEmpty ? '' : '$detail [.$ext, $mb MB]';
-      } catch (_) {}
+        final f = File(path);
+        if (!f.existsSync()) {
+          detail = 'The file is gone (moved or deleted). Remove it from the library.';
+        } else {
+          final len = f.lengthSync();
+          final ext = path.contains('.') ? path.split('.').last.toLowerCase() : '?';
+          if (len == 0) {
+            detail = 'The file is empty (0 bytes): the download did not save. Delete it and fetch again.';
+          } else if (detail.isNotEmpty) {
+            detail = '$detail [.$ext, ${(len / 1048576).toStringAsFixed(1)} MB]';
+          }
+        }
+      } catch (e) {
+        detail = 'Android will not let the app open this file ($e).';
+      }
       engineError = detail.isNotEmpty
           ? 'Could not load $name - $detail'
           : 'Could not decode $name (need MP3, WAV, FLAC, Opus, or AAC M4A).';
