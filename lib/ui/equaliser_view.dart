@@ -41,7 +41,18 @@ class _EqualiserViewState extends State<EqualiserView> {
     return ListenableBuilder(
       listenable: widget.dj,
       builder: (context, _) {
-        return FittedBox(
+        return Column(children: [
+         Padding(
+          padding: const EdgeInsets.fromLTRB(12, 0, 12, 0),
+          child: SwitchListTile(
+            dense: true,
+            contentPadding: EdgeInsets.zero,
+            title: const Text('Show a small spectrum above the decks'),
+            value: widget.dj.stripOn,
+            onChanged: widget.dj.setStripOn,
+          ),
+         ),
+         Expanded(child: FittedBox(
           fit: BoxFit.contain,
           child: SizedBox(
             width: 920,
@@ -75,7 +86,8 @@ class _EqualiserViewState extends State<EqualiserView> {
               ),
             ),
           ),
-        );
+         )),
+        ]);
       },
     );
   }

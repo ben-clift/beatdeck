@@ -44,11 +44,10 @@ class ControllerView extends StatefulWidget {
 class _ControllerViewState extends State<ControllerView> {
   final _pages = PageController(initialPage: 1);
   int _page = 1;
-  bool _strip = false;
+  bool get _strip => widget.dj.stripOn;
 
   @override
   void dispose() {
-    widget.dj.setStripOn(false);
     _pages.dispose();
     super.dispose();
   }
@@ -287,23 +286,6 @@ class _ControllerViewState extends State<ControllerView> {
                   ),
                 ),
               GestureDetector(
-                onTap: _samplerSheet,
-                child: Container(
-                  margin: const EdgeInsets.only(left: 6),
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  child: const Text(
-                    'SAMPLER',
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: 1,
-                      color: SideDeckTheme.muted,
-                    ),
-                  ),
-                ),
-              ),
-              GestureDetector(
                 onTap: _cueSheet,
                 child: Container(
                   margin: const EdgeInsets.only(left: 8),
@@ -350,10 +332,7 @@ class _ControllerViewState extends State<ControllerView> {
                 ),
               ),
               GestureDetector(
-                onTap: () {
-                  setState(() => _strip = !_strip);
-                  widget.dj.setStripOn(_strip);
-                },
+                onTap: () => widget.dj.setStripOn(!_strip),
                 child: Container(
                   margin: const EdgeInsets.only(left: 8),
                   padding:
@@ -373,7 +352,8 @@ class _ControllerViewState extends State<ControllerView> {
             ],
           ),
         ),
-        if (_strip) EqualiserStrip(dj: widget.dj),
+        // The full equaliser page has its own spectrum, so the strip waits.
+        if (_strip && _page != _titles.length - 1) EqualiserStrip(dj: widget.dj),
         Expanded(
           child: PageView(
             controller: _pages,
