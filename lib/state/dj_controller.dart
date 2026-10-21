@@ -1356,7 +1356,9 @@ class DjController extends ChangeNotifier {
         DebugLog.flow('Automix mix to next deck', true);
         final prevTrack = _flowOf(_automixQueue[_automixIndex]);
         _automixDeck = other;
+        final donePath = _automixQueue[_automixIndex];
         _automixIndex = next;
+        onTrackDone?.call(donePath);
         _markPlayed(_automixQueue[next]);
         if (prevTrack != null) _flow?.played(prevTrack, _flowMove);
         _clearUpNext();
@@ -1560,13 +1562,21 @@ class DjController extends ChangeNotifier {
       DebugLog.ok('automix', 'mix finished, deck ${other + 1} now playing');
       _automixDeck = other;
       final prevTrack = _flowOf(_automixQueue[_automixIndex]);
+      final donePath = _automixQueue[_automixIndex];
       _automixIndex = _automixNextTarget;
+      onTrackDone?.call(donePath);
       _markPlayed(_automixQueue[_automixIndex]);
       if (prevTrack != null) _flow?.played(prevTrack, _flowMove);
       _clearUpNext();
       _automixFading = false;
     }
   }
+
+  /// True when the track is in the running automix list.
+  bool inAutomixQueue(String path) => automixOn && _automixQueue.contains(path);
+
+  /// A track has been played through in automix and is no longer needed.
+  void Function(String path)? onTrackDone;
 
   /// Called when a library file turns out to be missing.
   void Function(String path)? onFileMissing;

@@ -741,6 +741,7 @@ class AutoFetch extends ChangeNotifier {
   // Genre the shop gave for a downloaded file (Traxsource lists one), used
   // when the file itself carries no genre tag.
   final Map<String, String> _genreHint = {};
+  bool wasFetched(String path) => _fetched.contains(path);
   String hintFor(String path) => _genreHint[path] ?? '';
 
 

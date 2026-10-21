@@ -25,7 +25,10 @@ class AutoFetchPage extends StatefulWidget {
 }
 
 class _AutoFetchPageState extends State<AutoFetchPage> {
-  final _genre = TextEditingController(text: AutoFetch.instance.genre);
+  final _genre = TextEditingController();
+  late final Set<String> _sel = {
+    ...(AutoFetch.instance.genres.isNotEmpty ? AutoFetch.instance.genres : [AutoFetch.instance.genre]),
+  };
   late RangeValues _bpm = RangeValues(
     AutoFetch.instance.bpmMin.clamp(70.0, 179.0).toDouble(),
     AutoFetch.instance.bpmMax.clamp(71.0, 180.0).toDouble(),
@@ -182,13 +185,21 @@ class _AutoFetchPageState extends State<AutoFetchPage> {
 
   void _remember() {
     final af = AutoFetch.instance;
-    af.genre = _genre.text.trim().isEmpty ? 'house' : _genre.text.trim();
+    final typed = _genre.text.trim().toLowerCase();
+    if (typed.isNotEmpty) _sel.add(typed);
+    if (_sel.isEmpty) _sel.add('house');
+    af.genres = _sel.toList();
+    af.genre = af.genres.first;
+    if (_source == 'genre' && af.count < 10) {
+      af.count = 10;
+      _count = 10;
+    }
     af.bpmMin = _bpm.start;
     af.bpmMax = _bpm.end;
     af.count = _count.round();
     af.endless = _endless;
     af.source = _source;
-    af.pinned = false;
+    af.pinned = _source == 'genre';
     af.hardwax = _hardwax;
     af.hwTag = _hwTag;
     af.pasted = _pasted.text;
@@ -492,8 +503,26 @@ class _AutoFetchPageState extends State<AutoFetchPage> {
             TextField(
               controller: _genre,
               enabled: true,
-              decoration: const InputDecoration(labelText: 'Genre'),
+              onSubmitted: (v) => setState(() {
+                if (v.trim().isNotEmpty) _sel.add(v.trim().toLowerCase());
+                _genre.clear();
+              }),
+              decoration: const InputDecoration(
+                labelText: 'Type a genre and press enter, or tick as many as you like',
+              ),
             ),
+            if (_sel.isNotEmpty)
+              Wrap(
+                spacing: 6,
+                children: [
+                  for (final g in _sel)
+                    InputChip(
+                      label: Text(g),
+                      visualDensity: VisualDensity.compact,
+                      onDeleted: () => setState(() => _sel.remove(g)),
+                    ),
+                ],
+              ),
             SwitchListTile(
               contentPadding: EdgeInsets.zero,
               title: const Text('Only these years'),
@@ -537,22 +566,33 @@ class _AutoFetchPageState extends State<AutoFetchPage> {
                   ChoiceChip(
                     label: Text('${g.name}  ${g.min.round()}-${g.max.round()}'),
                     visualDensity: VisualDensity.compact,
-                    selected: _genre.text.trim().toLowerCase() == g.name,
+                    selected: _sel.contains(g.name),
                     selectedColor: const Color(0xFFFF9F1C),
                     backgroundColor: _fits(g)
                         ? const Color(0xFF2E7D32)
                         : Colors.transparent,
                     labelStyle: TextStyle(
-                      color: _genre.text.trim().toLowerCase() == g.name
+                      color: _sel.contains(g.name)
                           ? Colors.black
                           : (_fits(g) ? Colors.white : SideDeckTheme.muted),
                       fontWeight: _fits(g) ? FontWeight.w700 : FontWeight.w400,
                     ),
                     onSelected: (_) => setState(() {
-                              _genre.text = g.name;
-                              final lo = g.min.clamp(70.0, 179.0).toDouble();
-                              _bpm = RangeValues(lo, g.max.clamp(lo + 1, 180.0).toDouble());
-                            }),
+                      if (!_sel.remove(g.name)) _sel.add(g.name);
+                      double? lo, hi;
+                      for (final grp in genreGroups) {
+                        for (final x in grp.$2) {
+                          if (_sel.contains(x.name)) {
+                            lo = lo == null ? x.min : math.min(lo, x.min);
+                            hi = hi == null ? x.max : math.max(hi, x.max);
+                          }
+                        }
+                      }
+                      if (lo != null && hi != null) {
+                        final l = lo.clamp(70.0, 179.0).toDouble();
+                        _bpm = RangeValues(l, hi.clamp(l + 1, 180.0).toDouble());
+                      }
+                    }),
                   ),
               ],
             ),

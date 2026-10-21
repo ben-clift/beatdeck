@@ -63,7 +63,25 @@ class SlskSetup {
 
   /// Every finished download goes straight into the library, wherever it was
   /// saved, and is analysed for tempo and key.
+  /// Removes a track automix has finished with, but only a file this app
+  /// downloaded (never one from your own music folder).
+  static Future<void> discardPlayed(LibraryController lib, String path) async {
+    final own = fallback.isNotEmpty && path.startsWith(fallback);
+    if (!own && !AutoFetch.instance.wasFetched(path)) return;
+    try {
+      final f = File(path);
+      if (await f.exists()) {
+        await f.delete();
+        DebugLog.add('automix', 'played, removed from the downloads: ${path.split(RegExp(r'[\\/]')).last}');
+      }
+      await lib.removeMissing();
+    } catch (e) {
+      DebugLog.add('automix', 'could not remove a played file: $e');
+    }
+  }
+
   static void wire(LibraryController lib) {
+    dj?.onTrackDone = (path) => discardPlayed(lib, path);
     library = lib;
     soulseek.downloadDir = () => dirFor(lib);
     soulseek.storageCheck = (size) => StorageGuard.blockReason(dirFor(lib), size);
@@ -80,6 +98,12 @@ class SlskSetup {
     AutoFetch.instance.addListener(() => dj?.refresh());
     // Starting automix switches AUTO on and makes sure Soulseek is signed in.
     dj?.onAutomixStart = () {
+      // Clear out downloads that have already been played.
+      () async {
+        for (final t in List.of(lib.tracks)) {
+          if ((dj?.playedRecently(t.path) ?? false) && !(dj?.inAutomixQueue(t.path) ?? false)) await discardPlayed(lib, t.path);
+        }
+      }();
       if (!autoFetchForAutomix) return;
       soulseek.manualDisconnect = false;
       SlskKeeper.instance.setEnabled(true);
