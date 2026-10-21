@@ -740,8 +740,24 @@ class DjController extends ChangeNotifier {
       return false;
     }
     if (shouldStartFade(remaining: remaining, fadeSeconds: automixFadeSeconds)) {
+      var breakLeft = 0.0;
+      if (kindFor(automixStyle, d.bpm, deck(other).bpm) == TransitionKind.breakdown) {
+        final amp = [
+          for (var k = 0; k < math.min(d.waveMax.length, d.waveMin.length); k++)
+            (d.waveMax[k] - d.waveMin[k]).toDouble(),
+        ];
+        final pos = _engine.position(cur);
+        final end = breakdownEnd(amp, d.duration, pos, 6);
+        final barNow = d.bpm > 1 ? 4 * 60.0 / d.bpm : 2.0;
+        // Wait for a breakdown on a bar line; give up when the track is nearly over.
+        if (end == null || !nearBarLine(pos, d.bpm, d.beatOffset)) {
+          if (remaining > 4 * barNow + 6) return false;
+        } else {
+          breakLeft = (end - pos) / (d.rate <= 0 ? 1 : d.rate);
+        }
+      }
       final plan = planFor(automixStyle,
-          outBpm: d.bpm, inBpm: deck(other).bpm, baseSeconds: automixFadeSeconds);
+          outBpm: d.bpm, inBpm: deck(other).bpm, baseSeconds: automixFadeSeconds, breakSeconds: breakLeft);
       // A cut lands on the first beat of a bar, so wait for the bar line
       // (unless the track is about to end).
       final bar = d.bpm > 1 ? 4 * 60.0 / d.bpm : 2.0;
@@ -817,11 +833,18 @@ class DjController extends ChangeNotifier {
     double c(double base, double off) => math.max(-24.0, base + off);
     _engine.setEq(other, c(_eqBaseIn.low, inc.low), c(_eqBaseIn.mid, inc.mid), c(_eqBaseIn.high, inc.high));
     _engine.setEq(cur, c(_eqBaseOut.low, out.low), c(_eqBaseOut.mid, out.mid), c(_eqBaseOut.high, out.high));
+    final (fIn, fOut) = filterMoves(_plan?.kind ?? TransitionKind.smooth, t);
+    if (fIn != 0 || fOut != 0 || t > 0) {
+      _engine.setFilter(other, fIn != 0 ? fIn : deck(other).filter);
+      _engine.setFilter(cur, fOut != 0 ? fOut : deck(cur).filter);
+    }
   }
 
   void _restoreMixEq(int cur, int other) {
     _engine.setEq(other, _eqBaseIn.low, _eqBaseIn.mid, _eqBaseIn.high);
     _engine.setEq(cur, _eqBaseOut.low, _eqBaseOut.mid, _eqBaseOut.high);
+    _engine.setFilter(other, deck(other).filter);
+    _engine.setFilter(cur, deck(cur).filter);
   }
   double _fadeInBase = 1;
 
