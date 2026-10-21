@@ -12,6 +12,7 @@ import 'package:sidedeck/soulseek/playable.dart';
 import 'package:sidedeck/soulseek/slsk_setup.dart';
 import 'package:sidedeck/soulseek/storage_guard.dart';
 import 'package:sidedeck/soulseek/soulseek_client.dart';
+import 'package:sidedeck/state/avoids.dart';
 import 'package:sidedeck/state/dislikes.dart';
 import 'package:sidedeck/automix/genre_family.dart';
 import 'package:sidedeck/suggest/genres.dart';
@@ -766,6 +767,7 @@ class AutoFetch extends ChangeNotifier {
         if (Dislikes.instance.hasTrack(x.artist, x.title)) continue;
         if (lib != null && x.title.isNotEmpty && _inLibrary(lib, x)) continue;
         if (_triedThisSession.contains(k)) continue;
+        if (Avoids.instance.rejects(artist: x.artist)) continue;
         if (seen.add(k)) out.add(x);
       }
     }

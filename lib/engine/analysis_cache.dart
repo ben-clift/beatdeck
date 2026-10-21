@@ -75,4 +75,9 @@ class AnalysisCache {
       'beat_offset': beatOffset,
     }, conflictAlgorithm: ConflictAlgorithm.replace);
   }
+
+  Future<void> clearAll() async {
+    final db = await _open();
+    await db.delete('analysis');
+  }
 }

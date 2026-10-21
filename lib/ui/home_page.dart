@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:sidedeck/state/avoids.dart';
 import 'package:sidedeck/debug/debug_log.dart';
 import 'package:sidedeck/debug/log_upload.dart';
 import 'package:sidedeck/soulseek/slsk_keeper.dart';
@@ -57,6 +58,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     SlskSetup.wire(_library);
     SlskKeeper.instance.start();
     Dislikes.instance.load();
+    Avoids.instance.load();
     Ratings.instance.load();
     _dj.addListener(_onDjChanged);
   }

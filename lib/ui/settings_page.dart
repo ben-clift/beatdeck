@@ -5,6 +5,8 @@ import 'package:sidedeck/debug/debug_log.dart';
 import 'package:sidedeck/debug/log_upload.dart';
 import 'package:sidedeck/ui/debug_page.dart';
 import 'package:sidedeck/ui/deleted_tracks_page.dart';
+import 'package:sidedeck/engine/analysis_cache.dart';
+import 'package:sidedeck/state/avoids.dart';
 import 'package:sidedeck/state/dislikes.dart';
 import 'package:sidedeck/state/dj_controller.dart';
 import 'package:sidedeck/subsonic/subsonic_client.dart';
@@ -254,6 +256,37 @@ class _SettingsPageState extends State<SettingsPage> {
           ],
           const Divider(height: 32),
           const Text(
+            'Reset',
+            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+          ),
+          const SizedBox(height: 8),
+          OutlinedButton.icon(
+            icon: const Icon(Icons.cleaning_services_outlined),
+            label: const Text('Clear cache'),
+            onPressed: _clearCache,
+          ),
+          const SizedBox(height: 4),
+          const Text(
+            'Forgets the saved track analysis and the shop / chart lists. '
+            'They are read again when needed. Your music and settings stay.',
+            style: TextStyle(color: SideDeckTheme.muted, fontSize: 12),
+          ),
+          const SizedBox(height: 12),
+          OutlinedButton.icon(
+            icon: const Icon(Icons.restart_alt),
+            label: const Text('Reset to factory settings'),
+            onPressed: _factoryReset,
+          ),
+          const SizedBox(height: 4),
+          const Text(
+            'Puts every setting back to how it started (Auto DJ, looks, '
+            'fetching, logins, Less-of-this list). Your music files, '
+            'library folders, playlists, stars, Backup tracks and deleted-track '
+            'list are kept.',
+            style: TextStyle(color: SideDeckTheme.muted, fontSize: 12),
+          ),
+          const Divider(height: 32),
+          const Text(
             'About',
             style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
           ),
@@ -285,4 +318,87 @@ class _SettingsPageState extends State<SettingsPage> {
       ),
     );
   }
+
+  Future<void> _clearCache() async {
+    final ok = await _confirm('Clear cache?',
+        'Saved track analysis and the shop / chart lists are forgotten and read again when needed.');
+    if (ok != true) return;
+    try {
+      final p = await SharedPreferences.getInstance();
+      for (final k in p.getKeys().toList()) {
+        if (_isCacheKey(k)) await p.remove(k);
+      }
+      await AnalysisCache.instance.clearAll();
+    } catch (e) {
+      DebugLog.add('settings', 'clear cache failed: $e');
+    }
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Cache cleared.')));
+    }
+  }
+
+  static bool _isCacheKey(String k) =>
+      k == 'ra_v1' ||
+      k == 'traxsource_all_v1' ||
+      k == 'taste_labels_v1' ||
+      k.startsWith('hardwax_') ||
+      k.startsWith('disc_') ||
+      k.endsWith('_try') ||
+      k == 'ra_gate_v2' ||
+      k == 'traxsource_gate_v2';
+
+  // Kept on a factory reset: the user's music and what they built from it.
+  static const _keep = {
+    'library_folder',
+    'library_paths',
+    'local_playlists',
+    'disliked_v1',
+    'play_counts_v1',
+    'track_stars_v1',
+    'lib_tags_v1',
+    'lib_genre_override_v1',
+    'wish_lists_v1',
+  };
+
+  Future<void> _factoryReset() async {
+    final ok = await _confirm('Reset to factory settings?',
+        'Every setting goes back to how it started and you will be signed out of Soulseek, '
+        'Subsonic and the rest. Your music, library folders, playlists, stars, Backup tracks '
+        'and deleted-track list are kept. The app closes the Auto DJ and asks you to restart it.');
+    if (ok != true) return;
+    try {
+      if (widget.dj.automixOn) widget.dj.stopAutomix();
+      final p = await SharedPreferences.getInstance();
+      for (final k in p.getKeys().toList()) {
+        if (!_keep.contains(k)) await p.remove(k);
+      }
+      Avoids.instance.clear();
+      await AnalysisCache.instance.clearAll();
+    } catch (e) {
+      DebugLog.add('settings', 'factory reset failed: $e');
+    }
+    if (mounted) {
+      await showDialog<void>(
+        context: context,
+        barrierDismissible: false,
+        builder: (c) => AlertDialog(
+          title: const Text('Reset done'),
+          content: const Text('Close BeatDeck completely and open it again to start fresh.'),
+          actions: [TextButton(onPressed: () => Navigator.pop(c), child: const Text('OK'))],
+        ),
+      );
+    }
+  }
+
+  Future<bool?> _confirm(String title, String body) => showDialog<bool>(
+        context: context,
+        builder: (c) => AlertDialog(
+          title: Text(title),
+          content: Text(body),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Cancel')),
+            FilledButton(onPressed: () => Navigator.pop(c, true), child: const Text('Yes')),
+          ],
+        ),
+      );
 }

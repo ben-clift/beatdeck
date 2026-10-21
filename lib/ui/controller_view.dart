@@ -642,6 +642,18 @@ class _DeckPanelState extends State<_DeckPanel> {
                 ),
               if (d.loaded)
                 IconButton(
+                  tooltip: 'Less: steer away from this artist / genre / tempo',
+                  visualDensity: VisualDensity.compact,
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                  icon: const Icon(Icons.do_not_disturb_on_outlined, size: 20),
+                  onPressed: () {
+                    final msg = widget.dj.automixLessLike(widget.index);
+                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+                  },
+                ),
+              if (d.loaded)
+                IconButton(
                   tooltip: 'Put in Backup tracks to come back to another time',
                   visualDensity: VisualDensity.compact,
                   padding: EdgeInsets.zero,

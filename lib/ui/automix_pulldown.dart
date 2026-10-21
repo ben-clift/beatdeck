@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:sidedeck/state/avoids.dart';
 import 'package:sidedeck/state/backup_tracks.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sidedeck/automix/transition_style.dart';
@@ -507,6 +508,27 @@ class _AutomixPullDownState extends State<AutomixPullDown> {
                                 (v) => setState(() => _len = v)),
                         ],
                       ),
+                    ),
+                    ListenableBuilder(
+                      listenable: Avoids.instance,
+                      builder: (context, _) => Avoids.instance.isEmpty
+                          ? const SizedBox.shrink()
+                          : Padding(
+                              padding: const EdgeInsets.only(top: 8),
+                              child: OutlinedButton.icon(
+                                icon: const Icon(Icons.restart_alt, size: 18),
+                                label: Text(
+                                  'Reset "Less of this" (${Avoids.instance.count})',
+                                  style: const TextStyle(fontSize: 12),
+                                ),
+                                onPressed: () {
+                                  Avoids.instance.clear();
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(content: Text('Less-of-this list cleared.')),
+                                  );
+                                },
+                              ),
+                            ),
                     ),
                   ],
                 ),

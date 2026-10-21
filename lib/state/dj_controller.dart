@@ -12,6 +12,7 @@ import 'package:sidedeck/engine/analysis_cache.dart';
 import 'package:sidedeck/automix/set_flow.dart';
 import 'package:sidedeck/automix/genre_family.dart';
 import 'package:sidedeck/automix/transition_style.dart';
+import 'package:sidedeck/state/avoids.dart';
 import 'package:sidedeck/state/dislikes.dart';
 import 'package:sidedeck/suggest/harmony.dart';
 import 'package:sidedeck/engine/native_engine.dart';
@@ -974,13 +975,47 @@ class DjController extends ChangeNotifier {
 
   FlowTrack? _flowOf(String path) => _flowInfo[path];
 
-  /// The next queue entry that has not been played yet, or null.
+  /// The artist of a track: from the tempo/key read, else the file name.
+  String _artistOf(String path) {
+    final a = _flowOf(path)?.artist ?? '';
+    if (a.isNotEmpty) return a;
+    final name = path.split(RegExp(r'[\\/]')).last.replaceFirst(RegExp(r'\.[^.]+$'), '');
+    final dash = name.indexOf(' - ');
+    return dash > 0 ? name.substring(0, dash).replaceFirst(RegExp(r'^\d+[\.\s-]+'), '').trim() : '';
+  }
+
+  bool _avoided(String path) => Avoids.instance.rejects(
+        artist: _artistOf(path),
+        genre: genreOf?.call(path) ?? '',
+        bpm: _flowOf(path)?.bpm ?? 0,
+      );
+
+  /// "Less of this": remember the artist / genre / tempo of the track on this
+  /// deck as one to steer away from, then move off it. Returns a message for
+  /// the screen.
+  String automixLessLike(int deckIndex) {
+    final path = deck(deckIndex).path;
+    if (path == null || path.isEmpty) return 'Load a track first.';
+    Avoids.instance.add(
+      artist: _artistOf(path),
+      genre: genreOf?.call(path) ?? '',
+      bpm: _flowOf(path)?.bpm ?? 0,
+    );
+    DebugLog.add('automix', 'less of this: avoiding ${_artistOf(path)} / ${genreOf?.call(path) ?? ''}');
+    if (automixOn && _automixDeck >= 0 && !_automixFading) {
+      automixSkip(deckIndex);
+    }
+    notifyListeners();
+    return 'OK, less like that from now on. (Reset it in the Auto DJ panel.)';
+  }
+
   /// Looks up a track's genre (set by the app from the library tags).
   String Function(String path)? genreOf;
 
   /// Does [path] suit the track now playing? Same or similar genre and a
   /// tempo within 8 %. Unknown genre or tempo does not rule it out.
   bool _suits(String path, {int tier = 0}) {
+    if (!Avoids.instance.isEmpty && _avoided(path)) return false;
     final curPath = _automixIndex >= 0 && _automixIndex < _automixQueue.length
         ? _automixQueue[_automixIndex]
         : null;
