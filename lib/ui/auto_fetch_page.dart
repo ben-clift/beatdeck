@@ -43,6 +43,7 @@ class _AutoFetchPageState extends State<AutoFetchPage> {
   bool _hardwax = false;
   String _hwTag = 'this-week';
   String? _loadError;
+  int _loadSeq = 0;
   int _era = 1950; // decade start; 0 means everything before 1960
   final _style = TextEditingController();
   bool _yearFilter = false;
@@ -56,7 +57,9 @@ class _AutoFetchPageState extends State<AutoFetchPage> {
   Future<void> _loadTracks() async {
     final af = AutoFetch.instance;
     final id = _charts.any((c) => c.$1 == af.chartId) ? af.chartId : (_charts.isEmpty ? -1 : _charts.first.$1);
-    if ((id < 0 && !_hardwax) || _loadingTracks) return;
+    if (id < 0 && !_hardwax) return;
+    // A newer request replaces any still running; its answer is dropped.
+    final seq = ++_loadSeq;
     final name = id < 0 ? '' : _charts.firstWhere((c) => c.$1 == id).$2;
     setState(() {
       _loadingTracks = true;
@@ -77,10 +80,10 @@ class _AutoFetchPageState extends State<AutoFetchPage> {
     } else {
       t = await _loadOther(svc, id, name);
     }
+    if (!mounted || seq != _loadSeq) return;
     for (final s in t) {
       _seen.add('${s.artist} ${s.title}'.toLowerCase());
     }
-    if (!mounted) return;
     setState(() {
       _tracks = t;
       _loadingTracks = false;
@@ -365,7 +368,7 @@ class _AutoFetchPageState extends State<AutoFetchPage> {
               Row(
                 children: [
                   OutlinedButton.icon(
-                    onPressed: _loadingTracks ? null : _loadTracks,
+                    onPressed: _loadTracks,
                     icon: const Icon(Icons.refresh, size: 18),
                     label: Text(_tracks.isEmpty ? 'Show tracks' : 'Reload'),
                   ),
