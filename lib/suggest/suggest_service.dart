@@ -190,16 +190,24 @@ class SuggestService {
     bool needDetails = false,
   }) async {
     final raw = <(int, String, String)>[];
-    try {
-      final c = await _get('https://api.deezer.com/chart/$genreId/tracks?limit=100');
-      for (final t in ((c['data'] as List?) ?? const [])) {
-        final m = t as Map;
-        final artist = ((m['artist'] as Map?)?['name'] ?? '') as String;
-        final title = (m['title'] ?? '') as String;
-        if (skip.contains('$artist $title'.toLowerCase())) continue;
-        raw.add((m['id'] as int, title, artist));
+    // Page down the chart until there are enough tracks not seen before.
+    for (var page = 0; page < 4 && raw.length < want * 3; page++) {
+      try {
+        final c = await _get(
+            'https://api.deezer.com/chart/$genreId/tracks?limit=100&index=${page * 100}');
+        final data = (c['data'] as List?) ?? const [];
+        for (final t in data) {
+          final m = t as Map;
+          final artist = ((m['artist'] as Map?)?['name'] ?? '') as String;
+          final title = (m['title'] ?? '') as String;
+          if (skip.contains('$artist $title'.toLowerCase())) continue;
+          raw.add((m['id'] as int, title, artist));
+        }
+        if (data.length < 100) break;
+      } catch (_) {
+        break;
       }
-    } catch (_) {}
+    }
     final out = <Suggestion>[];
     if (!needDetails && (bpmMin == null || bpmMax == null)) {
       for (final r in raw.take(want)) {

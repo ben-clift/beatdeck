@@ -37,6 +37,8 @@ class _AutoFetchPageState extends State<AutoFetchPage> {
   bool _loadingTracks = false;
   int _loadedFor = -1;
   final Set<int> _picked = {};
+  // Tracks already shown this session, so a reload brings only new ones.
+  static final Set<String> _seen = {};
 
   Future<void> _loadTracks() async {
     final af = AutoFetch.instance;
@@ -55,7 +57,11 @@ class _AutoFetchPageState extends State<AutoFetchPage> {
       bpmMax: _chartTempo ? _bpm.end : null,
       want: 50,
       needDetails: true,
+      skip: _seen,
     );
+    for (final s in t) {
+      _seen.add('${s.artist} ${s.title}'.toLowerCase());
+    }
     if (!mounted) return;
     setState(() {
       _tracks = t;
@@ -220,7 +226,7 @@ class _AutoFetchPageState extends State<AutoFetchPage> {
                   child: Center(child: CircularProgressIndicator()),
                 ),
               if (!_loadingTracks && _loadedFor >= 0 && _tracks.isEmpty)
-                const Text('No tracks found for this chart and tempo.',
+                const Text('No new tracks left for this chart and tempo this session.',
                     style: TextStyle(fontSize: 12, color: SideDeckTheme.muted)),
               for (var i = 0; i < _tracks.length; i++)
                 CheckboxListTile(
