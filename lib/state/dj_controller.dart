@@ -925,7 +925,14 @@ class DjController extends ChangeNotifier {
   /// The very last resort so the music never stops: every track still in the
   /// queue is playable again, the one heard longest ago first (never one on a
   /// deck, a deleted file or a disliked track).
+  DateTime _lastResortAt = DateTime(2000);
+
   int? _lastResortPick() {
+    // Once per few seconds: it used to run every tick and flood the queue
+    // with copies of one track, which froze the screen.
+    final now = DateTime.now();
+    if (now.difference(_lastResortAt).inSeconds < 8) return null;
+    _lastResortAt = now;
     final onDeck = <String>{
       for (var i = 0; i < 2; i++) if ((deck(i).path ?? '').isNotEmpty) _trackKey(deck(i).path!),
     };
@@ -946,6 +953,7 @@ class DjController extends ChangeNotifier {
     }
     if (best == null) return null;
     final k = _trackKey(best);
+    if (_automixQueue.where((q) => _trackKey(q) == k).length > 1) return null;
     _automixPlayed.remove(k);
     _replayOk.add(k);
     _rejected.remove(best);
