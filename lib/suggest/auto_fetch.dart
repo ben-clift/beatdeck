@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'package:sidedeck/debug/debug_log.dart';
 import 'dart:io';
 import 'dart:async';
@@ -35,6 +36,13 @@ class AutoFetch extends ChangeNotifier {
 
   // What the AUTO switch uses. Set on the Auto-fetch page and remembered.
   String genre = 'house';
+
+  /// Every genre you ticked. When [pinned], each search uses one of them
+  /// (not the genre of the playing track) and the result is mixed in at once.
+  List<String> genres = [];
+  bool pinned = false;
+  final _rnd = math.Random();
+  String pickGenre() => (pinned && genres.isNotEmpty) ? genres[_rnd.nextInt(genres.length)] : genre;
   double bpmMin = 120;
   double bpmMax = 128;
   int count = 5;
@@ -66,6 +74,8 @@ class AutoFetch extends ChangeNotifier {
       useHardwax = prefs.getBool('af_use_hw') ?? useHardwax;
       useTrax = prefs.getBool('af_use_trax') ?? useTrax;
       useRa = prefs.getBool('af_use_ra') ?? useRa;
+      genres = prefs.getStringList('af_genres') ?? genres;
+      pinned = prefs.getBool('af_pinned') ?? pinned;
       useBandcamp = prefs.getBool('af_use_bc') ?? useBandcamp;
       useDiscogs = prefs.getBool('af_use_dg') ?? useDiscogs;
       hwTag = prefs.getString('af_hw_tag') ?? hwTag;
@@ -97,6 +107,8 @@ class AutoFetch extends ChangeNotifier {
       await prefs.setBool('af_use_hw', useHardwax);
       await prefs.setBool('af_use_trax', useTrax);
       await prefs.setBool('af_use_ra', useRa);
+      await prefs.setStringList('af_genres', genres);
+      await prefs.setBool('af_pinned', pinned);
       await prefs.setBool('af_use_bc', useBandcamp);
       await prefs.setBool('af_use_dg', useDiscogs);
       await prefs.setString('af_hw_tag', hwTag);
@@ -1044,7 +1056,7 @@ class AutoFetch extends ChangeNotifier {
         }
         if (!genreMode) break;
         await findNext(
-          genre: genre,
+          genre: pickGenre(),
           artist: '',
           title: '',
           bpm: (bpmMin + bpmMax) / 2,

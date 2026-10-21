@@ -66,6 +66,7 @@ class SlskSetup {
     soulseek.storageCheck = (size) => StorageGuard.blockReason(dirFor(lib), size);
     dj?.onFileMissing = (_) => lib.removeMissing();
     dj?.fetchBusy = () => AutoFetch.instance.running || AutoFetch.instance.manualPending > 0;
+    dj?.genrePinned = () => AutoFetch.instance.pinned && AutoFetch.instance.genres.isNotEmpty;
     dj?.genreOf = (path) {
       final g = lib.genreOf(path);
       return g.isNotEmpty ? g : AutoFetch.instance.hintFor(path);
@@ -95,12 +96,16 @@ class SlskSetup {
       () async {
         // Keep searching until a track is found (or automix is stopped).
         while (true) {
+          final pin = af.pinned && af.genres.isNotEmpty;
           await af.findNext(
-            genre: genre,
+            genre: pin ? af.pickGenre() : genre,
             artist: artist,
             title: title,
             bpm: bpm,
             library: lib,
+            bpmLo: pin ? af.bpmMin : null,
+            bpmHi: pin ? af.bpmMax : null,
+            steer: pin,
           );
           if (af.lastFound || !(dj?.automixOn ?? false) || !autoFetchForAutomix) return;
           DebugLog.add('automix', 'nothing found yet, searching again');

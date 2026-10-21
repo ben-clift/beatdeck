@@ -188,6 +188,7 @@ class _AutoFetchPageState extends State<AutoFetchPage> {
     af.count = _count.round();
     af.endless = _endless;
     af.source = _source;
+    af.pinned = false;
     af.hardwax = _hardwax;
     af.hwTag = _hwTag;
     af.pasted = _pasted.text;

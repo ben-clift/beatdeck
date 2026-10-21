@@ -448,7 +448,12 @@ class DjController extends ChangeNotifier {
       if (cur.key != null && c.key != null && keyMatch(cur.key!, c.key!).score < 70) continue;
       fits++;
     }
-    if (fits > 0) return;
+    // With your own genres picked, a pinned download is wanted even when the
+    // queue has other tracks that fit.
+    final pinned = genrePinned?.call() ?? false;
+    final fp = _forcePath;
+    final waitingPinned = fp != null && !_wasPlayed(fp) && _automixQueue.contains(fp);
+    if (pinned ? waitingPinned : fits > 0) return;
     _needAsked = path;
     _needAskedAt = now;
     final name = path.split(RegExp(r'[\\/]')).last.replaceFirst(RegExp(r'\.[^.]+$'), '');
@@ -483,6 +488,7 @@ class DjController extends ChangeNotifier {
     if (armed) {
       _playNextArmed = false;
       _forcePath = path;
+      _mixNow = true;
       _upNext = path;
       _automixPreloaded = false;
       _rejected.remove(path);
@@ -492,6 +498,10 @@ class DjController extends ChangeNotifier {
   }
 
   bool _playNextArmed = false;
+
+  /// Genres picked by the user are in force: fetch them, skip the genre gate.
+  bool Function()? genrePinned;
+  bool _mixNow = false;
   DateTime _playNextAt = DateTime.fromMillisecondsSinceEpoch(0);
   String? _forcePath;
 
@@ -1098,7 +1108,8 @@ class DjController extends ChangeNotifier {
       _loadNext(other, _automixQueue[next], tier);
       return false;
     }
-    if (shouldStartFade(remaining: remaining, fadeSeconds: automixFadeSeconds)) {
+    final mixNow = _mixNow && _forcePath != null && _forcePath == _automixQueue[next];
+    if (mixNow || shouldStartFade(remaining: remaining, fadeSeconds: automixFadeSeconds)) {
       var breakLeft = 0.0;
       if (kindFor(automixStyle, d.bpm, deck(other).bpm) == TransitionKind.breakdown) {
         final amp = [
@@ -1126,6 +1137,7 @@ class DjController extends ChangeNotifier {
         return false;
       }
       _plan = plan;
+      _mixNow = false;
       _automixBeginFade(cur, other, next);
       return true;
     }
@@ -1180,7 +1192,7 @@ class DjController extends ChangeNotifier {
       // Genre check on the file's own tags (a new download is not in the
       // library tags yet): never dub after minimal house, except as a last
       // resort when time has run out.
-      final forced = _forcePath == path;
+      final forced = _forcePath == path || (genrePinned?.call() ?? false);
       if (!forced && tier < 2 && _automixIndex >= 0 && _automixIndex < _automixQueue.length) {
         final cg = await _genreFor(_automixQueue[_automixIndex]);
         final ng = await _genreFor(path);
@@ -1194,7 +1206,7 @@ class DjController extends ChangeNotifier {
           return;
         }
       }
-      final tol = forced ? 16.0 : (tier == 0 ? 10.0 : (tier == 1 ? 16.0 : 1e9));
+      final tol = forced ? 30.0 : (tier == 0 ? 10.0 : (tier == 1 ? 16.0 : 1e9));
       if (out.bpm > 1 && inc.bpm > 1 && bpmGapPercent(out.bpm, inc.bpm).abs() > tol) {
         DebugLog.add('automix',
             'turned down ${path.split(RegExp(r'[\\/]')).last}: ${inc.bpm.round()} BPM against ${out.bpm.round()}, choosing another');

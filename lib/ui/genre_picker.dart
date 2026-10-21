@@ -19,7 +19,8 @@ class GenrePicker extends StatefulWidget {
 
 class _GenrePickerState extends State<GenrePicker> {
   final _af = AutoFetch.instance;
-  late final TextEditingController _genre = TextEditingController(text: _af.genre);
+  late final TextEditingController _genre = TextEditingController();
+  late final Set<String> _sel = {..._af.genres};
   late RangeValues _bpm = RangeValues(
     _af.bpmMin.clamp(70.0, 179.0).toDouble(),
     _af.bpmMax.clamp(71.0, 180.0).toDouble(),
@@ -60,17 +61,53 @@ class _GenrePickerState extends State<GenrePicker> {
     return all;
   }
 
-  void _go() {
-    final g = _genre.text.trim();
+  void _addTyped() {
+    final g = _genre.text.trim().toLowerCase();
     if (g.isEmpty) return;
+    setState(() {
+      _sel.add(g);
+      _genre.clear();
+    });
+  }
+
+  /// Tempo range that covers every ticked genre.
+  void _fitTempo() {
+    double? lo, hi;
+    for (final grp in genreGroups) {
+      for (final g in grp.$2) {
+        if (_sel.contains(g.name)) {
+          lo = lo == null ? g.min : math.min(lo, g.min);
+          hi = hi == null ? g.max : math.max(hi, g.max);
+        }
+      }
+    }
+    if (lo != null && hi != null) {
+      final l = lo.clamp(70.0, 179.0).toDouble();
+      _bpm = RangeValues(l, hi.clamp(l + 1, 180.0).toDouble());
+    }
+  }
+
+  void _go() {
+    _addTyped();
+    if (_sel.isEmpty) return;
+    _af.genres = _sel.toList();
+    _af.genre = _af.genres.first;
+    _af.pinned = true;
     _af.source = 'genre';
-    _af.genre = g;
     _af.bpmMin = _bpm.start;
     _af.bpmMax = _bpm.end;
     _af.save();
-    // Restart so the new genre is fetched at once (and plays next).
+    // Restart so a track of the ticked genres is fetched at once and mixed in.
     _af.toggle(false, widget.library);
     _af.toggle(true, widget.library);
+  }
+
+  void _clear() {
+    setState(() => _sel.clear());
+    _af.genres = [];
+    _af.pinned = false;
+    _af.save();
+    _af.refresh();
   }
 
   Widget _src(String label, bool value, void Function(bool) set) => FilterChip(
@@ -93,8 +130,31 @@ class _GenrePickerState extends State<GenrePicker> {
         TextField(
           controller: _genre,
           onChanged: (_) => setState(() {}),
-          decoration: const InputDecoration(labelText: 'Genre', isDense: true),
+          onSubmitted: (_) => _addTyped(),
+          decoration: InputDecoration(
+            labelText: 'Type a genre and press enter, or tick as many as you like',
+            isDense: true,
+            suffixIcon: IconButton(icon: const Icon(Icons.add), onPressed: _addTyped),
+          ),
         ),
+        if (_sel.isNotEmpty) ...[
+          const SizedBox(height: 6),
+          Wrap(
+            spacing: 6,
+            children: [
+              for (final g in _sel)
+                InputChip(
+                  label: Text(g),
+                  visualDensity: VisualDensity.compact,
+                  onDeleted: () => setState(() {
+                    _sel.remove(g);
+                    _fitTempo();
+                  }),
+                ),
+              TextButton(onPressed: _clear, child: const Text('Clear all')),
+            ],
+          ),
+        ],
         const SizedBox(height: 8),
         Text('Tempo  ${_bpm.start.round()} to ${_bpm.end.round()} BPM',
             style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12)),
@@ -119,19 +179,18 @@ class _GenrePickerState extends State<GenrePicker> {
               ChoiceChip(
                 label: Text('${g.name}  ${g.min.round()}-${g.max.round()}'),
                 visualDensity: VisualDensity.compact,
-                selected: _genre.text.trim().toLowerCase() == g.name,
+                selected: _sel.contains(g.name),
                 selectedColor: const Color(0xFFFF9F1C),
                 backgroundColor: _fits(g) ? const Color(0xFF2E7D32) : Colors.transparent,
                 labelStyle: TextStyle(
-                  color: _genre.text.trim().toLowerCase() == g.name
+                  color: _sel.contains(g.name)
                       ? Colors.black
                       : (_fits(g) ? Colors.white : SideDeckTheme.muted),
                   fontWeight: _fits(g) ? FontWeight.w700 : FontWeight.w400,
                 ),
                 onSelected: (_) => setState(() {
-                  _genre.text = g.name;
-                  final lo = g.min.clamp(70.0, 179.0).toDouble();
-                  _bpm = RangeValues(lo, g.max.clamp(lo + 1, 180.0).toDouble());
+                  if (!_sel.remove(g.name)) _sel.add(g.name);
+                  _fitTempo();
                 }),
               ),
           ],
@@ -161,8 +220,8 @@ class _GenrePickerState extends State<GenrePicker> {
         Row(
           children: [
             FilledButton(
-              onPressed: _genre.text.trim().isEmpty ? null : _go,
-              child: const Text('Fetch and play this genre'),
+              onPressed: (_sel.isEmpty && _genre.text.trim().isEmpty) ? null : _go,
+              child: Text(_af.pinned ? 'Update genres and fetch' : 'Fetch and mix these genres'),
             ),
             const SizedBox(width: 10),
             Expanded(

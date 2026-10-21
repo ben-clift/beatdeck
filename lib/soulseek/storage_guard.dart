@@ -23,6 +23,11 @@ class StorageGuard {
       final prefs = await SharedPreferences.getInstance();
       maxGb = prefs.getDouble('dl_max_gb') ?? maxGb;
       reserveGb = prefs.getDouble('dl_reserve_gb') ?? reserveGb;
+      // A big reserve stops every download on a phone with space to spare.
+      if (reserveGb > 5) {
+        reserveGb = 5;
+        await prefs.setDouble('dl_reserve_gb', reserveGb);
+      }
     } catch (_) {}
   }
 
