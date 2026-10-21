@@ -2114,6 +2114,15 @@ class DjController extends ChangeNotifier {
     d.loopEnd = _engine.loopEnd(deckIndex);
   }
 
+  /// A jump of a fraction of a beat (a nudge to line a track up with the
+  /// other one): moves the play position by that part of a beat.
+  void nudgeBeats(int deckIndex, double beats) {
+    final d = deck(deckIndex);
+    if (!d.loaded || d.bpm <= 1) return;
+    final delta = beats * 60.0 / d.bpm;
+    seekTo(deckIndex, _engine.position(deckIndex) + delta);
+  }
+
   void beatJump(int deckIndex, int beats) {
     _engine.beatJump(deckIndex, beats);
     deck(deckIndex).position = _engine.position(deckIndex);

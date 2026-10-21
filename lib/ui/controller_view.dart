@@ -479,7 +479,14 @@ class _DeckPanel extends StatefulWidget {
 class _DeckPanelState extends State<_DeckPanel> {
   _PadMode _mode = _PadMode.hotCue;
   static const _loopBars = [0.25, 0.5, 1.0, 2.0, 4.0, 8.0];
-  static const _jumpBeats = [-1, 1, -4, 4, -8, 8, -16, 16];
+  static const _jumpBeats = [-1 / 16, 1 / 16, -1 / 4, 1 / 4, -1 / 2, 1 / 2, -1.0, 1.0, -4.0, 4.0, -16.0, 16.0];
+
+  static String _jumpLabel(double b) {
+    final sign = b > 0 ? '+' : '-';
+    final a = b.abs();
+    if (a >= 1) return '$sign${a.round()}';
+    return '$sign' '1/${(1 / a).round()}';
+  }
   // Tempo fader range: plus or minus 8 percent.
   static const _ranges = [0.06, 0.10, 0.16, 0.50];
   int _rangeIdx = 1;
@@ -1006,7 +1013,7 @@ class _DeckPanelState extends State<_DeckPanel> {
 
   Widget _pads(DeckState d) {
     final pads = <Widget>[];
-    for (var k = 0; k < 8; k++) {
+    for (var k = 0; k < (_mode == _PadMode.jump ? _jumpBeats.length : 8); k++) {
       switch (_mode) {
         case _PadMode.hotCue:
           final set = d.hotcues[k] >= 0;
@@ -1041,19 +1048,23 @@ class _DeckPanelState extends State<_DeckPanel> {
         case _PadMode.jump:
           final b = _jumpBeats[k];
           pads.add(_pad(
-            b > 0 ? '+$b' : '$b',
+            _jumpLabel(b),
             false,
-            () => widget.dj.beatJump(widget.index, b),
+            () => b.abs() >= 1
+                ? widget.dj.beatJump(widget.index, b.round())
+                : widget.dj.nudgeBeats(widget.index, b),
           ));
       }
     }
     return LayoutBuilder(
       builder: (context, c) {
         const gap = 4.0;
-        final cellW = (c.maxWidth - gap) / 2;
-        final cellH = (c.maxHeight - gap * 3) / 4;
+        final cols = _mode == _PadMode.jump ? 4 : 2;
+        final rows = _mode == _PadMode.jump ? 3 : 4;
+        final cellW = (c.maxWidth - gap * (cols - 1)) / cols;
+        final cellH = (c.maxHeight - gap * (rows - 1)) / rows;
         return GridView.count(
-          crossAxisCount: 2,
+          crossAxisCount: cols,
           childAspectRatio: cellW / math.max(1.0, cellH),
           mainAxisSpacing: gap,
           crossAxisSpacing: gap,
