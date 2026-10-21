@@ -1084,7 +1084,7 @@ class DjController extends ChangeNotifier {
       // Nothing to put on the other deck yet: say so, and keep asking.
       final text = (fetchBusy?.call() ?? false)
           ? (fetchStatus?.call() ?? 'Finding the next track…')
-          : 'No track fits yet. Looking for one (Soulseek helper), or add music.';
+          : _idleReason('No track fits yet. Looking for one (Soulseek helper), or add music.');
       if (automixStatus != text) {
         automixStatus = text;
         return true;
@@ -1223,6 +1223,12 @@ class DjController extends ChangeNotifier {
   String Function()? fetchStatus;
 
   void refresh() => notifyListeners();
+
+  /// After a failed search, say why instead of a generic line.
+  String _idleReason(String fallback) {
+    final st = fetchStatus?.call() ?? '';
+    return st.startsWith('Next track:') ? '$st. Trying again shortly.' : fallback;
+  }
 
   /// Text for an empty deck while automix is looking for its next track.
   String? deckHint(int i) {

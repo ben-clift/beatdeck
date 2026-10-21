@@ -790,11 +790,20 @@ class AutoFetch extends ChangeNotifier {
     DebugLog.add('fetch',
         'taste: ${Taste.artists.length} artists and ${Taste.labels.length} labels from your playlists, ${liked.length} liked on the shop lists');
     DebugLog.add('fetch', 'shortlist for "$g": ${tx.length} Traxsource + ${hw.length} Hardwax + ${ra.length} RA, ${out.length} usable');
-    if (out.length < 5 && (useTrax || useHardwax || useRa)) {
-      DebugLog.add('fetch', 'shop lists are short, adding the underground list');
+    if (out.length < 5) {
+      // Shops unreachable or empty: more artists from your own playlists.
+      final more = Taste.pick(6, genre: g);
+      final extra = more.isEmpty ? Taste.pick(6) : more;
+      DebugLog.add('fetch', 'shop lists are short, adding ${extra.length} artists from your playlists');
+      add([for (final a in extra) Suggestion(a, '', 0, 'You like')]);
+    }
+    if (out.length < 5) {
+      DebugLog.add('fetch', 'still short, adding the underground list');
       try {
         add(await _service.underground(g, bpmMin: lo, bpmMax: hi, skip: seen, want: 10));
-      } catch (_) {}
+      } catch (e) {
+        DebugLog.add('fetch', 'underground list not available: $e');
+      }
     }
     return out.take(20).toList();
   }
