@@ -115,15 +115,14 @@ class _AutomixPullDownState extends State<AutomixPullDown> {
   static const _libTempo = 'lib:tempo';
   static const _libAz = 'lib:az';
 
-  /// What automix will play: the chosen option, else the first playlist,
-  /// else the whole library.
+  /// What automix will play: the chosen option, else the whole library shuffled.
   String _choice(List<Playlist> lists) {
     final id = _selectedId;
     if (id != null &&
         (id.startsWith('lib:') || lists.any((p) => p.id == id))) {
       return id;
     }
-    return lists.isEmpty ? _libShuffle : lists.first.id;
+    return _libShuffle;
   }
 
   List<String> _pathsFor(String id, List<Playlist> lists) {
