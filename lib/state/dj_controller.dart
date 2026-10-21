@@ -551,20 +551,33 @@ class DjController extends ChangeNotifier {
       _skipAt = DateTime.now();
       DebugLog.add('automix', 'skip: mixing into the next track now');
       automixStatus = 'Skipping…';
+      _askForTrackNow();
       notifyListeners();
       return null;
     }
     final path = deck(deckIndex).path;
+    DebugLog.add('automix', 'skip: choosing another track for deck ${deckIndex + 1}');
+    _clearUpNext(); // (this also empties the turned-down list)
+    _flowNext = null;
     if (path != null) {
       _markPlayed(path);
       _rejected.add(path);
+      _loadHold = DateTime(2000); // pick the replacement straight away
     }
-    DebugLog.add('automix', 'skip: choosing another track for deck ${deckIndex + 1}');
-    _clearUpNext();
-    _flowNext = null;
+    automixStatus = 'Skipped: choosing another track…';
+    _askForTrackNow();
     notifyListeners();
     return null;
   }
+
+  /// After a skip, look for a track at once (queue first, then Soulseek)
+  /// instead of waiting out the usual pauses between asks.
+  void _askForTrackNow() {
+    _needCheck = DateTime.fromMillisecondsSinceEpoch(0);
+    _needAsked = null;
+    _checkNeedTrack();
+  }
+
   DateTime _playNextAt = DateTime.fromMillisecondsSinceEpoch(0);
   String? _forcePath;
 
