@@ -116,6 +116,11 @@ class LookController extends ChangeNotifier {
   bool cosmicOn = true;
   int cosmicMask = 15;
 
+  /// Animals that now and then walk across the screen. [critterMask]:
+  /// 1 big cats, 2 farm, 4 pets, 8 snakes / frogs / insects.
+  bool critterOn = true;
+  int critterMask = 15;
+
   /// Bumped to fire the effects once, for trying them out.
   final ValueNotifier<int> testTrigger = ValueNotifier<int>(0);
   int backgroundIndex = 0;
@@ -218,6 +223,8 @@ class LookController extends ChangeNotifier {
       strobeOn = prefs.getBool('look_strobe') ?? false;
       cosmicOn = prefs.getBool('look_cosmic') ?? true;
       cosmicMask = prefs.getInt('look_cosmic_mask') ?? 15;
+      critterOn = prefs.getBool('look_critter') ?? true;
+      critterMask = prefs.getInt('look_critter_mask') ?? 15;
       style = LookStyle.values[_clamp(prefs.getInt('look_style') ?? 0, LookStyle.values.length)];
       final saved = prefs.getStringList('look_decks');
       if (saved != null && saved.length == deckAccent.length) {
@@ -245,6 +252,8 @@ class LookController extends ChangeNotifier {
       await prefs.setBool('look_strobe', strobeOn);
       await prefs.setBool('look_cosmic', cosmicOn);
       await prefs.setInt('look_cosmic_mask', cosmicMask);
+      await prefs.setBool('look_critter', critterOn);
+      await prefs.setInt('look_critter_mask', critterMask);
       await prefs.setStringList('look_decks', [for (final a in deckAccent) '$a']);
     } catch (_) {}
   }
@@ -281,6 +290,18 @@ class LookController extends ChangeNotifier {
 
   void toggleCosmicKind(int bit) {
     cosmicMask ^= bit;
+    notifyListeners();
+    _save();
+  }
+
+  void setCritters(bool on) {
+    critterOn = on;
+    notifyListeners();
+    _save();
+  }
+
+  void toggleCritterKind(int bit) {
+    critterMask ^= bit;
     notifyListeners();
     _save();
   }
@@ -326,6 +347,8 @@ class LookController extends ChangeNotifier {
     strobeOn = false;
     cosmicOn = true;
     cosmicMask = 15;
+    critterOn = true;
+    critterMask = 15;
     backgroundIndex = 0;
     bodyIndex = 0;
     for (var i = 0; i < deckAccent.length; i++) {

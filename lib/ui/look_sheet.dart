@@ -116,6 +116,35 @@ class _LookSheet extends StatelessWidget {
                         ),
                     ],
                   ),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  dense: true,
+                  title: const Text('Wandering animals'),
+                  subtitle: const Text(
+                    'Now and then an animal walks across the screen: big cats, farm '
+                    'animals, pets, snakes, frogs and insects. Never more than two.',
+                    style: TextStyle(fontSize: 11),
+                  ),
+                  value: look.critterOn,
+                  onChanged: look.setCritters,
+                ),
+                if (look.critterOn)
+                  Wrap(
+                    spacing: 8,
+                    children: [
+                      for (final k in const [
+                        (1, 'Lions & tigers'),
+                        (2, 'Sheep & goats'),
+                        (4, 'Cats & dogs'),
+                        (8, 'Snakes, frogs & bugs'),
+                      ])
+                        FilterChip(
+                          label: Text(k.$2, style: const TextStyle(fontSize: 12)),
+                          selected: look.critterMask & k.$1 != 0,
+                          onSelected: (_) => look.toggleCritterKind(k.$1),
+                        ),
+                    ],
+                  ),
                 Align(
                   alignment: Alignment.centerLeft,
                   child: OutlinedButton(
