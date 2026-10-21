@@ -674,10 +674,14 @@ class AutoFetch extends ChangeNotifier {
                   !Dislikes.instance.hasTrack(s.artist, s.title))
               .toList()
             ..shuffle();
-          return tx.take(12).toList();
-        } catch (_) {
-          return <Suggestion>[];
+          if (tx.isNotEmpty) return tx.take(12).toList();
+        } catch (e) {
+          DebugLog.add('fetch', 'Traxsource list not available: $e');
         }
+        // Last resort when the shop lists gave nothing: low-play-count tracks
+        // of the same genre and tempo (never chart music).
+        DebugLog.add('fetch', 'the shop lists had nothing left, trying the underground list');
+        return _service.underground(g, bpmMin: lo, bpmMax: hi, skip: tried, want: 12);
       },
       library: library,
       count: count,

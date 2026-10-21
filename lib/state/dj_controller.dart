@@ -1017,10 +1017,15 @@ class DjController extends ChangeNotifier {
     final tier = remaining > 45 ? 0 : (remaining > 20 ? 1 : 2);
     final next = _nextUnplayed(tier: tier);
     if (next == null) {
-      automixStatus = (fetchBusy?.call() ?? false)
-          ? 'Finding a matching track…'
-          : (remaining <= 45 ? 'No suitable track left. Looking for one.' : automixStatus);
-      return remaining <= 45;
+      // Nothing to put on the other deck yet: say so, and keep asking.
+      final text = (fetchBusy?.call() ?? false)
+          ? 'Finding the next track…'
+          : 'No track fits yet. Looking for one (Soulseek helper), or add music.';
+      if (automixStatus != text) {
+        automixStatus = text;
+        return true;
+      }
+      return false;
     }
     if (!_automixPreloaded) {
       // Load the next track on the other deck as soon as one is chosen, so
