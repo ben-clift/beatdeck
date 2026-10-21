@@ -16,6 +16,7 @@ import 'package:sidedeck/ui/soulseek_page.dart';
 import 'package:sidedeck/ui/suggest_page.dart';
 import 'package:sidedeck/ui/wishlist_page.dart';
 import 'package:sidedeck/subsonic/subsonic_client.dart';
+import 'package:sidedeck/state/backup_tracks.dart';
 import 'package:sidedeck/theme/sidedeck_theme.dart';
 
 /// Modal library overlay (opened from the Library button).
@@ -786,7 +787,7 @@ class _LibraryOverlayState extends State<LibraryOverlay> {
     );
   }
 
-  /// Hold a track: a small sheet with a delete button.
+  /// Hold a track: a small sheet with Backup and Delete.
   void _trackMenu(LibraryTrack t) {
     showModalBottomSheet<void>(
       context: context,
@@ -802,6 +803,25 @@ class _LibraryOverlayState extends State<LibraryOverlay> {
                   style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
               if (t.artist.isNotEmpty)
                 Text(t.artist, style: const TextStyle(fontSize: 12, color: SideDeckTheme.muted)),
+              const SizedBox(height: 14),
+              FilledButton.icon(
+                onPressed: () async {
+                  Navigator.pop(ctx);
+                  widget.dj.automixDrop(t.path);
+                  await BackupTracks.add(t.path);
+                  if (!mounted) return;
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Saved in the playlist "Backup tracks".')),
+                  );
+                },
+                icon: const Icon(Icons.bookmark_add_outlined),
+                label: const Text('Backup: keep it and come back to it another time'),
+              ),
+              const SizedBox(height: 4),
+              const Text(
+                'Keeps the file, puts it in the playlist "Backup tracks" and takes it out of automix for now.',
+                style: TextStyle(fontSize: 11, color: SideDeckTheme.muted),
+              ),
               const SizedBox(height: 14),
               FilledButton.icon(
                 style: FilledButton.styleFrom(backgroundColor: Colors.red.shade700),
