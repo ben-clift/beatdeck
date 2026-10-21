@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -37,6 +38,25 @@ class _AutomixPullDownState extends State<AutomixPullDown> {
 
   final _playlists = PlaylistController();
   bool _open = false;
+  // The big panel is only built while it is open or sliding away; building it
+  // behind the decks on every 50 ms update made the whole app stutter.
+  bool _showPanel = false;
+  Timer? _hideTimer;
+  late final Widget _picker = GenrePicker(library: widget.library);
+
+  void _setOpen(bool v) {
+    if (_open == v) return;
+    _hideTimer?.cancel();
+    setState(() {
+      _open = v;
+      if (v) _showPanel = true;
+    });
+    if (!v) {
+      _hideTimer = Timer(const Duration(milliseconds: 320), () {
+        if (mounted && !_open) setState(() => _showPanel = false);
+      });
+    }
+  }
   double _fade = 120;
   double _offset = 10;
   FlowArc _arc = FlowArc.journey;
@@ -83,11 +103,12 @@ class _AutomixPullDownState extends State<AutomixPullDown> {
 
   @override
   void dispose() {
+    _hideTimer?.cancel();
     _playlists.dispose();
     super.dispose();
   }
 
-  void _toggle() => setState(() => _open = !_open);
+  void _toggle() => _setOpen(!_open);
 
   static const _libShuffle = 'lib:shuffle';
   static const _libTempo = 'lib:tempo';
@@ -147,7 +168,7 @@ class _AutomixPullDownState extends State<AutomixPullDown> {
         builder: (context, _) {
           return Column(
             children: [
-              SizedBox(height: _panelH, child: _panel()),
+              SizedBox(height: _panelH, child: _showPanel ? _panel() : const SizedBox.shrink()),
               _tab(),
             ],
           );
@@ -167,8 +188,8 @@ class _AutomixPullDownState extends State<AutomixPullDown> {
         onTap: _toggle,
         onVerticalDragEnd: (d) {
           final v = d.primaryVelocity ?? 0;
-          if (v > 120 && !_open) setState(() => _open = true);
-          if (v < -120 && _open) setState(() => _open = false);
+          if (v > 120 && !_open) _setOpen(true);
+          if (v < -120 && _open) _setOpen(false);
         },
         child: Container(
           height: _tabH,
@@ -219,7 +240,7 @@ class _AutomixPullDownState extends State<AutomixPullDown> {
         lengthMinutes: _len,
         style: _style);
     // Stay open when it could not start, so the reason stays visible.
-    if (mounted && dj.automixOn) setState(() => _open = false);
+    if (mounted && dj.automixOn) _setOpen(false);
   }
 
   bool get _helper => SlskKeeper.instance.enabled && SlskSetup.autoFetchForAutomix;
@@ -273,12 +294,12 @@ class _AutomixPullDownState extends State<AutomixPullDown> {
     final look = LookController.instance;
     final lists = _playlists.playlists.where((p) => p.paths.isNotEmpty).toList();
     final choice = _choice(lists);
-    final paths = _pathsFor(choice, lists);
+    final hasMusic = widget.library.tracks.isNotEmpty || lists.isNotEmpty;
     final on = dj.automixOn;
     final signedIn = soulseek.online || soulseek.status == SlskStatus.connecting;
     return GestureDetector(
       onVerticalDragEnd: (d) {
-        if ((d.primaryVelocity ?? 0) < -120) setState(() => _open = false);
+        if ((d.primaryVelocity ?? 0) < -120) _setOpen(false);
       },
       child: Container(
         padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
@@ -304,7 +325,7 @@ class _AutomixPullDownState extends State<AutomixPullDown> {
                         ),
                       )
                     : FilledButton.icon(
-                        onPressed: paths.isEmpty ? null : () => _start(paths),
+                        onPressed: !hasMusic ? null : () => _start(_pathsFor(choice, lists)),
                         icon: const Icon(Icons.auto_mode),
                         label: const Text('Start Auto DJ', style: TextStyle(fontSize: 18)),
                       ),
@@ -314,7 +335,7 @@ class _AutomixPullDownState extends State<AutomixPullDown> {
                 child: Text(
                   on
                       ? (dj.automixStatus ?? 'Mixing for you. Deck 1 and 2 swap over automatically.')
-                      : paths.isEmpty
+                      : !hasMusic
                           ? 'Add music to your library first (folder icon in the Library), then come back.'
                           : (dj.automixStatus ??
                               'It plays your music and mixes each track into the next, all by itself.'),
@@ -414,7 +435,7 @@ class _AutomixPullDownState extends State<AutomixPullDown> {
                 'Pick a genre and shop',
                 'Choose a genre, tempo and where to look. The track is downloaded '
                     'right away and plays next.',
-                GenrePicker(library: widget.library),
+                _picker,
               ),
               Theme(
                 data: Theme.of(context).copyWith(dividerColor: Colors.transparent),

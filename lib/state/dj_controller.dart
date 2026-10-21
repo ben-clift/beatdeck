@@ -1173,6 +1173,9 @@ class DjController extends ChangeNotifier {
       return false;
     }
     if (!_automixPreloaded) {
+      // After a turned-down track, wait a moment before trying another so the
+      // deck is not loaded and emptied over and over (that froze the screen).
+      if (DateTime.now().isBefore(_loadHold)) return false;
       // Load the next track on the other deck as soon as one is chosen, so
       // both decks are loaded from the start.
       _automixBusy = true;
@@ -1322,9 +1325,12 @@ class DjController extends ChangeNotifier {
       _automixPreloaded = false;
     } finally {
       _automixBusy = false;
+      if (!_automixPreloaded) _loadHold = DateTime.now().add(const Duration(milliseconds: 1500));
       notifyListeners();
     }
   }
+
+  DateTime _loadHold = DateTime(2000);
 
   /// True while tracks are still being downloaded for automix.
   bool Function()? fetchBusy;
