@@ -334,6 +334,34 @@ class _AutoFetchPageState extends State<AutoFetchPage> {
               enabled: true,
               decoration: const InputDecoration(labelText: 'Genre'),
             ),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Only these years'),
+              subtitle: Text(
+                af.useYearRange ? '${af.yearFrom} to ${af.yearTo}' : 'Off: any year',
+                style: const TextStyle(fontSize: 12),
+              ),
+              value: af.useYearRange,
+              onChanged: (v) {
+                af.useYearRange = v;
+                af.save();
+                setState(() {});
+              },
+            ),
+            if (af.useYearRange)
+              RangeSlider(
+                values: RangeValues(af.yearFrom.toDouble(), af.yearTo.toDouble()),
+                min: 1960,
+                max: 2026,
+                divisions: 66,
+                labels: RangeLabels('${af.yearFrom}', '${af.yearTo}'),
+                onChanged: (v) {
+                  af.yearFrom = v.start.round();
+                  af.yearTo = v.end.round();
+                  af.save();
+                  setState(() {});
+                },
+              ),
             const SizedBox(height: 8),
             Text(
               'Genres that fit ${_bpm.start.round()}-${_bpm.end.round()} BPM are lit. '

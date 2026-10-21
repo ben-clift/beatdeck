@@ -42,6 +42,9 @@ class AutoFetch extends ChangeNotifier {
       bpmMax = prefs.getDouble('af_bpm_max') ?? bpmMax;
       count = prefs.getInt('af_count') ?? count;
       similarYears = prefs.getBool('af_years') ?? similarYears;
+      useYearRange = prefs.getBool('af_range') ?? useYearRange;
+      yearFrom = prefs.getInt('af_year_from') ?? yearFrom;
+      yearTo = prefs.getInt('af_year_to') ?? yearTo;
       yearSpan = prefs.getInt('af_year_span') ?? yearSpan;
       buffer = prefs.getInt('af_buffer') ?? buffer;
       endless = prefs.getBool('af_endless') ?? endless;
@@ -62,6 +65,9 @@ class AutoFetch extends ChangeNotifier {
       await prefs.setDouble('af_bpm_max', bpmMax);
       await prefs.setInt('af_count', count);
       await prefs.setBool('af_years', similarYears);
+      await prefs.setBool('af_range', useYearRange);
+      await prefs.setInt('af_year_from', yearFrom);
+      await prefs.setInt('af_year_to', yearTo);
       await prefs.setInt('af_year_span', yearSpan);
       await prefs.setInt('af_buffer', buffer);
       await prefs.setBool('af_endless', endless);
@@ -219,7 +225,15 @@ class AutoFetch extends ChangeNotifier {
   int yearSpan = 5;
   int _refYear = 0;
 
+  /// A fixed range of years for genre and chart fetching.
+  bool useYearRange = false;
+  int yearFrom = 1995;
+  int yearTo = 2026;
+
   bool _yearOk(Suggestion s) {
+    if (useYearRange) {
+      if (s.year == 0 || s.year < yearFrom || s.year > yearTo) return false;
+    }
     if (!similarYears) return true;
     if (s.year == 0) return false;
     if (_refYear == 0) return true;
@@ -340,7 +354,7 @@ class AutoFetch extends ChangeNotifier {
         bpmMin: matchTempo ? bpmMin : null,
         bpmMax: matchTempo ? bpmMax : null,
         skip: tried,
-        needDetails: similarYears,
+        needDetails: similarYears || useYearRange,
       ),
       library: library,
       count: count,
