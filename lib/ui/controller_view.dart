@@ -728,6 +728,23 @@ class _DeckPanelState extends State<_DeckPanel> {
                     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
                   },
                 ),
+              if (d.loaded && (d.path ?? '').isNotEmpty)
+                IconButton(
+                  tooltip: 'Share this track (WhatsApp and other apps)',
+                  visualDensity: VisualDensity.compact,
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                  icon: const Icon(Icons.share_outlined, size: 20),
+                  onPressed: () {
+                    final path = d.path!;
+                    final name = path.split(RegExp(r'[\\/]')).last.replaceFirst(RegExp(r'\.[^.]+$'), '');
+                    SharePlus.instance.share(ShareParams(
+                      files: [XFile(path)],
+                      text: name,
+                      subject: name,
+                    ));
+                  },
+                ),
               if (d.loaded)
                 IconButton(
                   tooltip: 'Put in Backup tracks to come back to another time',
