@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:sidedeck/state/library_controller.dart';
 import 'package:sidedeck/suggest/auto_fetch.dart';
+import 'package:sidedeck/suggest/discover.dart';
 import 'package:sidedeck/suggest/genres.dart';
 import 'package:sidedeck/theme/sidedeck_theme.dart';
 
@@ -24,9 +25,14 @@ class _GenrePickerState extends State<GenrePicker> {
     _af.bpmMax.clamp(71.0, 180.0).toDouble(),
   );
 
+  final _token = TextEditingController();
+
   @override
   void initState() {
     super.initState();
+    Discover.loadToken().then((_) {
+      if (mounted) _token.text = Discover.token;
+    });
     _af.addListener(_changed);
   }
 
@@ -38,6 +44,7 @@ class _GenrePickerState extends State<GenrePicker> {
   void dispose() {
     _af.removeListener(_changed);
     _genre.dispose();
+    _token.dispose();
     super.dispose();
   }
 
@@ -79,7 +86,7 @@ class _GenrePickerState extends State<GenrePicker> {
 
   @override
   Widget build(BuildContext context) {
-    final noSource = !_af.useHardwax && !_af.useTrax && !_af.useRa;
+    final noSource = !_af.useHardwax && !_af.useTrax && !_af.useRa && !_af.useBandcamp && !_af.useDiscogs;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -137,8 +144,19 @@ class _GenrePickerState extends State<GenrePicker> {
             _src('Hardwax', _af.useHardwax, (v) => _af.useHardwax = v),
             _src('Traxsource', _af.useTrax, (v) => _af.useTrax = v),
             _src('RA', _af.useRa, (v) => _af.useRa = v),
+            _src('Bandcamp', _af.useBandcamp, (v) => _af.useBandcamp = v),
+            _src('Discogs', _af.useDiscogs, (v) => _af.useDiscogs = v),
           ],
         ),
+        if (_af.useDiscogs)
+          TextField(
+            controller: _token,
+            onChanged: Discover.saveToken,
+            decoration: const InputDecoration(
+              labelText: 'Discogs token (free, discogs.com/settings/developers)',
+              isDense: true,
+            ),
+          ),
         const SizedBox(height: 8),
         Row(
           children: [

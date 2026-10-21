@@ -355,6 +355,26 @@ class _SoulseekPageState extends State<SoulseekPage> {
                         ),
                         const SizedBox(width: 6),
                         FilterChip(
+                          label: const Text('Bandcamp'),
+                          selected: af.useBandcamp,
+                          onSelected: (v) {
+                            af.useBandcamp = v;
+                            af.save();
+                            af.refresh();
+                          },
+                        ),
+                        const SizedBox(width: 6),
+                        FilterChip(
+                          label: const Text('Discogs'),
+                          selected: af.useDiscogs,
+                          onSelected: (v) {
+                            af.useDiscogs = v;
+                            af.save();
+                            af.refresh();
+                          },
+                        ),
+                        const SizedBox(width: 6),
+                        FilterChip(
                           label: const Text('Traxsource'),
                           selected: af.useTrax,
                           onSelected: (v) {

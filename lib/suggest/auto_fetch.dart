@@ -21,6 +21,7 @@ import 'package:sidedeck/state/library_controller.dart';
 import 'package:sidedeck/suggest/harmony.dart';
 import 'package:sidedeck/wishlist/wishlist.dart';
 import 'package:sidedeck/suggest/suggest_service.dart';
+import 'package:sidedeck/suggest/discover.dart';
 
 /// Fetches tracks that suit a seed track, one after another: look up what
 /// goes with it, search Soulseek, take the best result, and when it has
@@ -47,6 +48,8 @@ class AutoFetch extends ChangeNotifier {
   bool useHardwax = true;
   bool useTrax = true;
   bool useRa = true;
+  bool useBandcamp = true;
+  bool useDiscogs = true;
   String hwTag = '';
 
   Future<void> load() async {
@@ -63,6 +66,8 @@ class AutoFetch extends ChangeNotifier {
       useHardwax = prefs.getBool('af_use_hw') ?? useHardwax;
       useTrax = prefs.getBool('af_use_trax') ?? useTrax;
       useRa = prefs.getBool('af_use_ra') ?? useRa;
+      useBandcamp = prefs.getBool('af_use_bc') ?? useBandcamp;
+      useDiscogs = prefs.getBool('af_use_dg') ?? useDiscogs;
       hwTag = prefs.getString('af_hw_tag') ?? hwTag;
       source = prefs.getString('af_source') ?? source;
       chartId = prefs.getInt('af_chart_id') ?? chartId;
@@ -92,6 +97,8 @@ class AutoFetch extends ChangeNotifier {
       await prefs.setBool('af_use_hw', useHardwax);
       await prefs.setBool('af_use_trax', useTrax);
       await prefs.setBool('af_use_ra', useRa);
+      await prefs.setBool('af_use_bc', useBandcamp);
+      await prefs.setBool('af_use_dg', useDiscogs);
       await prefs.setString('af_hw_tag', hwTag);
       await prefs.setInt('af_chart_id', chartId);
       await prefs.setString('af_chart_name', chartName);
@@ -753,6 +760,26 @@ class AutoFetch extends ChangeNotifier {
         DebugLog.add('fetch', 'RA list not available: $e');
       }
     }
+    var bc = <Suggestion>[];
+    var dg = <Suggestion>[];
+    if (useBandcamp) {
+      try {
+        bc = [...await Discover.bandcamp(g)];
+      } catch (e) {
+        DebugLog.add('fetch', 'Bandcamp list not available: $e');
+      }
+    }
+    if (useDiscogs) {
+      try {
+        dg = [...await Discover.discogs(g)];
+      } catch (e) {
+        DebugLog.add('fetch', 'Discogs list not available: $e');
+      }
+    }
+    bc.shuffle();
+    dg.shuffle();
+    bc = bc.take(15).toList();
+    dg = dg.take(15).toList();
     ra.shuffle();
     tx.shuffle();
     hw.shuffle();
@@ -768,10 +795,12 @@ class AutoFetch extends ChangeNotifier {
     }
     // Traxsource first (it has the tempo), then Hardwax, alternating.
     final mixed = <Suggestion>[];
-    for (var i = 0; i < tx.length || i < hw.length || i < ra.length; i++) {
+    for (var i = 0; i < tx.length || i < hw.length || i < ra.length || i < bc.length || i < dg.length; i++) {
       if (i < tx.length) mixed.add(tx[i]);
       if (i < ra.length) mixed.add(ra[i]);
       if (i < hw.length) mixed.add(hw[i]);
+      if (i < bc.length) mixed.add(bc[i]);
+      if (i < dg.length) mixed.add(dg[i]);
     }
     // Your playlists decide the order: tracks by artists or on labels you
     // have in them first, then a couple of other tracks by artists you like,
@@ -789,7 +818,7 @@ class AutoFetch extends ChangeNotifier {
     add(liked.skip(4));
     DebugLog.add('fetch',
         'taste: ${Taste.artists.length} artists and ${Taste.labels.length} labels from your playlists, ${liked.length} liked on the shop lists');
-    DebugLog.add('fetch', 'shortlist for "$g": ${tx.length} Traxsource + ${hw.length} Hardwax + ${ra.length} RA, ${out.length} usable');
+    DebugLog.add('fetch', 'shortlist for "$g": ${tx.length} Traxsource + ${hw.length} Hardwax + ${ra.length} RA + ${bc.length} Bandcamp + ${dg.length} Discogs, ${out.length} usable');
     if (out.length < 5) {
       // Shops unreachable or empty: more artists from your own playlists.
       final more = Taste.pick(6, genre: g);
@@ -904,7 +933,7 @@ class AutoFetch extends ChangeNotifier {
       while (!_stop && winner == null) {
         for (final f in [...flights]) {
           if (f.dl.state == DlState.done && f.dl.savedPath != null) {
-            const generic = {'Hardwax', 'RA', 'You like'};
+            const generic = {'Hardwax', 'RA', 'You like', 'Bandcamp', 'Discogs'};
             if (f.s.reason.isNotEmpty &&
                 !generic.contains(f.s.reason) &&
                 !f.s.reason.contains('underground')) {
