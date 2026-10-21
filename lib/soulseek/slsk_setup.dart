@@ -24,13 +24,14 @@ class SlskSetup {
     try {
       await StorageGuard.load();
       final prefs = await SharedPreferences.getInstance();
-      chosen = prefs.getString('slsk_dir');
-      final ext = await getExternalStorageDirectory();
-      if (ext != null) {
-        final d = Directory('${ext.path}/soulseek');
-        await d.create(recursive: true);
-        fallback = d.path;
-      }
+      // Older versions shared a folder with other apps and lost files there.
+      // Only a folder picked on this version (slsk_dir2) is used.
+      chosen = prefs.getString('slsk_dir2');
+      final base = await getExternalStorageDirectory() ??
+          await getApplicationDocumentsDirectory();
+      final d = Directory('${base.path}/soulseek');
+      await d.create(recursive: true);
+      fallback = d.path;
     } catch (_) {}
   }
 
@@ -38,8 +39,6 @@ class SlskSetup {
   static String dirFor(LibraryController lib) {
     final c = chosen;
     if (c != null && c.isNotEmpty) return c;
-    final f = lib.folderPath;
-    if (f != null && f.isNotEmpty) return f;
     return fallback;
   }
 
@@ -63,7 +62,7 @@ class SlskSetup {
     chosen = dir;
     try {
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('slsk_dir', dir);
+      await prefs.setString('slsk_dir2', dir);
     } catch (_) {}
     return true;
   }

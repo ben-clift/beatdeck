@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:sidedeck/debug/debug_log.dart';
+import 'package:sidedeck/soulseek/ingest.dart';
 import 'dart:math' as math;
 import 'dart:typed_data';
 
@@ -714,10 +715,23 @@ class SoulseekClient extends ChangeNotifier {
       await sink?.flush().timeout(const Duration(seconds: 6));
       await sink?.close().timeout(const Duration(seconds: 6));
     } catch (_) {}
+    final saved = d.savedPath;
+    if (saved != null) {
+      final bad = await verifyDownload(saved, d.size);
+      if (bad != null) {
+        DebugLog.add('download', 'REJECTED $saved: $bad');
+        try {
+          await File(saved).delete();
+        } catch (_) {}
+        d.state = DlState.failed;
+        d.message = bad;
+        _changed();
+        return;
+      }
+    }
     d.state = DlState.done;
     d.message = 'Saved';
     _changed();
-    final saved = d.savedPath;
     if (saved != null) {
       DebugLog.add('download',
           'done: received ${d.received} of ${d.size}. On disk: ${await DebugLog.describeFile(saved)}');
