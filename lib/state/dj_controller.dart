@@ -730,7 +730,11 @@ class DjController extends ChangeNotifier {
     inc.position = start;
     _automixFadeFrom = crossfaderEndFor(cur);
     xfader = _automixFadeFrom;
-    _engine.setXfader(xfader);
+    // Both decks open at the centre; the channel faders do the fading.
+    _fadeOutBase = out.fader;
+    _fadeInBase = inc.fader;
+    _engine.setXfader(0.5);
+    _engine.setFader(other, 0.0);
     _engine.play(other, true);
     inc.playing = true;
     _automixFadeStart = DateTime.now();
@@ -740,21 +744,36 @@ class DjController extends ChangeNotifier {
     automixStatus = null;
   }
 
+  double _fadeOutBase = 1;
+  double _fadeInBase = 1;
+
   void _automixAdvanceFade() {
     final cur = _automixDeck;
     final other = 1 - cur;
     final elapsed =
         DateTime.now().difference(_automixFadeStart).inMilliseconds / 1000.0;
+    // The on-screen crossfader moves in a straight line; the sound uses the
+    // two channel faders on a smooth curve: the new track rises gently from
+    // silence (sin squared) while the old one falls away (cosine).
     xfader = crossfaderAt(
       elapsed: elapsed,
       fadeSeconds: automixFadeSeconds,
       from: _automixFadeFrom,
       to: crossfaderEndFor(other),
     );
-    _engine.setXfader(xfader);
+    final t = (elapsed / automixFadeSeconds).clamp(0.0, 1.0);
+    final gIn = math.pow(math.sin(t * math.pi / 2), 2).toDouble();
+    final gOut = math.cos(t * math.pi / 2);
+    _engine.setFader(other, _fadeInBase * gIn);
+    _engine.setFader(cur, _fadeOutBase * gOut);
     if (elapsed >= automixFadeSeconds) {
       _engine.play(cur, false);
       deck(cur).playing = false;
+      // Put both faders back and park the crossfader on the new deck.
+      _engine.setFader(cur, _fadeOutBase);
+      _engine.setFader(other, _fadeInBase);
+      _engine.setXfader(crossfaderEndFor(other));
+      xfader = crossfaderEndFor(other);
       DebugLog.flow('Automix mix to next deck', true);
       DebugLog.ok('automix', 'mix finished, deck ${other + 1} now playing');
       _automixDeck = other;
