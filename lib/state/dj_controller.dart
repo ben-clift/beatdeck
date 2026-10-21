@@ -618,8 +618,43 @@ class DjController extends ChangeNotifier {
       DebugLog.add('automix', 'nothing new yet: replaying the track played longest ago: ${path.split(RegExp(r'[\\/]')).last}');
       return _automixQueue.length - 1;
     }
+    // Still nothing: any other file in the library, the one played longest
+    // ago, preferring the same kind of music as what is playing now.
+    final lp = libraryPaths?.call();
+    if (lp != null) {
+      final curPath = _automixIndex >= 0 && _automixIndex < _automixQueue.length
+          ? _automixQueue[_automixIndex]
+          : '';
+      final curGenre = curPath.isEmpty ? '' : (genreOf?.call(curPath) ?? '');
+      final inQueue = {for (final q in _automixQueue) _trackKey(q)};
+      final cands = <String>[
+        for (final p in lp)
+          if (p != curPath &&
+              !inQueue.contains(_trackKey(p)) &&
+              !Dislikes.instance.hasPath(p) &&
+              File(p).existsSync())
+            p,
+      ];
+      if (cands.isNotEmpty) {
+        cands.sort((a, b) {
+          final sa = curGenre.isNotEmpty && genresSimilar(curGenre, genreOf?.call(a) ?? '') ? 0 : 1;
+          final sb = curGenre.isNotEmpty && genresSimilar(curGenre, genreOf?.call(b) ?? '') ? 0 : 1;
+          if (sa != sb) return sa.compareTo(sb);
+          return (_recentPlayed[_trackKey(a)] ?? 0).compareTo(_recentPlayed[_trackKey(b)] ?? 0);
+        });
+        final path = cands.first;
+        _replayOk.add(_trackKey(path));
+        _automixQueue.add(path);
+        _learnAfterAnalysis(path);
+        DebugLog.add('automix', 'nothing new yet: using ${path.split(RegExp(r'[\\/]')).last} from your library so the music keeps going');
+        return _automixQueue.length - 1;
+      }
+    }
     return null;
   }
+
+  /// Every file in the library (last-resort pick when nothing else is ready).
+  Iterable<String> Function()? libraryPaths;
 
   // ---- Play counts (for the "Most played" sort) ----------------------------
   final Map<String, int> _plays = {};
@@ -1077,7 +1112,7 @@ class DjController extends ChangeNotifier {
     var next = _nextUnplayed(tier: tier);
     // Never silent: with the end near and nothing new yet, replay the track
     // played longest ago (never a deleted one) while the helper keeps looking.
-    if (next == null && remaining <= 25 && _replayPick() != null) {
+    if (next == null && remaining <= 40 && _replayPick() != null) {
       next = _nextUnplayed(tier: 2);
     }
     if (next == null) {
