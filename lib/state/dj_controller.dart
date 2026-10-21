@@ -908,6 +908,7 @@ class DjController extends ChangeNotifier {
     _swapAt = bassSwapAt(_plan?.kind ?? TransitionKind.smooth, _fadeLen, barReal);
     _applyMixEq(cur, other, 0);
     _phaseFixed = false;
+    _xfaderByHand = false;
     _engine.play(other, true);
     inc.playing = true;
     _automixFadeStart = DateTime.now();
@@ -922,6 +923,10 @@ class DjController extends ChangeNotifier {
   EqMove _eqBaseIn = EqMove.none;
   double _swapAt = 0.6;
   bool _phaseFixed = false;
+
+  /// Set when the DJ moves the crossfader during an automix mix; automix then
+  /// stops moving it (the channel faders still fade) and leaves it where it is.
+  bool _xfaderByHand = false;
 
   // Spots a manual skip or scrub of the playing deck: its position moves by
   // more than the time that passed.
@@ -956,8 +961,10 @@ class DjController extends ChangeNotifier {
     _engine.setFader(cur, _fadeOutBase);
     _engine.setFader(other, _fadeInBase);
     _restoreMixEq(cur, other);
-    _engine.setXfader(crossfaderEndFor(cur));
-    xfader = crossfaderEndFor(cur);
+    if (!_xfaderByHand) {
+      _engine.setXfader(crossfaderEndFor(cur));
+      xfader = crossfaderEndFor(cur);
+    }
     _automixFading = false;
     _automixPreloaded = true;
   }
@@ -1011,12 +1018,14 @@ class DjController extends ChangeNotifier {
     // The on-screen crossfader moves in a straight line; the sound uses the
     // two channel faders on a smooth curve: the new track rises gently from
     // silence (sin squared) while the old one falls away (cosine).
-    xfader = crossfaderAt(
-      elapsed: elapsed,
-      fadeSeconds: _fadeLen,
-      from: _automixFadeFrom,
-      to: crossfaderEndFor(other),
-    );
+    if (!_xfaderByHand) {
+      xfader = crossfaderAt(
+        elapsed: elapsed,
+        fadeSeconds: _fadeLen,
+        from: _automixFadeFrom,
+        to: crossfaderEndFor(other),
+      );
+    }
     final t = (elapsed / _fadeLen).clamp(0.0, 1.0);
     final (gIn, gOut) = gains(_plan?.kind ?? TransitionKind.smooth, t);
     _engine.setFader(other, _fadeInBase * gIn);
@@ -1033,8 +1042,10 @@ class DjController extends ChangeNotifier {
       _engine.setFader(cur, _fadeOutBase);
       _engine.setFader(other, _fadeInBase);
       _restoreMixEq(cur, other);
-      _engine.setXfader(crossfaderEndFor(other));
-      xfader = crossfaderEndFor(other);
+      if (!_xfaderByHand) {
+        _engine.setXfader(crossfaderEndFor(other));
+        xfader = crossfaderEndFor(other);
+      }
       DebugLog.flow('Automix mix to next deck', true);
       DebugLog.ok('automix', 'mix finished, deck ${other + 1} now playing');
       _automixDeck = other;
@@ -1291,6 +1302,7 @@ class DjController extends ChangeNotifier {
   }
 
   void setXfader(double x) {
+    if (_automixFading) _xfaderByHand = true; // the DJ takes over the crossfader
     xfader = x;
     _engine.setXfader(x);
     notifyListeners();
