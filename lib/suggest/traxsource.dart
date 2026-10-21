@@ -42,7 +42,8 @@ class Traxsource {
       return [
         for (final e in (m['items'] as List))
           Suggestion((e as List)[0] as String, e[1] as String, (e[2] as num).toDouble(),
-              e[3] as String),
+              e[3] as String)
+            ..label = e.length > 4 ? e[4] as String : '',
       ];
     } catch (_) {
       return null;
@@ -57,7 +58,7 @@ class Traxsource {
         jsonEncode({
           't': DateTime.now().millisecondsSinceEpoch,
           'items': [
-            for (final s in items) [s.artist, s.title, s.bpm, s.reason],
+            for (final s in items) [s.artist, s.title, s.bpm, s.reason, s.label],
           ],
         }),
       );
@@ -92,7 +93,10 @@ class Traxsource {
       var genre = fallbackGenre;
       final g = RegExp(r'href="/genre/\d+/([a-z0-9-]+)').firstMatch(part);
       if (g != null) genre = g.group(1)!.replaceAll('-', ' ');
-      out.add(Suggestion(a.take(2).join(', '), title, bpm, genre));
+      var label = '';
+      final lm = RegExp(r'<a[^>]*href="/label/\d+[^"]*"[^>]*>([\s\S]*?)</a>').firstMatch(part);
+      if (lm != null) label = _clean(lm.group(1)!);
+      out.add(Suggestion(a.take(2).join(', '), title, bpm, genre)..label = label);
     }
     return out;
   }

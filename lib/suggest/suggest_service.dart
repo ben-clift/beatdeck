@@ -16,6 +16,9 @@ class Suggestion {
   final double bpm;
   final String reason;
 
+  /// Record label when the source gives one (set after construction).
+  String label = '';
+
   String get query => '$artist $title'.trim();
 }
 

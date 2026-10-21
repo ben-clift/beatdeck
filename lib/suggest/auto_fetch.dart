@@ -13,6 +13,7 @@ import 'package:sidedeck/state/dislikes.dart';
 import 'package:sidedeck/automix/genre_family.dart';
 import 'package:sidedeck/suggest/genres.dart';
 import 'package:sidedeck/suggest/hardwax.dart';
+import 'package:sidedeck/suggest/taste.dart';
 import 'package:sidedeck/suggest/traxsource.dart';
 import 'package:sidedeck/state/library_controller.dart';
 import 'package:sidedeck/suggest/harmony.dart';
@@ -709,7 +710,7 @@ class AutoFetch extends ChangeNotifier {
       for (final x in l) {
         final k = x.query.toLowerCase();
         if (Dislikes.instance.hasTrack(x.artist, x.title)) continue;
-        if (lib != null && _inLibrary(lib, x)) continue;
+        if (lib != null && x.title.isNotEmpty && _inLibrary(lib, x)) continue;
         if (_triedThisSession.contains(k)) continue;
         if (seen.add(k)) out.add(x);
       }
@@ -739,7 +740,18 @@ class AutoFetch extends ChangeNotifier {
       if (i < tx.length) mixed.add(tx[i]);
       if (i < hw.length) mixed.add(hw[i]);
     }
-    add(mixed);
+    // Your playlists decide the order: tracks by artists or on labels you
+    // have in them first, then a couple of other tracks by artists you like,
+    // then the rest.
+    final liked = [for (final x in mixed) if (Taste.likesTrack(x.artist, x.label)) x];
+    final rest = [for (final x in mixed) if (!Taste.likesTrack(x.artist, x.label)) x];
+    add(liked.take(4));
+    final fav = Taste.pick(2);
+    add([for (final a in fav) Suggestion(a, '', 0, 'You like')]);
+    add(rest);
+    add(liked.skip(4));
+    DebugLog.add('fetch',
+        'taste: ${Taste.artists.length} artists and ${Taste.labels.length} labels from your playlists, ${liked.length} liked on the shop lists');
     DebugLog.add('fetch', 'shortlist for "$g": ${tx.length} Traxsource + ${hw.length} Hardwax, ${out.length} usable');
     if (out.length < 5 && (useTrax || useHardwax)) {
       DebugLog.add('fetch', 'shop lists are short, adding the underground list');
@@ -822,6 +834,7 @@ class AutoFetch extends ChangeNotifier {
           return;
         }
       }
+      await Taste.refresh(library);
       _say('Next track: building a shortlist for $g');
       var list = await _shortlist(g, lo, hi);
       if (list.isEmpty && _triedThisSession.isNotEmpty) {
