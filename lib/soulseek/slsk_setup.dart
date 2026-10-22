@@ -172,6 +172,8 @@ class SlskSetup {
       return (af.bpmMin, af.bpmMax);
     };
     dj?.yearOf = lib.yearOf;
+    dj?.allowBothKinds = () => AutoFetch.instance.mixKinds;
+    dj?.bandsMode = () => AutoFetch.instance.bandsPicked;
     dj?.genreOf = (path) {
       final g = lib.genreOf(path);
       return g.isNotEmpty ? g : AutoFetch.instance.hintFor(path);

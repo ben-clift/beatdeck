@@ -51,6 +51,13 @@ class AutoFetch extends ChangeNotifier {
 
   /// Use the tempo range below for every search, whatever genre is playing.
   bool tempoPinned = false;
+
+  /// Off (the default): Auto DJ plays band music or electronic music, never
+  /// both. Band genres picked = bands only; otherwise electronic only.
+  bool mixKinds = false;
+
+  /// True when any picked genre is band music (rock, indie, punk, goth...).
+  bool get bandsPicked => genres.any((g) => genreFamily(g) == 'bands');
   final _rnd = math.Random();
   String pickGenre() => (pinned && genres.isNotEmpty) ? genres[_rnd.nextInt(genres.length)] : genre;
   double bpmMin = 120;
@@ -96,6 +103,7 @@ class AutoFetch extends ChangeNotifier {
       pinned = prefs.getBool('af_pinned') ?? pinned;
       intensity = prefs.getInt('af_intensity') ?? intensity;
       tempoPinned = prefs.getBool('af_tempo_pin') ?? tempoPinned;
+      mixKinds = prefs.getBool('af_mix_kinds') ?? mixKinds;
       useBandcamp = prefs.getBool('af_use_bc') ?? useBandcamp;
       useDiscogs = prefs.getBool('af_use_dg') ?? useDiscogs;
       hwTag = prefs.getString('af_hw_tag') ?? hwTag;
@@ -131,6 +139,7 @@ class AutoFetch extends ChangeNotifier {
       await prefs.setBool('af_pinned', pinned);
       await prefs.setInt('af_intensity', intensity);
       await prefs.setBool('af_tempo_pin', tempoPinned);
+      await prefs.setBool('af_mix_kinds', mixKinds);
       await prefs.setBool('af_use_bc', useBandcamp);
       await prefs.setBool('af_use_dg', useDiscogs);
       await prefs.setString('af_hw_tag', hwTag);

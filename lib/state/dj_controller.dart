@@ -728,7 +728,24 @@ class DjController extends ChangeNotifier {
   (int, int)? decadeRange;
   int Function(String path)? yearOf;
 
+  /// Band music and electronic music are kept apart unless this says both may
+  /// mix (off by default). [bandsMode] says which side is wanted.
+  bool Function()? allowBothKinds;
+  bool Function()? bandsMode;
+
+  bool get _kindStrict => !(allowBothKinds?.call() ?? false);
+
+  /// False for a track of the other kind. Unknown or pop-like genres pass.
+  bool _kindOk(String path) {
+    if (!_kindStrict) return true;
+    final fam = genreFamily(genreOf?.call(path) ?? '');
+    if (fam == null || fam == 'pop') return true;
+    final bands = bandsMode?.call() ?? false;
+    return bands ? fam == 'bands' : fam != 'bands';
+  }
+
   bool _inWindow(String path) {
+    if (!_kindOk(path)) return false;
     final dr = decadeRange;
     if (dr != null) {
       final y = yearOf?.call(path) ?? 0;
@@ -1399,7 +1416,7 @@ class DjController extends ChangeNotifier {
       for (final p in paths)
         if (File(p).existsSync() && !_wasPlayed(p) && seen.add(_trackKey(p))) p,
     ];
-    if (tempoWindow?.call() != null || decadeRange != null) {
+    if (tempoWindow?.call() != null || decadeRange != null || _kindStrict) {
       // Your tempo range: only tracks that can sit inside it start the set.
       for (final q in _automixQueue) {
         await _flowLearn(q);

@@ -516,6 +516,23 @@ class _AutomixPullDownState extends State<AutomixPullDown> {
                 ),
               ),
               _step(
+                '3c',
+                'Bands and electronic',
+                'Off: Auto DJ plays band music (rock, indie, punk, goth...) only when you pick a band genre, '
+                    'and electronic music otherwise, never both. On: they can mix.',
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  dense: true,
+                  title: const Text('Mix bands and electronic'),
+                  value: AutoFetch.instance.mixKinds,
+                  onChanged: (v) => setState(() {
+                    AutoFetch.instance.mixKinds = v;
+                    AutoFetch.instance.save();
+                    widget.dj.refresh();
+                  }),
+                ),
+              ),
+              _step(
                 '4',
                 'Pick a genre and shop',
                 'Choose a genre, tempo and where to look. The track is downloaded '
