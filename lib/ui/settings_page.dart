@@ -256,6 +256,21 @@ class _SettingsPageState extends State<SettingsPage> {
             Text(_status!),
           ],
           const Divider(height: 32),
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            title: const Text('Bass out in breakdowns'),
+            subtitle: const Text(
+              'Watches each playing track for breakdowns: cuts the bass as the break '
+              'starts and slams it back on the drop. Move the bass knob yourself and it leaves that break to you.',
+              style: TextStyle(fontSize: 12),
+            ),
+            value: widget.dj.breakBassOn,
+            onChanged: (v) async {
+              await widget.dj.setBreakBass(v);
+              if (mounted) setState(() {});
+            },
+          ),
+          const Divider(height: 32),
           const Text(
             'Shazam',
             style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),

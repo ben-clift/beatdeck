@@ -19,6 +19,7 @@ import 'package:sidedeck/engine/native_engine.dart';
 import 'package:sidedeck/engine/track_analyzer.dart';
 import 'package:sidedeck/engine/usb_output.dart';
 import 'package:sidedeck/state/automix_math.dart';
+import 'package:sidedeck/state/break_detect.dart';
 
 class DeckState {
   String? path;
@@ -404,6 +405,7 @@ class DjController extends ChangeNotifier {
       }
       dirty = true;
     }
+    if (_breakBassTick()) dirty = true;
     if (_automixTick()) dirty = true;
     if (dirty) notifyListeners();
   }
@@ -1480,6 +1482,119 @@ class DjController extends ChangeNotifier {
 
   /// Returns true if something on screen changed.
   DateTime? _silentSince;
+
+  // ---- Bass out in breakdowns --------------------------------------------
+  /// Cut the bass when a breakdown starts and bring it back on the drop.
+  bool breakBassOn = true;
+  final List<List<BreakSpan>> _breaks = [[], [], [], []];
+  final List<String> _breaksKey = ['', '', '', ''];
+  final List<BreakSpan?> _brkActive = [null, null, null, null];
+  final List<BreakSpan?> _brkSkipped = [null, null, null, null];
+  final List<double> _brkBase = [0, 0, 0, 0];
+  final List<double> _brkShown = [0, 0, 0, 0];
+
+  Future<void> loadBreakBass() async {
+    try {
+      breakBassOn = (await SharedPreferences.getInstance()).getBool('break_bass') ?? true;
+    } catch (_) {}
+  }
+
+  Future<void> setBreakBass(bool v) async {
+    breakBassOn = v;
+    if (!v) {
+      for (var i = 0; i < deckCount; i++) {
+        _breakRestore(i);
+      }
+    }
+    notifyListeners();
+    try {
+      await (await SharedPreferences.getInstance()).setBool('break_bass', v);
+    } catch (_) {}
+  }
+
+  /// The breakdowns of the track on [i] (seconds), found once per track.
+  List<BreakSpan> breaksOf(int i) {
+    final d = deck(i);
+    final key = '${d.path}|${d.bpm.round()}|${d.waveMax.length}';
+    if (_breaksKey[i] != key) {
+      _breaksKey[i] = key;
+      _brkSkipped[i] = null;
+      _breaks[i] = d.path == null || d.bpm <= 1
+          ? const []
+          : findBreaks(min: d.waveMin, max: d.waveMax, duration: d.duration, bpm: d.bpm, beatOffset: d.beatOffset);
+      if (_breaks[i].isNotEmpty) {
+        DebugLog.add('breaks', 'deck ${i + 1}: ${_breaks[i].length} breakdown(s) at ${[for (final b in _breaks[i]) '${b.start.round()}-${b.end.round()} s'].join(', ')}');
+      }
+    }
+    return _breaks[i];
+  }
+
+  void _breakRestore(int i) {
+    if (_brkActive[i] == null) return;
+    final d = deck(i);
+    d.eqLow = _brkBase[i];
+    _engine.setEq(i, d.eqLow, d.eqMid, d.eqHigh);
+    _brkActive[i] = null;
+  }
+
+  bool _breakBassTick() {
+    var changed = false;
+    for (var i = 0; i < deckCount; i++) {
+      final d = deck(i);
+      if (!breakBassOn || !d.loaded || !d.playing || _automixFading) {
+        if (_brkActive[i] != null) {
+          // The mix owns the knobs during a fade; otherwise put the bass back.
+          if (_automixFading) {
+            _brkActive[i] = null;
+          } else {
+            _breakRestore(i);
+            changed = true;
+          }
+        }
+        continue;
+      }
+      final spans = breaksOf(i);
+      if (spans.isEmpty) continue;
+      final pos = d.position;
+      BreakSpan? cur;
+      for (final b in spans) {
+        if (pos >= b.start && pos < b.end) {
+          cur = b;
+          break;
+        }
+      }
+      final active = _brkActive[i];
+      if (cur == null) {
+        if (active != null) {
+          _breakRestore(i); // the drop: bass back on the beat
+          DebugLog.add('breaks', 'deck ${i + 1}: drop, bass back on');
+          changed = true;
+        }
+        continue;
+      }
+      if (identical(_brkSkipped[i], cur)) continue;
+      if (active == null) {
+        _brkActive[i] = cur;
+        _brkBase[i] = d.eqLow;
+        _brkShown[i] = d.eqLow;
+        DebugLog.add('breaks', 'deck ${i + 1}: breakdown, bass out');
+      } else if ((d.eqLow - _brkShown[i]).abs() > 1.5) {
+        // You moved the bass knob yourself: leave it to you for this break.
+        _brkActive[i] = null;
+        _brkSkipped[i] = cur;
+        continue;
+      }
+      final beat = 60.0 / d.bpm;
+      final frac = ((pos - cur.start) / beat).clamp(0.0, 1.0);
+      final low = _brkBase[i] + (-24.0 - _brkBase[i]) * frac;
+      final shown = low.clamp(-12.0, 12.0).toDouble();
+      _brkShown[i] = shown;
+      d.eqLow = shown;
+      _engine.setEq(i, low, d.eqMid, d.eqHigh);
+      changed = true;
+    }
+    return changed;
+  }
 
   bool _automixTick() {
     if (!automixOn || _automixDeck < 0) return false;

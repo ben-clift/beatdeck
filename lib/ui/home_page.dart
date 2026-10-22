@@ -63,6 +63,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     SlskKeeper.instance.start();
     Dislikes.instance.load();
     Avoids.instance.load();
+    _dj.loadBreakBass();
     ShazamWatcher.instance.start(_library);
     Ratings.instance.load();
     _dj.addListener(_onDjChanged);
