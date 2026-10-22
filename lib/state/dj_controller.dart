@@ -1689,7 +1689,7 @@ class DjController extends ChangeNotifier {
       // your own library is not held to the intensity bar, and a run of
       // turn-downs gives up so the decks are not loaded over and over.
       final fresh = path.contains('/soulseek/');
-      if (want > 0 && fresh && !forced && _rejectStreak < 3) {
+      if (want > 0 && _forcePath != path && _rejectStreak < 6 && (fresh || want >= 2)) {
         final n = math.min(inc.waveMax.length, inc.waveMin.length);
         if (n > 20) {
           var sum = 0.0, top = 0.0;
@@ -1699,7 +1699,7 @@ class DjController extends ChangeNotifier {
             if (a > top) top = a;
           }
           final dens = top > 0 ? sum / n / top : 0.0;
-          const need = [0.0, 0.34, 0.44, 0.54];
+          const need = [0.0, 0.40, 0.50, 0.62];
           DebugLog.add('automix',
               'intensity of ${path.split(RegExp(r'[\\/]')).last}: ${(dens * 100).round()} (wanted ${(need[want] * 100).round()})');
           if (tier < 2 && dens < need[want]) {
