@@ -2043,6 +2043,10 @@ class DjController extends ChangeNotifier {
     inc.playing = true;
     _automixFadeStart = DateTime.now();
     DebugLog.add('automix', 'mixing deck ${cur + 1} into deck ${other + 1}: ${_plan?.label ?? 'blend'}, ${_fadeLen.toStringAsFixed(1)} s (${out.bpm.round()} to ${inc.bpm.round()} BPM)');
+    _mixqErr.clear();
+    _mixqNextAt = 0.8;
+    _mixqFixMs = 0;
+    _mixqHead = '${_plan?.label ?? 'blend'} ${_fadeLen.toStringAsFixed(0)} s';
     _automixNextTarget = next;
     _automixFading = true;
     automixStatus = null;
@@ -2092,6 +2096,7 @@ class DjController extends ChangeNotifier {
   /// A skip during a mix: undo the mix so far and let it start again from
   /// the new position (the next track stays loaded).
   void _abortFade(int cur, int other) {
+    _mixqReport(cur, other, finished: false);
     _engine.play(other, false);
     deck(other).playing = false;
     _engine.setFader(cur, _fadeOutBase);
@@ -2103,6 +2108,60 @@ class DjController extends ChangeNotifier {
     }
     _automixFading = false;
     _automixPreloaded = true;
+  }
+
+  // ---- Mix quality monitor ---------------------------------------------
+  final List<double> _mixqErr = [];
+  double _mixqNextAt = 0.8;
+  double _mixqFixMs = 0;
+  String _mixqHead = '';
+
+  /// Beat misalignment between the two decks right now, in ms (positive: the
+  /// new track is late), or null when a deck has no tempo grid.
+  double? _mixqOffsetMs(int cur, int other) {
+    final out = deck(cur), inc = deck(other);
+    if (out.bpm <= 1 || inc.bpm <= 1) return null;
+    final pOut = beatPhase(position: _engine.position(cur), bpm: out.bpm, beatOffset: out.beatOffset);
+    final pIn = beatPhase(position: _engine.position(other), bpm: inc.bpm, beatOffset: inc.beatOffset);
+    var delta = pOut - pIn;
+    if (delta > 0.5) delta -= 1;
+    if (delta < -0.5) delta += 1;
+    final r = inc.rate <= 0 ? 1.0 : inc.rate;
+    return -delta * 60000.0 / inc.bpm / r;
+  }
+
+  void _mixqSample(int cur, int other, double elapsed) {
+    if (elapsed < _mixqNextAt) return;
+    _mixqNextAt = elapsed + 1.5;
+    final e = _mixqOffsetMs(cur, other);
+    if (e != null) _mixqErr.add(e);
+  }
+
+  /// One line per mix in the log: tempo gap, how far the beats were apart
+  /// while both played, and a verdict.
+  void _mixqReport(int cur, int other, {required bool finished}) {
+    final out = deck(cur), inc = deck(other);
+    final eo = out.bpm * (out.rate <= 0 ? 1 : out.rate);
+    final ei = inc.bpm * (inc.rate <= 0 ? 1 : inc.rate);
+    final gap = eo > 1 && ei > 1 ? (ei - eo) / eo * 100 : 0.0;
+    var worst = 0.0;
+    for (final v in _mixqErr) {
+      if (v.abs() > worst) worst = v.abs();
+    }
+    final drift = _mixqErr.length >= 2 ? _mixqErr.last - _mixqErr.first : 0.0;
+    final verdict = _mixqErr.isEmpty
+        ? 'NO BEAT GRID'
+        : (worst < 25 ? 'clean' : (worst < 50 ? 'loose' : 'OFF-BEAT'));
+    final errs = [for (final v in _mixqErr) v.round()].join(', ');
+    String nm(DeckState d) => (d.path ?? '').split(RegExp(r'[\\/]')).last;
+    DebugLog.add(
+        'mixq',
+        '${finished ? 'MIX' : 'MIX CANCELLED'} $verdict | $_mixqHead | '
+        'now ${eo.toStringAsFixed(1)} -> ${ei.toStringAsFixed(1)} BPM (gap ${gap.toStringAsFixed(1)}%) | '
+        'incoming speed ${((inc.rate <= 0 ? 1 : inc.rate) * 100 - 100).toStringAsFixed(1)}% | '
+        'beat start fix ${_mixqFixMs.round()} ms | beat offset during mix (ms): [$errs] worst ${worst.round()} drift ${drift.round()} | '
+        'grids out ${out.beatOffset.toStringAsFixed(3)} in ${inc.beatOffset.toStringAsFixed(3)} | '
+        '"${nm(out)}" -> "${nm(inc)}"');
   }
 
   void _applyMixEq(int cur, int other, double t) {
@@ -2157,6 +2216,7 @@ class DjController extends ChangeNotifier {
     if (delta > 0.5) delta -= 1;
     if (delta < -0.5) delta += 1;
     DebugLog.add('automix', 'beat check: new track is ${(-delta * 60000.0 / inc.bpm / (inc.rate <= 0 ? 1 : inc.rate)).round()} ms off the beat (grid out ${out.beatOffset.toStringAsFixed(3)} in ${inc.beatOffset.toStringAsFixed(3)})');
+    _mixqFixMs = -delta * 60000.0 / inc.bpm / (inc.rate <= 0 ? 1 : inc.rate);
     if (delta.abs() < 0.01) return;
     final target = (_engine.position(other) + delta * 60.0 / inc.bpm)
         .clamp(0.0, math.max(0.0, inc.duration))
@@ -2209,11 +2269,13 @@ class DjController extends ChangeNotifier {
     _engine.setFader(other, _fadeInBase * gIn);
     _engine.setFader(cur, _fadeOutBase * gOut);
     _applyMixEq(cur, other, t);
+    _mixqSample(cur, other, elapsed);
     if (!_phaseFixed && elapsed >= 0.35) {
       _phaseFixed = true;
       _fixMixPhase(cur, other);
     }
     if (elapsed >= _fadeLen) {
+      _mixqReport(cur, other, finished: true);
       _engine.play(cur, false);
       deck(cur).playing = false;
       // Put both faders back and park the crossfader on the new deck.

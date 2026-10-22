@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sidedeck/engine/usb_output.dart';
 import 'package:sidedeck/debug/debug_log.dart';
@@ -269,6 +270,29 @@ class _SettingsPageState extends State<SettingsPage> {
               await widget.dj.setBreakBass(v);
               if (mounted) setState(() {});
             },
+          ),
+          OutlinedButton.icon(
+            icon: const Icon(Icons.graphic_eq),
+            label: const Text('Copy mix quality log'),
+            onPressed: () {
+              final lines = DebugLog.instance.lines
+                  .where((l) => l.contains('[mixq]') || l.contains('[automix] mixing deck') || l.contains('beat check'))
+                  .toList();
+              Clipboard.setData(ClipboardData(
+                text: lines.isEmpty
+                    ? 'No mixes logged yet.'
+                    : 'BeatDeck mix quality log. Each MIX line: verdict (clean under 25 ms, loose under 50 ms, OFF-BEAT beyond), '
+                        'tempo gap, how many ms apart the two beats were while both decks played, and the tracks.\n${lines.join('\n')}',
+              ));
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('Copied ${lines.length} lines. Paste them to Claude.')),
+              );
+            },
+          ),
+          const SizedBox(height: 4),
+          const Text(
+            'Each Auto DJ mix is checked while it plays and logged: how far apart the beats were, the tempo gap and a clean / loose / off-beat verdict.',
+            style: TextStyle(color: SideDeckTheme.muted, fontSize: 12),
           ),
           const Divider(height: 32),
           const Text(
