@@ -92,6 +92,13 @@ class MainActivity : FlutterActivity() {
         usbHotplug = null
         UsbPlayer.stop()
         super.onDestroy()
+        // Closing the app (swiped away or backed out) must stop the music. The
+        // Shazam notification listener keeps the process alive, and with it the
+        // audio engine, so end the process unless this is only a rotation or
+        // similar restart. The system re-binds the listener by itself.
+        if (!isChangingConfigurations) {
+            android.os.Process.killProcess(android.os.Process.myPid())
+        }
     }
 
     /** Opens an installed app whose launcher name matches [name] (case-insensitive). */
