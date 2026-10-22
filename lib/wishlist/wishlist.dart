@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import 'package:sidedeck/debug/debug_log.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// One song on a wish list: names only, no audio.
@@ -202,6 +203,115 @@ class WishListController extends ChangeNotifier {
     add(name.isEmpty ? 'Imported list' : name, source, items);
     message = null;
     return true;
+  }
+
+  /// Any public Spotify or Beatport playlist / chart / album link, no keys:
+  /// the page's own embedded data is read for the song names.
+  Future<bool> importLink(String link) async {
+    final l = link.trim();
+    final isSp = l.contains('spotify.com') || l.startsWith('spotify:');
+    final isBp = l.contains('beatport.com');
+    if (!isSp && !isBp) {
+      message = 'Paste a Spotify or Beatport link (playlist, album or chart).';
+      notifyListeners();
+      return false;
+    }
+    busy = true;
+    message = null;
+    notifyListeners();
+    try {
+      var url = l;
+      String source = 'Beatport';
+      if (isSp) {
+        source = 'Spotify';
+        final m = RegExp(r'(playlist|album|track)[/:]([A-Za-z0-9]+)').firstMatch(l);
+        if (m == null) {
+          message = 'That Spotify link has no playlist or album in it.';
+          return false;
+        }
+        url = 'https://open.spotify.com/embed/${m.group(1)}/${m.group(2)}';
+      }
+      final res = await http.get(Uri.parse(url), headers: const {
+        'User-Agent':
+            'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Mobile Safari/537.36',
+        'Accept-Language': 'en-GB,en;q=0.9',
+      }).timeout(const Duration(seconds: 25));
+      final items = parseEmbedded(res.body);
+      final title = RegExp(r'<title>([^<]+)</title>').firstMatch(res.body)?.group(1);
+      if (items.isEmpty) {
+        message = 'Could not read songs from that page (it may be private, or the site changed).';
+        DebugLog.add('wishlist', 'link import found nothing: HTTP ${res.statusCode}, ${res.body.length} bytes');
+        return false;
+      }
+      var name = (title ?? '$source list')
+          .replaceAll(RegExp(r'\s*[|\-–]\s*(Spotify|Beatport).*$'), '')
+          .replaceAll('&amp;', '&')
+          .trim();
+      if (name.isEmpty) name = '$source list';
+      add(name, source, items);
+      DebugLog.add('wishlist', 'imported ${items.length} songs from $source: $name');
+      return true;
+    } catch (e) {
+      message = 'Could not reach that link.';
+      DebugLog.add('wishlist', 'link import failed: $e');
+      return false;
+    } finally {
+      busy = false;
+      notifyListeners();
+    }
+  }
+
+  /// Finds track-like objects anywhere in the JSON blobs of a web page.
+  static List<WishItem> parseEmbedded(String html) {
+    final out = <WishItem>[];
+    final seen = <String>{};
+    void add(String artist, String title) {
+      title = title.trim();
+      artist = artist.trim();
+      if (title.isEmpty) return;
+      if (seen.add('${artist.toLowerCase()}|${title.toLowerCase()}')) out.add(WishItem(artist, title));
+    }
+
+    void walk(dynamic n) {
+      if (n is List) {
+        for (final e in n) {
+          walk(e);
+        }
+      } else if (n is Map) {
+        final uri = n['uri']?.toString() ?? '';
+        final sub = n['subtitle'];
+        final ttl = n['title'];
+        final name = n['name'];
+        final artists = n['artists'];
+        if (ttl is String && sub is String && (uri.startsWith('spotify:track') || n.containsKey('isPlayable'))) {
+          add(sub.replaceAll('\u00a0', ' '), ttl);
+        } else if (name is String && artists is List && artists.isNotEmpty && artists.first is Map &&
+            (artists.first as Map)['name'] is String &&
+            (n.containsKey('mix_name') || n.containsKey('bpm') || n.containsKey('duration_ms') ||
+                n.containsKey('track_number') || uri.startsWith('spotify:track') || n.containsKey('length_ms'))) {
+          final a = [for (final x in artists) if (x is Map && x['name'] is String) x['name']].join(', ');
+          final mix = n['mix_name']?.toString() ?? '';
+          add(a, mix.isEmpty || mix.toLowerCase() == 'original mix' ? name : '$name ($mix)');
+        }
+        for (final v in n.values) {
+          walk(v);
+        }
+      }
+    }
+
+    for (final m in RegExp(r'<script[^>]*type="application/(?:ld\+)?json"[^>]*>(.*?)</script>', dotAll: true).allMatches(html)) {
+      try {
+        walk(jsonDecode(m.group(1)!));
+      } catch (_) {}
+    }
+    for (final m in RegExp(r'<script[^>]*id="(?:__NEXT_DATA__|resource)"[^>]*>(.*?)</script>', dotAll: true).allMatches(html)) {
+      try {
+        var raw = m.group(1)!;
+        if (!raw.trimLeft().startsWith('{')) raw = utf8.decode(base64.decode(raw.trim()), allowMalformed: true);
+        walk(jsonDecode(raw));
+      } catch (_) {}
+    }
+    return out;
   }
 
   /// Public Deezer playlist link. Deezer shares playlist details without a key.

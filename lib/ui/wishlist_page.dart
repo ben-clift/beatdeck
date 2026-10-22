@@ -4,6 +4,8 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sidedeck/state/library_controller.dart';
+import 'package:sidedeck/suggest/auto_fetch.dart';
+import 'package:sidedeck/suggest/suggest_service.dart';
 import 'package:sidedeck/theme/sidedeck_theme.dart';
 import 'package:sidedeck/ui/soulseek_page.dart';
 import 'package:sidedeck/wishlist/wishlist.dart';
@@ -108,7 +110,25 @@ class _WishDetail extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text(list.name)),
+      appBar: AppBar(
+        title: Text(list.name),
+        actions: [
+          TextButton.icon(
+            icon: const Icon(Icons.download),
+            label: const Text('Download all'),
+            onPressed: () {
+              final tracks = [
+                for (final i in list.items)
+                  if (!i.done) Suggestion(i.artist, i.title, 0, 'Your list'),
+              ];
+              AutoFetch.instance.enqueueTracks(tracks, library);
+              ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                content: Text('Fetching ${tracks.length} tracks from Soulseek, one after another.'),
+              ));
+            },
+          ),
+        ],
+      ),
       body: ListenableBuilder(
         listenable: ctl,
         builder: (context, _) => ListView.builder(
@@ -205,7 +225,7 @@ class _ImportSheetState extends State<_ImportSheet> {
   Widget build(BuildContext context) {
     final bottom = MediaQuery.of(context).viewInsets.bottom;
     return DefaultTabController(
-      length: 3,
+      length: 4,
       child: Padding(
         padding: EdgeInsets.only(bottom: bottom),
         child: SizedBox(
@@ -215,6 +235,7 @@ class _ImportSheetState extends State<_ImportSheet> {
             builder: (context, _) => Column(
               children: [
                 const TabBar(tabs: [
+                  Tab(text: 'Link'),
                   Tab(text: 'Paste or file'),
                   Tab(text: 'Deezer'),
                   Tab(text: 'Spotify'),
@@ -230,7 +251,7 @@ class _ImportSheetState extends State<_ImportSheet> {
                 if (widget.ctl.busy) const LinearProgressIndicator(),
                 Expanded(
                   child: TabBarView(
-                    children: [_pasteTab(), _deezerTab(), _spotifyTab()],
+                    children: [_linkTab(), _pasteTab(), _deezerTab(), _spotifyTab()],
                   ),
                 ),
               ],
@@ -281,6 +302,28 @@ class _ImportSheetState extends State<_ImportSheet> {
                 label: const Text('Pick a CSV'),
               ),
             ],
+          ),
+        ],
+      );
+
+  Widget _linkTab() => ListView(
+        padding: const EdgeInsets.all(14),
+        children: [
+          const Text(
+            'Paste a public Spotify playlist or album link, or a Beatport '
+            'playlist or chart link. No keys or sign in. Then tap '
+            '"Download all" on the list to queue every track from Soulseek.',
+            style: TextStyle(color: SideDeckTheme.muted, fontSize: 12),
+          ),
+          const SizedBox(height: 10),
+          TextField(
+            controller: _link,
+            decoration: const InputDecoration(labelText: 'Spotify or Beatport link'),
+          ),
+          const SizedBox(height: 10),
+          FilledButton(
+            onPressed: widget.ctl.busy ? null : () => _done(widget.ctl.importLink(_link.text)),
+            child: const Text('Import'),
           ),
         ],
       );
