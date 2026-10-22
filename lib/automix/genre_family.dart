@@ -10,7 +10,7 @@ const _families = <String, List<String>>{
   'dub': ['dub', 'reggae', 'dancehall', 'roots'],
   'ambient': ['ambient', 'downtempo', 'chill', 'electronica', 'idm', 'new age', 'trip'],
   'hiphop': ['hip', 'rap', 'trap', 'r&b', 'rnb', 'soul'],
-  'pop': ['pop', 'rock', 'indie', 'alternative', 'singer'],
+  'pop': ['pop', 'singer'],
 };
 
 /// Families that sit next to each other and mix well.
@@ -23,8 +23,12 @@ const _near = <String, Set<String>>{
   'dub': {'ambient'},
   'ambient': {'dub'},
   'hiphop': {'breaks'},
-  'pop': {},
+  'pop': {'bands'},
+  'bands': {'pop'},
 };
+
+final _bandWords = RegExp(
+    r'\b(rock|indie|punk|metal|goth|gothic|grunge|emo|screamo|shoegaze|britpop|madchester|alternative|folk|blues|country|americana|ska|dark ?wave|cold ?wave|new wave|dream pop|acoustic|singer.?songwriter|post-?rock|post-?punk|jangle pop|power pop|glam)\b');
 
 /// The family of [genre], or null when unknown or empty.
 String? genreFamily(String genre) {
@@ -35,6 +39,13 @@ String? genreFamily(String genre) {
   if (g.contains('dub techno')) return 'techno';
   for (final k in const ['techstep', 'darkstep', 'hardstep', 'jazzstep', 'sambass', 'jump up', 'drill and bass']) {
     if (g.contains(k)) return 'dnb';
+  }
+  // Band music. Whole words only, so "emo" is not found inside another word.
+  if (_bandWords.hasMatch(g) &&
+      !g.contains('indie dance') &&
+      !g.contains('indie electronic') &&
+      !g.contains('nu disco')) {
+    return 'bands';
   }
   if (g.contains('bassline')) return 'house';
   if (g.contains('bigbeat') || g.contains('big beat') || g.contains('breakbeat hardcore')) return 'breaks';

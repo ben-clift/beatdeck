@@ -69,10 +69,11 @@ class _GenrePickerState extends State<GenrePicker> {
     'Electro and synth': ['electro', 'ebm', 'industrial', 'synthpop', 'new wave', 'minimal wave', 'italo disco'],
     'Funk, soul and hip hop': ['funk', 'soul', 'rnb', 'boogie', 'hip hop', 'boom bap', 'turntablism', 'g-funk', 'cloud rap', 'rap'],
     'Latin and world': ['reggaeton', 'dembow', 'cumbia', 'kuduro', 'afrobeats', 'batida', 'bhangra', 'arabic', 'global bass', 'guarachero', 'tropical', 'latin', 'amapiano', 'afro'],
+    'Bands and guitar': ['rock', 'indie', 'punk', 'metal', 'goth', 'grunge', 'emo', 'shoegaze', 'post-', 'britpop', 'madchester', 'jangle', 'twee', 'alternative', 'ska', 'dark wave', 'cold wave', 'deathrock', 'folk', 'country', 'americana', 'blues', 'jazz', 'acoustic', 'singer', 'dream pop', 'bedroom', 'slowcore', 'baggy', 'krautrock', 'chamber', 'power pop', 'glam', 'new wave', 'j-rock', 'k-rock', 'band', 'screamo', 'core'],
     'Pop and other': ['hyperpop', 'nightcore', 'sped up'],
   };
   final Set<String> _openCats = {};
-  static const _catNames = ['House', 'Tech house', 'Techno', 'Garage', 'Breaks', 'Dub and reggae', 'Drum and bass', 'Acid', 'Trance', 'Bass', 'Hard dance', 'Downtempo and ambient', 'Electro and synth', 'Funk, soul and hip hop', 'Latin and world', 'Pop and other'];
+  static const _catNames = ['House', 'Tech house', 'Techno', 'Garage', 'Breaks', 'Dub and reggae', 'Drum and bass', 'Acid', 'Trance', 'Bass', 'Hard dance', 'Downtempo and ambient', 'Electro and synth', 'Funk, soul and hip hop', 'Latin and world', 'Bands and guitar', 'Pop and other'];
 
   bool _inCat(String cat, String name) {
     for (final k in _cats[cat] ?? const <String>[]) {
