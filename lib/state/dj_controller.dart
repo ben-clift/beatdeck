@@ -1,5 +1,6 @@
 import 'package:sidedeck/debug/debug_log.dart';
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:sidedeck/engine/audio_check.dart';
@@ -273,6 +274,46 @@ class DjController extends ChangeNotifier {
     eqBands[band] = db.clamp(-12.0, 12.0).toDouble();
     _engine.setMasterEq(band, eqBands[band]);
     notifyListeners();
+  }
+
+  void setMasterEqAll(List<double> db) {
+    for (var b = 0; b < eqBandCount && b < db.length; b++) {
+      eqBands[b] = db[b].clamp(-12.0, 12.0).toDouble();
+      _engine.setMasterEq(b, eqBands[b]);
+    }
+    notifyListeners();
+  }
+
+  /// Presets you saved yourself (name -> 10 dB values).
+  final Map<String, List<double>> customEq = {};
+
+  Future<void> loadCustomEq() async {
+    try {
+      final raw = (await SharedPreferences.getInstance()).getString('eq_custom_presets');
+      if (raw == null) return;
+      final m = jsonDecode(raw) as Map<String, dynamic>;
+      customEq
+        ..clear()
+        ..addAll({for (final e in m.entries) e.key: [for (final v in e.value as List) (v as num).toDouble()]});
+      notifyListeners();
+    } catch (_) {}
+  }
+
+  Future<void> _saveCustomEq() async {
+    try {
+      await (await SharedPreferences.getInstance()).setString('eq_custom_presets', jsonEncode(customEq));
+    } catch (_) {}
+    notifyListeners();
+  }
+
+  void saveEqPreset(String name) {
+    customEq[name] = List<double>.of(eqBands);
+    _saveCustomEq();
+  }
+
+  void deleteEqPreset(String name) {
+    customEq.remove(name);
+    _saveCustomEq();
   }
 
   void resetMasterEq() {

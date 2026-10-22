@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:sidedeck/state/dj_controller.dart';
+import 'package:sidedeck/state/eq_presets.dart';
 
 /// 1980s style graphic equaliser: LED spectrum analyser on the left, ten
 /// sliders on the right. The sliders shape the whole mix (master output).
@@ -28,6 +29,7 @@ class _EqualiserViewState extends State<EqualiserView> {
   void initState() {
     super.initState();
     widget.dj.setSpectrumOn(true);
+    widget.dj.loadCustomEq();
   }
 
   @override
@@ -52,6 +54,7 @@ class _EqualiserViewState extends State<EqualiserView> {
             onChanged: widget.dj.setStripOn,
           ),
          ),
+         _presetRow(),
          Expanded(child: FittedBox(
           fit: BoxFit.contain,
           child: SizedBox(
@@ -89,6 +92,81 @@ class _EqualiserViewState extends State<EqualiserView> {
          )),
         ]);
       },
+    );
+  }
+
+  bool _isNow(List<double> v) {
+    for (var b = 0; b < DjController.eqBandCount && b < v.length; b++) {
+      if ((widget.dj.eqBands[b] - v[b]).abs() > 0.05) return false;
+    }
+    return true;
+  }
+
+  Future<void> _saveCurrent() async {
+    final c = TextEditingController();
+    final name = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Save this sound'),
+        content: TextField(
+          controller: c,
+          autofocus: true,
+          decoration: const InputDecoration(labelText: 'Name'),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, c.text.trim()), child: const Text('Save')),
+        ],
+      ),
+    );
+    if (name != null && name.isNotEmpty) widget.dj.saveEqPreset(name);
+  }
+
+  /// Ready-made sounds for the equaliser, plus your own saved ones.
+  Widget _presetRow() {
+    final dj = widget.dj;
+    return SizedBox(
+      height: 44,
+      child: ListView(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        children: [
+          for (final p in eqPresets)
+            Padding(
+              padding: const EdgeInsets.only(right: 6),
+              child: Tooltip(
+                message: p.hint,
+                triggerMode: TooltipTriggerMode.longPress,
+                child: ChoiceChip(
+                  label: Text(p.name, style: const TextStyle(fontSize: 12)),
+                  visualDensity: VisualDensity.compact,
+                  selected: _isNow(p.bands),
+                  onSelected: (_) => dj.setMasterEqAll(p.bands),
+                ),
+              ),
+            ),
+          for (final e in dj.customEq.entries)
+            Padding(
+              padding: const EdgeInsets.only(right: 6),
+              child: GestureDetector(
+                onLongPress: () => dj.deleteEqPreset(e.key),
+                child: ChoiceChip(
+                  avatar: const Icon(Icons.star, size: 14),
+                  label: Text(e.key, style: const TextStyle(fontSize: 12)),
+                  visualDensity: VisualDensity.compact,
+                  selected: _isNow(e.value),
+                  onSelected: (_) => dj.setMasterEqAll(e.value),
+                ),
+              ),
+            ),
+          ActionChip(
+            avatar: const Icon(Icons.save_outlined, size: 14),
+            label: const Text('Save this sound', style: TextStyle(fontSize: 12)),
+            visualDensity: VisualDensity.compact,
+            onPressed: _saveCurrent,
+          ),
+        ],
+      ),
     );
   }
 
