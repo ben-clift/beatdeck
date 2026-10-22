@@ -983,13 +983,16 @@ class DjController extends ChangeNotifier {
 
   int? _replayPick() {
     while (_replayPool.isNotEmpty) {
-      // Closest tempo first (in 4 % steps), then the one heard longest ago.
-      _replayPool.sort((a, b) {
-        final c = _tempoBucket(a).compareTo(_tempoBucket(b));
-        return c != 0
-            ? c
-            : (_recentPlayed[_trackKey(a)] ?? 0).compareTo(_recentPlayed[_trackKey(b)] ?? 0);
-      });
+      // Oldest-heard first, so the same few tracks never ping-pong. Tempo only
+      // chooses among the longest-ago third.
+      _replayPool.sort((a, b) =>
+          (_recentPlayed[_trackKey(a)] ?? 0).compareTo(_recentPlayed[_trackKey(b)] ?? 0));
+      final n = (_replayPool.length / 3).ceil().clamp(1, _replayPool.length);
+      var bi = 0;
+      for (var i = 1; i < n; i++) {
+        if (_tempoBucket(_replayPool[i]) < _tempoBucket(_replayPool[bi])) bi = i;
+      }
+      _replayPool.insert(0, _replayPool.removeAt(bi));
       final path = _replayPool.removeAt(0);
       if (!File(path).existsSync() || Dislikes.instance.hasPath(path) || !_inWindow(path)) continue;
       if (_automixQueue.any((q) => _trackKey(q) == _trackKey(path))) continue;
@@ -1016,19 +1019,24 @@ class DjController extends ChangeNotifier {
     final onDeck = <String>{
       for (var i = 0; i < 2; i++) if ((deck(i).path ?? '').isNotEmpty) _trackKey(deck(i).path!),
     };
-    String? best;
-    var bestAt = 1 << 62;
-    var bestBucket = 1 << 30;
+    final cands = <String>[];
     for (final q in _automixQueue) {
       final k = _trackKey(q);
       if (onDeck.contains(k) || Dislikes.instance.hasPath(q) || failedPaths.contains(q)) continue;
       if (!File(q).existsSync() || !_inWindow(q)) continue;
-      final at = _recentPlayed[k] ?? 0;
-      final bucket = _tempoBucket(q);
-      if (bucket < bestBucket || (bucket == bestBucket && at < bestAt)) {
-        bestBucket = bucket;
-        bestAt = at;
-        best = q;
+      if (cands.any((c) => _trackKey(c) == k)) continue;
+      cands.add(q);
+    }
+    // Oldest-heard first; tempo only picks among the longest-ago third, so the
+    // same two or three tracks can't keep coming back.
+    cands.sort((a, b) =>
+        (_recentPlayed[_trackKey(a)] ?? 0).compareTo(_recentPlayed[_trackKey(b)] ?? 0));
+    String? best;
+    if (cands.isNotEmpty) {
+      final n = (cands.length / 3).ceil().clamp(1, cands.length);
+      best = cands[0];
+      for (var i = 1; i < n; i++) {
+        if (_tempoBucket(cands[i]) < _tempoBucket(best!)) best = cands[i];
       }
     }
     if (best == null) return null;
