@@ -322,9 +322,33 @@ class LibraryController extends ChangeNotifier {
   /// Deletes the given files from the phone and the library. Returns how many
   /// could be deleted.
   /// Drops library entries whose file no longer exists. Returns how many.
+  bool _missingRunning = false;
+  bool _missingAgain = false;
+
   Future<int> removeMissing() async {
+    // Several finished tracks used to start this together, each checking every
+    // file at once (heavy, and the list changed under the loop). One check
+    // runs at a time; a request that arrives meanwhile triggers one more.
+    if (_missingRunning) {
+      _missingAgain = true;
+      return 0;
+    }
+    _missingRunning = true;
+    var total = 0;
+    try {
+      do {
+        _missingAgain = false;
+        total += await _removeMissingOnce();
+      } while (_missingAgain);
+    } finally {
+      _missingRunning = false;
+    }
+    return total;
+  }
+
+  Future<int> _removeMissingOnce() async {
     final gone = <LibraryTrack>[];
-    for (final t in tracks) {
+    for (final t in List<LibraryTrack>.of(tracks)) {
       if (!await File(t.path).exists()) gone.add(t);
     }
     if (gone.isEmpty) return 0;

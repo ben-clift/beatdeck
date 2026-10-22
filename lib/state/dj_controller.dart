@@ -1331,6 +1331,7 @@ class DjController extends ChangeNotifier {
         if (_wasPlayed(path)) continue;
         if (failedPaths.contains(path)) continue;
         if (tier < 2 && _rejected.contains(path)) continue;
+        if (_knownTooMild(path, tier)) continue;
         if (!_suits(path, tier: tier)) continue;
         cands.add((i, _flowOf(path) ?? FlowTrack(path)));
       }
@@ -1357,6 +1358,7 @@ class DjController extends ChangeNotifier {
       if (_wasPlayed(path)) continue;
       if (failedPaths.contains(path)) continue;
       if (tier < 2 && _rejected.contains(path)) continue;
+      if (_knownTooMild(path, tier)) continue;
       if (!_suits(path, tier: tier)) continue;
       final c = _flowOf(path);
       var score = 0.0;
@@ -1877,6 +1879,7 @@ class DjController extends ChangeNotifier {
             if (a > top) top = a;
           }
           final dens = top > 0 ? sum / n / top : 0.0;
+          _density[path] = dens;
           const need = [0.0, 0.40, 0.50, 0.62];
           DebugLog.add('automix',
               'intensity of ${path.split(RegExp(r'[\\/]')).last}: ${(dens * 100).round()} (wanted ${(need[want] * 100).round()})');
@@ -1926,6 +1929,22 @@ class DjController extends ChangeNotifier {
 
   DateTime _loadHold = DateTime(2000);
   int _rejectStreak = 0;
+
+  // How dense each track measured when it was loaded (path -> 0..1). A track
+  // already found too mild is not loaded onto a deck again just to be turned
+  // down again (each load blocks the screen for a moment, and long m4a files
+  // for many seconds).
+  final Map<String, double> _density = {};
+
+  bool _knownTooMild(String path, int tier) {
+    if (tier >= 2) return false;
+    final want = intensityWanted?.call() ?? 0;
+    if (want <= 0 || _forcePath == path) return false;
+    final dens = _density[path];
+    if (dens == null) return false;
+    const need = [0.0, 0.40, 0.50, 0.62];
+    return dens < need[want];
+  }
 
   /// True while tracks are still being downloaded for automix.
   bool Function()? fetchBusy;
