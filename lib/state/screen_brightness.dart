@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -9,6 +10,10 @@ class ScreenBrightness {
 
   /// 0 = System, 1 = Low, 2 = Medium, 3 = High.
   static int level = 0;
+
+  /// True on Low: the spectrum and all animated scenes switch off too, to save
+  /// battery. Screens listen to this to hide their animations.
+  static final ValueNotifier<bool> lowPower = ValueNotifier<bool>(false);
   static const _values = [-1.0, 0.15, 0.45, 0.85];
 
   static Future<void> load() async {
@@ -27,6 +32,7 @@ class ScreenBrightness {
   }
 
   static Future<void> apply() async {
+    lowPower.value = level == 1;
     try {
       await _ch.invokeMethod('setBrightness', {'value': _values[level]});
     } catch (_) {}

@@ -262,10 +262,20 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
             ),
           ),
               if (_controllerMode)
-                Positioned.fill(child: CosmicEffects(dj: _dj)),
-                Positioned.fill(child: ThemeEffects(dj: _dj)),
-                const Positioned.fill(child: CritterEffects()),
-                Positioned.fill(child: PartyEffects(dj: _dj)),
+                // Low brightness = battery saver: no animated scenes.
+                Positioned.fill(
+                  child: ValueListenableBuilder<bool>(
+                    valueListenable: ScreenBrightness.lowPower,
+                    builder: (context, low, _) => low
+                        ? const SizedBox.shrink()
+                        : Stack(children: [
+                            Positioned.fill(child: CosmicEffects(dj: _dj)),
+                            Positioned.fill(child: ThemeEffects(dj: _dj)),
+                            const Positioned.fill(child: CritterEffects()),
+                            Positioned.fill(child: PartyEffects(dj: _dj)),
+                          ]),
+                  ),
+                ),
             ],
           ),
         );

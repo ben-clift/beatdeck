@@ -14,6 +14,7 @@ import 'package:sidedeck/automix/set_flow.dart';
 import 'package:sidedeck/automix/genre_family.dart';
 import 'package:sidedeck/automix/transition_style.dart';
 import 'package:sidedeck/state/avoids.dart';
+import 'package:sidedeck/state/screen_brightness.dart';
 import 'package:sidedeck/state/dislikes.dart';
 import 'package:sidedeck/suggest/harmony.dart';
 import 'package:sidedeck/engine/native_engine.dart';
@@ -432,7 +433,7 @@ class DjController extends ChangeNotifier {
       recordSeconds = _engine.recordSeconds();
       dirty = true;
     }
-    if (spectrumOn || effectsOn || stripOn) {
+    if (!ScreenBrightness.lowPower.value && (spectrumOn || effectsOn || stripOn)) {
       _updateSpectrum();
       dirty = true;
     }

@@ -95,7 +95,8 @@ class _SettingsPageState extends State<SettingsPage> {
           const SizedBox(height: 8),
           const Text(
             'The screen is the biggest battery drain. Low, Medium and High set the '
-            'brightness while BeatDeck is open; System follows your phone.',
+            'brightness while BeatDeck is open; System follows your phone. Low is also a '
+            'battery saver: the spectrum and all animated scenes switch off.',
             style: TextStyle(color: SideDeckTheme.muted, fontSize: 12, height: 1.4),
           ),
           const SizedBox(height: 8),
