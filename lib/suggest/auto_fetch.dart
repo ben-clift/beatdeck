@@ -17,6 +17,7 @@ import 'package:sidedeck/state/dislikes.dart';
 import 'package:sidedeck/automix/genre_family.dart';
 import 'package:sidedeck/suggest/genres.dart';
 import 'package:sidedeck/suggest/hardwax.dart';
+import 'package:sidedeck/suggest/nme.dart';
 import 'package:sidedeck/engine/audio_check.dart';
 import 'package:sidedeck/suggest/ra.dart';
 import 'package:sidedeck/suggest/taste.dart';
@@ -774,14 +775,25 @@ class AutoFetch extends ChangeNotifier {
 
     var tx = <Suggestion>[];
     var hw = <Suggestion>[];
-    if (useTrax) {
+    // Band genres (rock, indie, punk, goth...): the dance shops have nothing
+    // for them, so NME's track reviews are read instead.
+    final bands = genreFamily(g) == 'bands';
+    var nm = <Suggestion>[];
+    if (bands) {
+      try {
+        nm = [...await Nme.fetch()];
+      } catch (e) {
+        DebugLog.add('fetch', 'NME list not available: $e');
+      }
+    }
+    if (useTrax && !bands) {
       try {
         tx = [...await Traxsource.matching(g, bpmMin: lo, bpmMax: hi)];
       } catch (e) {
         DebugLog.add('fetch', 'Traxsource list not available: $e');
       }
     }
-    if (useHardwax) {
+    if (useHardwax && !bands) {
       try {
         hw = [...await Hardwax.fetch(_hardwaxSlug(g))];
       } catch (e) {
@@ -789,7 +801,7 @@ class AutoFetch extends ChangeNotifier {
       }
     }
     var ra = <Suggestion>[];
-    if (useRa) {
+    if (useRa && !bands) {
       try {
         ra = [...await RaSource.all()];
       } catch (e) {
@@ -817,6 +829,7 @@ class AutoFetch extends ChangeNotifier {
     bc = bc.take(15).toList();
     dg = dg.take(15).toList();
     ra.shuffle();
+    nm.shuffle();
     tx.shuffle();
     hw.shuffle();
     if (exact) {
@@ -835,7 +848,8 @@ class AutoFetch extends ChangeNotifier {
     }
     // Traxsource first (it has the tempo), then Hardwax, alternating.
     final mixed = <Suggestion>[];
-    for (var i = 0; i < tx.length || i < hw.length || i < ra.length || i < bc.length || i < dg.length; i++) {
+    for (var i = 0; i < tx.length || i < hw.length || i < ra.length || i < bc.length || i < dg.length || i < nm.length; i++) {
+      if (i < nm.length) mixed.add(nm[i]);
       if (i < tx.length) mixed.add(tx[i]);
       if (i < ra.length) mixed.add(ra[i]);
       if (i < hw.length) mixed.add(hw[i]);
@@ -858,7 +872,7 @@ class AutoFetch extends ChangeNotifier {
     add(liked.skip(4));
     DebugLog.add('fetch',
         'taste: ${Taste.artists.length} artists and ${Taste.labels.length} labels from your playlists, ${liked.length} liked on the shop lists');
-    DebugLog.add('fetch', 'shortlist for "$g": ${tx.length} Traxsource + ${hw.length} Hardwax + ${ra.length} RA + ${bc.length} Bandcamp + ${dg.length} Discogs, ${out.length} usable');
+    DebugLog.add('fetch', 'shortlist for "$g": ${tx.length} Traxsource + ${hw.length} Hardwax + ${ra.length} RA + ${nm.length} NME + ${bc.length} Bandcamp + ${dg.length} Discogs, ${out.length} usable');
     if (out.length < 5) {
       // Shops unreachable or empty: more artists from your own playlists.
       final more = Taste.pick(6, genre: g);
