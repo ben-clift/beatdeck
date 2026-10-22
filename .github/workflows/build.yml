@@ -102,7 +102,9 @@ jobs:
           STAMP=$(TZ=Europe/London date +"%Y-%m-%d %H:%M")
           FILE="BeatDeck-v${VER}.apk"
           cp build/app/outputs/flutter-apk/app-debug.apk "$FILE"
+          # Same file under a fixed name, so one permanent download link always works.
+          cp "$FILE" BeatDeck.apk
           gh release delete latest --cleanup-tag --yes || true
-          gh release create latest "$FILE" --prerelease \
+          gh release create latest "$FILE" BeatDeck.apk --prerelease \
             --title "BeatDeck v${VER} - ${STAMP} (UK time)" \
             --notes "BeatDeck v${VER}, built ${STAMP} UK time, commit $(git rev-parse --short HEAD). Tap the APK to download."
