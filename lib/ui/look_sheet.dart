@@ -119,6 +119,38 @@ class _LookSheet extends StatelessWidget {
                 SwitchListTile(
                   contentPadding: EdgeInsets.zero,
                   dense: true,
+                  title: const Text('Themed scenes'),
+                  subtitle: const Text(
+                    'Ocean fish and jellyfish, jungle fireflies and leaves, neon '
+                    'sun and lasers, embers, sakura petals, snow and UFOs.',
+                    style: TextStyle(fontSize: 11),
+                  ),
+                  value: look.themeOn,
+                  onChanged: look.setTheme,
+                ),
+                if (look.themeOn)
+                  Wrap(
+                    spacing: 8,
+                    children: [
+                      for (final k in const [
+                        (1, 'Ocean'),
+                        (2, 'Jungle'),
+                        (4, 'Neon'),
+                        (8, 'Fire'),
+                        (16, 'Sakura'),
+                        (32, 'Snow'),
+                        (64, 'UFOs'),
+                      ])
+                        FilterChip(
+                          label: Text(k.$2, style: const TextStyle(fontSize: 12)),
+                          selected: look.themeMask & k.$1 != 0,
+                          onSelected: (_) => look.toggleThemeKind(k.$1),
+                        ),
+                    ],
+                  ),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  dense: true,
                   title: const Text('Wandering animals'),
                   subtitle: const Text(
                     'Now and then an animal walks across the screen: big cats, farm '

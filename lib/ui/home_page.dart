@@ -21,6 +21,7 @@ import 'package:sidedeck/ui/look_background.dart';
 import 'package:sidedeck/ui/look_sheet.dart';
 import 'package:sidedeck/ui/mixer_strip.dart';
 import 'package:sidedeck/ui/cosmic_effects.dart';
+import 'package:sidedeck/ui/theme_effects.dart';
 import 'package:sidedeck/ui/critters.dart';
 import 'package:sidedeck/ui/party_effects.dart';
 import 'package:sidedeck/ui/pitch_sheet.dart';
@@ -259,6 +260,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
           ),
               if (_controllerMode)
                 Positioned.fill(child: CosmicEffects(dj: _dj)),
+                Positioned.fill(child: ThemeEffects(dj: _dj)),
                 const Positioned.fill(child: CritterEffects()),
                 Positioned.fill(child: PartyEffects(dj: _dj)),
             ],

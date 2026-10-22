@@ -219,26 +219,46 @@ class _ControllerViewState extends State<ControllerView> {
     return '$m:$sec';
   }
 
+  String? _lastRecording;
+
+  /// After a recording: a clear place to send it (WhatsApp or any app).
+  Future<void> _offerShare(String path) async {
+    final name = path.split(RegExp(r'[\\/]')).last;
+    if (!mounted) return;
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Mix saved'),
+        content: Text('$name\n\nSend it to a friend on WhatsApp or any other app?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Not now')),
+          FilledButton.icon(
+            icon: const Icon(Icons.share_outlined),
+            label: const Text('Share'),
+            onPressed: () {
+              Navigator.pop(ctx);
+              SharePlus.instance.share(ShareParams(files: [XFile(path)], text: name, subject: name));
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _toggleRecord() async {
     final dj = widget.dj;
     final messenger = ScaffoldMessenger.of(context);
     if (dj.recording) {
       final path = dj.stopRecording();
       final ok = path != null && File(path).existsSync() && File(path).lengthSync() > 1000;
-      messenger.showSnackBar(SnackBar(
-        duration: const Duration(seconds: 8),
-        content: Text(path == null
-            ? 'Recording stopped'
-            : ok
-                ? 'Saved ${path.split(RegExp(r'[\\/]')).last}'
-                : 'Recording is empty: nothing was playing?'),
-        action: ok
-            ? SnackBarAction(
-                label: 'Share',
-                onPressed: () => SharePlus.instance.share(ShareParams(files: [XFile(path)])),
-              )
-            : null,
-      ));
+      if (ok) _lastRecording = path;
+      if (!ok) {
+        messenger.showSnackBar(SnackBar(
+          content: Text(path == null ? 'Recording stopped' : 'Recording is empty: nothing was playing?'),
+        ));
+      } else {
+        _offerShare(path);
+      }
       final f = widget.library.folderPath;
       if (ok && f != null && f.isNotEmpty && path.startsWith(f)) {
         widget.library.scanDirectory(f, persist: false);
@@ -344,6 +364,16 @@ class _ControllerViewState extends State<ControllerView> {
               ),
               GestureDetector(
                 onTap: _toggleRecord,
+                onLongPress: () {
+                  final p = _lastRecording;
+                  if (!widget.dj.recording && p != null && File(p).existsSync()) {
+                    _offerShare(p);
+                  } else {
+                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                      content: Text('Record a mix first (tap REC), then hold REC to share it.'),
+                    ));
+                  }
+                },
                 child: Container(
                   margin: const EdgeInsets.only(left: 8),
                   padding:

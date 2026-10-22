@@ -119,6 +119,10 @@ class LookController extends ChangeNotifier {
   /// Animals that now and then walk across the screen. [critterMask]:
   /// 1 big cats, 2 farm, 4 pets, 8 snakes / frogs / insects.
   bool critterOn = true;
+
+  /// Themed scenery. [themeMask]: 1 ocean, 2 jungle, 4 neon, 8 fire, 16 sakura, 32 snow, 64 UFOs.
+  bool themeOn = false;
+  int themeMask = 127;
   int critterMask = 15;
 
   /// Bumped to fire the effects once, for trying them out.
@@ -224,6 +228,8 @@ class LookController extends ChangeNotifier {
       cosmicOn = prefs.getBool('look_cosmic') ?? true;
       cosmicMask = prefs.getInt('look_cosmic_mask') ?? 15;
       critterOn = prefs.getBool('look_critter') ?? true;
+      themeOn = prefs.getBool('look_theme') ?? false;
+      themeMask = prefs.getInt('look_theme_mask') ?? 127;
       critterMask = prefs.getInt('look_critter_mask') ?? 15;
       style = LookStyle.values[_clamp(prefs.getInt('look_style') ?? 0, LookStyle.values.length)];
       final saved = prefs.getStringList('look_decks');
@@ -253,6 +259,8 @@ class LookController extends ChangeNotifier {
       await prefs.setBool('look_cosmic', cosmicOn);
       await prefs.setInt('look_cosmic_mask', cosmicMask);
       await prefs.setBool('look_critter', critterOn);
+      await prefs.setBool('look_theme', themeOn);
+      await prefs.setInt('look_theme_mask', themeMask);
       await prefs.setInt('look_critter_mask', critterMask);
       await prefs.setStringList('look_decks', [for (final a in deckAccent) '$a']);
     } catch (_) {}
@@ -278,6 +286,18 @@ class LookController extends ChangeNotifier {
 
   void setStrobe(bool on) {
     strobeOn = on;
+    notifyListeners();
+    _save();
+  }
+
+  void setTheme(bool on) {
+    themeOn = on;
+    notifyListeners();
+    _save();
+  }
+
+  void toggleThemeKind(int bit) {
+    themeMask ^= bit;
     notifyListeners();
     _save();
   }
@@ -348,6 +368,8 @@ class LookController extends ChangeNotifier {
     cosmicOn = true;
     cosmicMask = 15;
     critterOn = true;
+    themeOn = false;
+    themeMask = 127;
     critterMask = 15;
     backgroundIndex = 0;
     bodyIndex = 0;
