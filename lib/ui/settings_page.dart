@@ -9,6 +9,7 @@ import 'package:sidedeck/ui/deleted_tracks_page.dart';
 import 'package:sidedeck/engine/analysis_cache.dart';
 import 'package:sidedeck/state/avoids.dart';
 import 'package:sidedeck/state/dislikes.dart';
+import 'package:sidedeck/state/screen_brightness.dart';
 import 'package:sidedeck/state/dj_controller.dart';
 import 'package:sidedeck/subsonic/subsonic_client.dart';
 import 'package:sidedeck/suggest/shazam_watcher.dart';
@@ -87,6 +88,31 @@ class _SettingsPageState extends State<SettingsPage> {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
+          const Text(
+            'Screen brightness',
+            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'The screen is the biggest battery drain. Low, Medium and High set the '
+            'brightness while BeatDeck is open; System follows your phone.',
+            style: TextStyle(color: SideDeckTheme.muted, fontSize: 12, height: 1.4),
+          ),
+          const SizedBox(height: 8),
+          SegmentedButton<int>(
+            segments: const [
+              ButtonSegment(value: 0, label: Text('System')),
+              ButtonSegment(value: 1, label: Text('Low')),
+              ButtonSegment(value: 2, label: Text('Med')),
+              ButtonSegment(value: 3, label: Text('High')),
+            ],
+            selected: {ScreenBrightness.level},
+            onSelectionChanged: (v) async {
+              await ScreenBrightness.set(v.first);
+              if (mounted) setState(() {});
+            },
+          ),
+          const SizedBox(height: 20),
           const Text(
             'External mixer',
             style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),

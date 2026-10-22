@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:sidedeck/state/screen_brightness.dart';
 import 'package:sidedeck/state/avoids.dart';
 import 'package:sidedeck/debug/debug_log.dart';
 import 'package:sidedeck/debug/log_upload.dart';
@@ -65,6 +66,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     Avoids.instance.load();
     _dj.loadBreakBass();
     ShazamWatcher.instance.start(_library);
+    ScreenBrightness.load();
     Ratings.instance.load();
     _dj.addListener(_onDjChanged);
   }

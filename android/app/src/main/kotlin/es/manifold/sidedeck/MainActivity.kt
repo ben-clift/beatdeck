@@ -54,6 +54,16 @@ class MainActivity : FlutterActivity() {
                         val name = call.argument<String>("name") ?: ""
                         result.success(openAppByName(name))
                     }
+                    "setBrightness" -> {
+                        // -1 follows the phone's own brightness.
+                        val v = (call.argument<Double>("value") ?: -1.0).toFloat()
+                        runOnUiThread {
+                            val lp = window.attributes
+                            lp.screenBrightness = if (v < 0f) WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE else v
+                            window.attributes = lp
+                        }
+                        result.success(null)
+                    }
                     "stopUsbPlayback" -> {
                         UsbPlayer.stop()
                         result.success(null)
