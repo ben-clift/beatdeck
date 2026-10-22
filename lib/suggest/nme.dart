@@ -5,15 +5,18 @@ import 'package:sidedeck/suggest/suggest_service.dart';
 
 /// Reads artist and track names from NME's public track-review pages and
 /// feeds, for band genres (rock, indie, punk, goth and so on). Names only: no
-/// audio or downloads from NME. Each page is read at most once a day and the
-/// saved list is used in between.
+/// audio or downloads from NME. Like the other shops, it is read at most once a
+/// week and the saved list is used in between; after a failed read nothing is
+/// tried again for a day.
 class Nme {
   static const _pages = <String>[
     'https://www.nme.com/reviews/track-reviews/feed',
     'https://www.nme.com/reviews/track-reviews',
     'https://www.nme.com/feed',
   ];
-  static const _maxAge = Duration(hours: 24);
+  static const _maxAge = Duration(days: 7);
+  static const _retryAfter = Duration(hours: 24);
+  static const _keyTry = 'nme_try_at_v1';
   static const _key = 'nme_list_v1';
   static const _keyAt = 'nme_list_at_v1';
 
@@ -73,9 +76,16 @@ class Nme {
   static Future<List<Suggestion>> fetch() async {
     final fresh = await _saved();
     if (fresh.isNotEmpty) {
-      DebugLog.add('nme', 'using the saved list read today (${fresh.length})');
+      DebugLog.add('nme', 'using the saved list (read within the last week) (${fresh.length})');
       return fresh;
     }
+    // A recent failed read: use the old list and leave NME alone.
+    try {
+      final p = await SharedPreferences.getInstance();
+      final t = p.getInt(_keyTry) ?? 0;
+      if (DateTime.now().millisecondsSinceEpoch - t < _retryAfter.inMilliseconds) return _saved(stale: true);
+      await p.setInt(_keyTry, DateTime.now().millisecondsSinceEpoch);
+    } catch (_) {}
     final out = <Suggestion>[];
     final seen = <String>{};
     for (final url in _pages) {
