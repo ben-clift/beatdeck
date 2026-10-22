@@ -719,6 +719,24 @@ class _DeckPanelState extends State<_DeckPanel> {
                   ),
                 ),
               ),
+              if (d.loaded && (d.path ?? '').isNotEmpty && widget.library.genreOf(d.path!).isNotEmpty)
+                Flexible(
+                  flex: 0,
+                  child: Container(
+                    margin: const EdgeInsets.only(right: 6),
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      border: Border.all(color: _accent),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      widget.library.genreOf(d.path!),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: _accent),
+                    ),
+                  ),
+                ),
               const Icon(Icons.library_music, size: 18),
               if (d.loaded && widget.dj.automixOn)
                 IconButton(
