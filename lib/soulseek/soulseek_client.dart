@@ -70,6 +70,7 @@ class SlskDownload {
   IOSink? sink;
   bool finishing = false;
   int resumes = 0;
+  int savedMark = 0;
 
   String get user => result.user;
   String get remotePath => result.path;
@@ -247,6 +248,7 @@ class SoulseekClient extends ChangeNotifier {
         }
         status = SlskStatus.online;
         _onlineSince = DateTime.now();
+        Timer(const Duration(seconds: 3), _resumeKept);
         error = null;
         _send((MsgWriter()..u32(_listener?.port ?? 0)).frame(2)); // wait port
         _send((MsgWriter()..u32(2)).frame(28)); // online
@@ -406,25 +408,72 @@ class SoulseekClient extends ChangeNotifier {
         DebugLog.add('download', 'deleted the unfinished file $path');
       } catch (_) {}
       await _Partials.remove(path);
+      await _Resume.remove(path);
     });
   }
 
   /// Once per start: delete half-downloaded files left by a crash or a
   /// closed app.
   static bool _swept = false;
+  final List<Map<String, dynamic>> _resumeLater = [];
+
   Future<void> sweepPartials() async {
     if (_swept) return;
     _swept = true;
+    final records = await _Resume.all();
     for (final path in await _Partials.all()) {
       try {
         final f = File(path);
+        final rec = records[path];
+        final len = await f.exists() ? await f.length() : 0;
+        final size = (rec?['size'] as num?)?.toInt() ?? 0;
+        final age = rec == null
+            ? 1 << 30
+            : DateTime.now().millisecondsSinceEpoch - ((rec['at'] as num?)?.toInt() ?? 0);
+        if (rec != null && len > 0 && size > len && age < 2 * 24 * 3600 * 1000) {
+          // Unfinished download from before: keep it and carry on once signed in.
+          _resumeLater.add({...rec, 'path': path, 'len': len});
+          DebugLog.add('download', 'kept a half-downloaded file to finish: $path ($len of $size)');
+          continue;
+        }
         if (await f.exists()) {
           await f.delete();
           DebugLog.add('download', 'deleted a half-downloaded file left from before: $path');
         }
       } catch (_) {}
       await _Partials.remove(path);
+      await _Resume.remove(path);
     }
+  }
+
+  /// Signed in: finish the downloads that were cut off when the app closed.
+  void _resumeKept() {
+    if (_resumeLater.isEmpty) return;
+    final todo = List<Map<String, dynamic>>.from(_resumeLater);
+    _resumeLater.clear();
+    for (final r in todo) {
+      final path = r['path'] as String;
+      final res = SlskResult(
+        user: r['user'] as String? ?? '',
+        path: r['remote'] as String? ?? '',
+        size: (r['size'] as num?)?.toInt() ?? 0,
+        bitrate: 0,
+        durationSec: 0,
+        freeSlot: true,
+        speed: 0,
+        queue: 0,
+      );
+      if (res.user.isEmpty || res.path.isEmpty || res.size <= 0) continue;
+      final d = SlskDownload(res)
+        ..size = res.size
+        ..savedPath = path
+        ..received = (r['len'] as num).toInt()
+        ..resumes = 1;
+      downloads.insert(0, d);
+      DebugLog.add('download', 'finishing a download from before: ${res.fileName} from ${d.received} of ${d.size}');
+      _beginDownload(d);
+    }
+    notifyListeners();
   }
 
   void removeDownload(SlskDownload d) {
@@ -760,6 +809,10 @@ class SoulseekClient extends ChangeNotifier {
     if (d == null || d.sink == null) return;
     d.sink!.add(chunk);
     d.received += chunk.length;
+    if (d.savedPath != null && d.received - d.savedMark >= 1024 * 1024) {
+      d.savedMark = d.received;
+      _Resume.put(d.savedPath!, d);
+    }
     _changed();
     if (d.size > 0 && d.received >= d.size) {
       _finish(d);
@@ -804,6 +857,7 @@ class SoulseekClient extends ChangeNotifier {
     d.savedPath = file.path;
     d.sink = file.openWrite();
     _Partials.add(file.path);
+    _Resume.put(file.path, d);
     DebugLog.add('download', 'start ${file.path} (expect ${d.size} bytes) from ${d.user}');
     d.state = DlState.downloading;
     d.message = '';
@@ -838,7 +892,10 @@ class SoulseekClient extends ChangeNotifier {
     }
     d.state = DlState.done;
     d.message = 'Saved';
-    if (saved != null) _Partials.remove(saved);
+    if (saved != null) {
+      _Partials.remove(saved);
+      _Resume.remove(saved);
+    }
     DebugLog.flow('Download to library', true);
     _changed();
     if (saved != null) {
@@ -855,6 +912,43 @@ class SoulseekClient extends ChangeNotifier {
     _searchTimer?.cancel();
     _serverLost('');
     super.dispose();
+  }
+}
+
+/// What is needed to carry on an unfinished download after a restart.
+class _Resume {
+  static const _key = 'slsk_resume';
+  static Future<Map<String, Map<String, dynamic>>> all() async {
+    try {
+      final raw = (await SharedPreferences.getInstance()).getString(_key);
+      if (raw == null) return {};
+      final m = jsonDecode(raw) as Map<String, dynamic>;
+      return {for (final e in m.entries) e.key: Map<String, dynamic>.from(e.value as Map)};
+    } catch (_) {
+      return {};
+    }
+  }
+
+  static Future<void> _save(Map<String, Map<String, dynamic>> m) async {
+    try {
+      await (await SharedPreferences.getInstance()).setString(_key, jsonEncode(m));
+    } catch (_) {}
+  }
+
+  static Future<void> put(String path, SlskDownload d) async {
+    final m = await all();
+    m[path] = {
+      'user': d.user,
+      'remote': d.remotePath,
+      'size': d.size,
+      'at': DateTime.now().millisecondsSinceEpoch,
+    };
+    await _save(m);
+  }
+
+  static Future<void> remove(String path) async {
+    final m = await all();
+    if (m.remove(path) != null) await _save(m);
   }
 }
 
