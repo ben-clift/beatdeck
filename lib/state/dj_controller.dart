@@ -1283,7 +1283,9 @@ class DjController extends ChangeNotifier {
   int? _upNextIndex() {
     final u = _upNext;
     if (u == null) return null;
-    final i = _automixQueue.indexOf(u);
+    // lastIndexOf: a replayed track is in the queue twice; the first copy is
+    // the old play, so it must not be mistaken for "already played".
+    final i = _automixQueue.lastIndexOf(u);
     if (i <= _automixIndex || _wasPlayed(u)) {
       _upNext = null;
       _automixPreloaded = false;
