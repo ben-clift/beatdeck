@@ -709,34 +709,38 @@ class _DeckPanelState extends State<_DeckPanel> {
               ),
               const SizedBox(width: 8),
               Expanded(
-                child: Text(
-                  d.loaded ? d.title : (widget.dj.deckHint(i) ?? 'Tap to load a track'),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-              if (d.loaded && (d.path ?? '').isNotEmpty && widget.library.genreOf(d.path!).isNotEmpty)
-                Flexible(
-                  flex: 0,
-                  child: Container(
-                    margin: const EdgeInsets.only(right: 6),
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                    decoration: BoxDecoration(
-                      border: Border.all(color: _accent),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Text(
-                      widget.library.genreOf(d.path!),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      d.loaded ? d.title : (widget.dj.deckHint(i) ?? 'Tap to load a track'),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: _accent),
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
-                  ),
+                    // The genre sits just under the name, so it never hides it.
+                    if (d.loaded && (d.path ?? '').isNotEmpty && widget.library.genreOf(d.path!).isNotEmpty)
+                      Container(
+                        margin: const EdgeInsets.only(top: 1),
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 0),
+                        decoration: BoxDecoration(
+                          border: Border.all(color: _accent),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          widget.library.genreOf(d.path!),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: _accent),
+                        ),
+                      ),
+                  ],
                 ),
+              ),
               const Icon(Icons.library_music, size: 18),
               if (d.loaded && widget.dj.automixOn)
                 IconButton(
