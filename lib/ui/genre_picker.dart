@@ -4,7 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:sidedeck/state/library_controller.dart';
 import 'package:sidedeck/suggest/auto_fetch.dart';
 import 'package:sidedeck/suggest/discover.dart';
+import 'package:sidedeck/suggest/genre_glossary.dart';
 import 'package:sidedeck/suggest/genres.dart';
+import 'package:sidedeck/ui/genre_glossary_page.dart';
 import 'package:sidedeck/theme/sidedeck_theme.dart';
 import 'package:sidedeck/ui/soulseek_page.dart';
 
@@ -267,13 +269,41 @@ class _GenrePickerState extends State<GenrePicker> {
           'Genres that fit ${_bpm.start.round()}-${_bpm.end.round()} BPM are lit.',
           style: const TextStyle(fontSize: 11, color: SideDeckTheme.muted),
         ),
-        const SizedBox(height: 6),
+        TextButton.icon(
+          icon: const Icon(Icons.help_outline, size: 18),
+          label: const Text('What do these genres mean?'),
+          onPressed: () => Navigator.of(context).push(
+            MaterialPageRoute<void>(builder: (_) => const GenreGlossaryPage()),
+          ),
+        ),
+        if (_sel.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 6),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                for (final g in _sel)
+                  if (genreGlossary[g] != null)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 3),
+                      child: Text.rich(TextSpan(children: [
+                        TextSpan(text: '$g: ', style: const TextStyle(fontWeight: FontWeight.w700)),
+                        TextSpan(text: genreGlossary[g]),
+                      ]), style: const TextStyle(fontSize: 11, color: SideDeckTheme.muted)),
+                    ),
+              ],
+            ),
+          ),
+        const SizedBox(height: 2),
         Wrap(
           spacing: 6,
           runSpacing: 2,
           children: [
             for (final g in _sorted())
-              ChoiceChip(
+              Tooltip(
+                message: genreGlossary[g.name] ?? g.name,
+                triggerMode: TooltipTriggerMode.longPress,
+                child: ChoiceChip(
                 label: Text('${g.name}  ${g.min.round()}-${g.max.round()}'),
                 visualDensity: VisualDensity.compact,
                 selected: _sel.contains(g.name),
@@ -289,6 +319,7 @@ class _GenrePickerState extends State<GenrePicker> {
                   if (!_sel.remove(g.name)) _sel.add(g.name);
                   _fitTempo();
                 }),
+              ),
               ),
           ],
         ),
