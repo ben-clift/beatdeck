@@ -61,6 +61,27 @@ class MainActivity : FlutterActivity() {
                     else -> result.notImplemented()
                 }
             }
+        MethodChannel(messenger, "beatdeck/shazam_m")
+            .setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "enabled" -> {
+                        val flat = android.provider.Settings.Secure.getString(contentResolver, "enabled_notification_listeners") ?: ""
+                        result.success(flat.contains(packageName))
+                    }
+                    "openSettings" -> {
+                        try {
+                            startActivity(android.content.Intent("android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS").addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
+                            result.success(true)
+                        } catch (e: Exception) { result.success(false) }
+                    }
+                    "drain" -> result.success(ShazamBridge.drain(this))
+                    else -> result.notImplemented()
+                }
+            }
+        EventChannel(messenger, "beatdeck/shazam").setStreamHandler(object : EventChannel.StreamHandler {
+            override fun onListen(arguments: Any?, events: EventChannel.EventSink?) { ShazamBridge.sink = events }
+            override fun onCancel(arguments: Any?) { ShazamBridge.sink = null }
+        })
         val hotplug = UsbHotplug(this)
         usbHotplug = hotplug
         EventChannel(messenger, "sidedeck/usb").setStreamHandler(hotplug)

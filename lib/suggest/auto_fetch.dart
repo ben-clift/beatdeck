@@ -1208,6 +1208,29 @@ class AutoFetch extends ChangeNotifier {
     return lib.tracks.any((x) => x.title.toLowerCase() == t);
   }
 
+  bool _shazamBusy = false;
+
+  /// A track found by Shazam: download it, then a few more by the same artist.
+  Future<void> shazamFetch(String artist, String title, LibraryController library) async {
+    if (_shazamBusy) return;
+    _shazamBusy = true;
+    try {
+      await refetch(artist, title, library);
+      // Tracks like it: other tracks by the same artist, a couple at once.
+      if (artist.isNotEmpty) {
+        for (var i = 0; i < 2; i++) {
+          if (!soulseek.online) break;
+          final got = await _fetchOne(Suggestion(artist, '', 0, 'Like your Shazam'), null);
+          if (got == null) break;
+        }
+      }
+    } catch (e) {
+      DebugLog.add('shazam', 'fetching after Shazam failed: $e');
+    } finally {
+      _shazamBusy = false;
+    }
+  }
+
   /// Fetch one particular track again (for example after deleting a bad copy).
   /// It is not blocked by the "deleted before" list. Runs in the background;
   /// the finished file joins the library like any other download.

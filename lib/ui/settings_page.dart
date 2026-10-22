@@ -10,6 +10,7 @@ import 'package:sidedeck/state/avoids.dart';
 import 'package:sidedeck/state/dislikes.dart';
 import 'package:sidedeck/state/dj_controller.dart';
 import 'package:sidedeck/subsonic/subsonic_client.dart';
+import 'package:sidedeck/suggest/shazam_watcher.dart';
 import 'package:sidedeck/theme/sidedeck_theme.dart';
 
 class SettingsPage extends StatefulWidget {
@@ -254,6 +255,46 @@ class _SettingsPageState extends State<SettingsPage> {
             const SizedBox(height: 8),
             Text(_status!),
           ],
+          const Divider(height: 32),
+          const Text(
+            'Shazam',
+            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+          ),
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            title: const Text('Fetch tracks Shazam finds, and more like them'),
+            subtitle: const Text(
+              'When Shazam names a song, BeatDeck reads it from Shazam\'s notification and starts downloading it and other tracks by the artist.',
+              style: TextStyle(fontSize: 12),
+            ),
+            value: ShazamWatcher.instance.on,
+            onChanged: (v) async {
+              await ShazamWatcher.instance.setOn(v);
+              if (mounted) setState(() {});
+            },
+          ),
+          FutureBuilder<bool>(
+            future: ShazamWatcher.instance.accessGranted(),
+            builder: (context, snap) {
+              final ok = snap.data ?? false;
+              return Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      ok ? 'Notification access: allowed' : 'Notification access: not allowed yet',
+                      style: const TextStyle(color: SideDeckTheme.muted, fontSize: 12),
+                    ),
+                  ),
+                  OutlinedButton(
+                    onPressed: () async {
+                      await ShazamWatcher.instance.openAccessSettings();
+                    },
+                    child: const Text('Allow access'),
+                  ),
+                ],
+              );
+            },
+          ),
           const Divider(height: 32),
           const Text(
             'Reset',
