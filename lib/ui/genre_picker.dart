@@ -54,21 +54,25 @@ class _GenrePickerState extends State<GenrePicker> {
 
   /// Groups of genres: tap one to show its genres. A genre can be in several.
   static const _cats = <String, List<String>>{
-    'House': ['house', 'disco', 'amapiano', 'afro', 'funk', 'soulful', 'jazz house', 'lo-fi', 'new global'],
-    'Tech house': ['tech house', 'minimal deep tech'],
-    'Techno': ['techno', 'basic channel', 'drexciya', 'schranz'],
-    'Garage': ['garage', 'bassline', 'uk funky', 'uk bounce', 'speed garage'],
-    'Breaks': ['break', 'big beat', 'trip hop', 'miami bass', 'broken beat', 'electro'],
-    'Dub': ['dub', 'reggae', 'ambient', 'electronica'],
+    'House': ['house', 'disco', 'amapiano', 'afro', 'soulful', 'lo-fi house', 'new global', 'balearic', 'hi-nrg', 'eurodance', 'italo', 'french', 'filter house', 'electro swing', 'indie dance', 'ghetto house', 'freestyle', 'kwaito'],
+    'Tech house': ['tech house', 'minimal deep tech', 'deep tech', 'microhouse', 'minimal house'],
+    'Techno': ['techno', 'basic channel', 'drexciya', 'schranz', 'minimal'],
+    'Garage': ['garage', 'bassline', 'uk funky', 'uk bounce', 'speed garage', 'donk', 'niche', 'grime', '2-step'],
+    'Breaks': ['break', 'big beat', 'trip hop', 'miami bass', 'broken beat', 'early rave'],
+    'Dub and reggae': ['dub', 'reggae', 'dancehall', 'ragga', 'steppers', 'roots'],
     'Drum and bass': ['drum and', 'jungle', 'neurofunk', 'jump up', 'techstep', 'darkstep', 'hardstep', 'drumstep', 'sambass', 'footwork', 'juke'],
     'Acid': ['acid'],
-    'Trance': ['trance'],
-    'Bass': ['bass', 'grime', 'dubstep', 'riddim', 'trap', 'phonk', 'baile', 'gqom', 'baltimore', 'jersey'],
-    'Hard dance': ['hard', 'rawstyle', 'makina', 'gabber', 'tekno', 'core', 'speedcore'],
-    'Hip hop and other': ['hip hop', 'hyperpop', 'nightcore', 'sped up'],
+    'Trance': ['trance', 'psy'],
+    'Bass': ['bass', 'dubstep', 'riddim', 'trap', 'phonk', 'baile', 'gqom', 'baltimore', 'jersey', 'wonky', 'future bass', 'brostep', 'tearout', '140', 'halftime', 'drill', 'moombah'],
+    'Hard dance': ['hard', 'rawstyle', 'makina', 'gabber', 'tekno', 'core', 'speedcore', 'jumpstyle', 'mainstage', 'scouse'],
+    'Downtempo and ambient': ['ambient', 'chillout', 'lounge', 'downtempo', 'drone', 'new age', 'vaporwave', 'chillwave', 'synthwave', 'retrowave', 'outrun', 'darksynth', 'idm', 'glitch', 'leftfield', 'krautrock', 'kosmische', 'psy chill', 'electronica', 'electronic'],
+    'Electro and synth': ['electro', 'ebm', 'industrial', 'synthpop', 'new wave', 'minimal wave', 'italo disco'],
+    'Funk, soul and hip hop': ['funk', 'soul', 'rnb', 'boogie', 'hip hop', 'boom bap', 'turntablism', 'g-funk', 'cloud rap', 'rap'],
+    'Latin and world': ['reggaeton', 'dembow', 'cumbia', 'kuduro', 'afrobeats', 'batida', 'bhangra', 'arabic', 'global bass', 'guarachero', 'tropical', 'latin', 'amapiano', 'afro'],
+    'Pop and other': ['hyperpop', 'nightcore', 'sped up'],
   };
   final Set<String> _openCats = {};
-  static const _catNames = ['House', 'Tech house', 'Techno', 'Garage', 'Breaks', 'Dub', 'Drum and bass', 'Acid', 'Trance', 'Bass', 'Hard dance', 'Hip hop and other'];
+  static const _catNames = ['House', 'Tech house', 'Techno', 'Garage', 'Breaks', 'Dub and reggae', 'Drum and bass', 'Acid', 'Trance', 'Bass', 'Hard dance', 'Downtempo and ambient', 'Electro and synth', 'Funk, soul and hip hop', 'Latin and world', 'Pop and other'];
 
   bool _inCat(String cat, String name) {
     for (final k in _cats[cat] ?? const <String>[]) {
