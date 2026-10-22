@@ -1775,9 +1775,16 @@ class DjController extends ChangeNotifier {
       return false;
     }
     final mixNow = skipping || (_mixNow && _forcePath != null && _forcePath == _automixQueue[next]);
-    if (mixNow || shouldStartFade(remaining: remaining, fadeSeconds: automixFadeSeconds)) {
+    final early = !mixNow && remaining > automixFadeSeconds + 15 && _endEarly(cur, d);
+    if (mixNow || early || shouldStartFade(remaining: remaining, fadeSeconds: automixFadeSeconds)) {
       var breakLeft = 0.0;
-      if (kindFor(automixStyle, d.bpm, deck(other).bpm) == TransitionKind.breakdown) {
+      // Tempos as heard: the outgoing speed, and the incoming one after the
+      // 8 % stretch limit, so a gap that cannot be closed picks a cut or echo
+      // instead of a blend that would drift out of time.
+      final heardOut = d.bpm * d.rate;
+      final heardIn = deck(other).bpm *
+          incomingRate(outBpm: d.bpm, outRate: d.rate, inBpm: deck(other).bpm);
+      if (kindFor(automixStyle, heardOut, heardIn) == TransitionKind.breakdown) {
         final amp = [
           for (var k = 0; k < math.min(d.waveMax.length, d.waveMin.length); k++)
             (d.waveMax[k] - d.waveMin[k]).toDouble(),
@@ -1793,7 +1800,7 @@ class DjController extends ChangeNotifier {
         }
       }
       final plan = planFor(automixStyle,
-          outBpm: d.bpm, inBpm: deck(other).bpm, baseSeconds: skipping ? 8.0 : automixFadeSeconds, breakSeconds: breakLeft);
+          outBpm: heardOut, inBpm: heardIn, baseSeconds: skipping ? 8.0 : automixFadeSeconds, breakSeconds: breakLeft);
       // A cut lands on the first beat of a bar, so wait for the bar line
       // (unless the track is about to end).
       final bar = d.bpm > 1 ? 4 * 60.0 / d.bpm : 2.0;
@@ -1809,6 +1816,70 @@ class DjController extends ChangeNotifier {
       return true;
     }
     return false;
+  }
+
+  // ---- Ending a track early --------------------------------------------
+  DateTime _earlyLogAt = DateTime(2000);
+
+  /// True when the playing track should be mixed out now rather than at its
+  /// end: it has run a while and the music has stopped changing (no build,
+  /// drop or breakdown coming), or it has simply played too long.
+  bool _endEarly(int cur, DeckState d) {
+    if (d.bpm <= 1 || d.duration <= 0) return false;
+    final rate = d.rate <= 0 ? 1.0 : d.rate;
+    final pos = _engine.position(cur);
+    if (pos / rate < 150) return false; // always give a track 2.5 minutes
+    if (!nearBarLine(pos, d.bpm, d.beatOffset)) return false;
+    final n = math.min(d.waveMax.length, d.waveMin.length);
+    if (n < 64) return false;
+    final binSec = d.duration / n;
+    final bar = 4 * 60.0 / d.bpm;
+    final perBar = math.max(1, (bar / binSec).round());
+    final here = (pos / binSec).round();
+    // Loudness of each bar: 8 just played, 8 still to come.
+    final past = <double>[], ahead = <double>[];
+    for (var k = 1; k <= 8; k++) {
+      final a = here - k * perBar;
+      if (a < 0) return false;
+      past.add(_barAmp(d, a, perBar));
+    }
+    for (var k = 0; k < 8; k++) {
+      final a = here + k * perBar;
+      if (a + perBar >= n) return false; // too near the end: the normal mix does it
+      ahead.add(_barAmp(d, a, perBar));
+    }
+    double mean(List<double> l) => l.fold(0.0, (x, y) => x + y) / l.length;
+    final mp = mean(past), ma = mean(ahead);
+    if (mp <= 0 || ma <= 0) return false;
+    double cv(List<double> l, double m) {
+      var v = 0.0;
+      for (final x in l) {
+        v += (x - m) * (x - m);
+      }
+      return math.sqrt(v / l.length) / m;
+    }
+    final tooLong = pos / rate >= 360; // six minutes is plenty
+    final flat = cv(past, mp) < 0.10 &&
+        cv(ahead, ma) < 0.10 &&
+        (ma / mp - 1).abs() < 0.12 &&
+        ahead.every((x) => x > 0.6 * ma);
+    if (!flat && !tooLong) return false;
+    if (DateTime.now().difference(_earlyLogAt).inSeconds > 20) {
+      _earlyLogAt = DateTime.now();
+      DebugLog.add('automix',
+          tooLong ? 'mixing out early: this track has played for 6 minutes' : 'mixing out early: the next 8 bars sound the same as the last 8 (no build or drop coming)');
+    }
+    return true;
+  }
+
+  double _barAmp(DeckState d, int from, int len) {
+    var sum = 0.0;
+    var c = 0;
+    for (var k = from; k < from + len && k < d.waveMax.length && k < d.waveMin.length; k++) {
+      sum += (d.waveMax[k] - d.waveMin[k]).toDouble();
+      c++;
+    }
+    return c == 0 ? 0 : sum / c;
   }
 
   final Map<String, String> _genreCache = {};
@@ -1922,7 +1993,9 @@ class DjController extends ChangeNotifier {
         return;
       }
       final tol = forced ? (_forceAnyTempo ? 1e9 : 9.0) : (tier == 0 ? 6.0 : (tier == 1 ? 9.0 : 1e9));
-      if (out.bpm > 1 && inc.bpm > 1 && bpmGapPercent(out.bpm, inc.bpm).abs() > tol) {
+      // The outgoing deck's real speed counts: after a mix it may be running at
+      // -6 % and the new track can only be stretched 8 % to meet it.
+      if (out.bpm > 1 && inc.bpm > 1 && bpmGapPercent(out.bpm * out.rate, inc.bpm).abs() > tol) {
         DebugLog.add('automix',
             'turned down ${path.split(RegExp(r'[\\/]')).last}: ${inc.bpm.round()} BPM against ${out.bpm.round()}, choosing another');
         _rejected.add(path);
