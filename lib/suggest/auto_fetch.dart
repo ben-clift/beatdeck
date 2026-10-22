@@ -1215,10 +1215,19 @@ class AutoFetch extends ChangeNotifier {
     if (_shazamBusy) return;
     _shazamBusy = true;
     try {
-      await refetch(artist, title, library);
-      // Tracks like it: other tracks by the same artist, a couple at once.
+      // First the Shazam track itself, and wait until it has arrived.
+      final d = await refetch(artist, title, library);
+      if (d != null) {
+        DebugLog.add('shazam', 'downloading the Shazam track first: ${d.result.fileName}');
+        for (var i = 0; i < 240; i++) {
+          if (d.state == DlState.done || d.state == DlState.failed) break;
+          await Future<void>.delayed(const Duration(seconds: 1));
+        }
+        DebugLog.add('shazam', 'the Shazam track is ${d.state == DlState.done ? 'saved' : 'not available'}: now tracks like it');
+      }
+      // Then 3 tracks like it: other tracks by the same artist.
       if (artist.isNotEmpty) {
-        for (var i = 0; i < 2; i++) {
+        for (var i = 0; i < 3; i++) {
           if (!soulseek.online) break;
           final got = await _fetchOne(Suggestion(artist, '', 0, 'Like your Shazam'), null);
           if (got == null) break;
@@ -1234,7 +1243,7 @@ class AutoFetch extends ChangeNotifier {
   /// Fetch one particular track again (for example after deleting a bad copy).
   /// It is not blocked by the "deleted before" list. Runs in the background;
   /// the finished file joins the library like any other download.
-  Future<void> refetch(String artist, String title, LibraryController library) async {
+  Future<SlskDownload?> refetch(String artist, String title, LibraryController library) async {
     _lib = library;
     _stop = false;
     var tries = 0;
@@ -1260,9 +1269,10 @@ class AutoFetch extends ChangeNotifier {
       if (best == null) continue;
       soulseek.download(best);
       DebugLog.add('fetch', 'downloading again: ${best.fileName}');
-      return;
+      return soulseek.downloads.isNotEmpty ? soulseek.downloads.first : null;
     }
     DebugLog.add('fetch', 'could not find it again after $tries search(es)');
+    return null;
   }
 
   /// Searches, picks the best match, waits until it has downloaded. Returns
