@@ -52,6 +52,40 @@ class _GenrePickerState extends State<GenrePicker> {
     super.dispose();
   }
 
+  /// Groups of genres: tap one to show its genres. A genre can be in several.
+  static const _cats = <String, List<String>>{
+    'House': ['house', 'disco', 'amapiano', 'afro', 'funk', 'soulful', 'jazz house', 'lo-fi', 'new global'],
+    'Tech house': ['tech house', 'minimal deep tech'],
+    'Techno': ['techno', 'basic channel', 'drexciya', 'schranz'],
+    'Garage': ['garage', 'bassline', 'uk funky', 'uk bounce', 'speed garage'],
+    'Breaks': ['break', 'big beat', 'trip hop', 'miami bass', 'broken beat', 'electro'],
+    'Dub': ['dub', 'reggae', 'ambient', 'electronica'],
+    'Drum and bass': ['drum and', 'jungle', 'neurofunk', 'jump up', 'techstep', 'darkstep', 'hardstep', 'drumstep', 'sambass', 'footwork', 'juke'],
+    'Acid': ['acid'],
+    'Trance': ['trance'],
+    'Bass': ['bass', 'grime', 'dubstep', 'riddim', 'trap', 'phonk', 'baile', 'gqom', 'baltimore', 'jersey'],
+    'Hard dance': ['hard', 'rawstyle', 'makina', 'gabber', 'tekno', 'core', 'speedcore'],
+    'Hip hop and other': ['hip hop', 'hyperpop', 'nightcore', 'sped up'],
+  };
+  final Set<String> _openCats = {};
+  static const _catNames = ['House', 'Tech house', 'Techno', 'Garage', 'Breaks', 'Dub', 'Drum and bass', 'Acid', 'Trance', 'Bass', 'Hard dance', 'Hip hop and other'];
+
+  bool _inCat(String cat, String name) {
+    for (final k in _cats[cat] ?? const <String>[]) {
+      if (name.contains(k)) return true;
+    }
+    return false;
+  }
+
+  bool _visible(GenreInfo g) {
+    if (_sel.contains(g.name)) return true;
+    for (final c in _openCats) {
+      if (c == 'All') return true;
+      if (_inCat(c, g.name)) return true;
+    }
+    return false;
+  }
+
   bool _fits(GenreInfo g) => math.min(g.max, _bpm.end) - math.max(g.min, _bpm.start) > 0;
 
   List<GenreInfo> _sorted() {
@@ -297,9 +331,36 @@ class _GenrePickerState extends State<GenrePicker> {
         const SizedBox(height: 2),
         Wrap(
           spacing: 6,
+          children: [
+            for (final c in ['All', ..._catNames])
+              FilterChip(
+                label: Text(
+                  c == 'All'
+                      ? 'All genres'
+                      : c,
+                  style: const TextStyle(fontSize: 12),
+                ),
+                avatar: Icon(_openCats.contains(c) ? Icons.expand_less : Icons.expand_more, size: 16),
+                visualDensity: VisualDensity.compact,
+                selected: _openCats.contains(c),
+                showCheckmark: false,
+                onSelected: (_) => setState(() {
+                  if (!_openCats.remove(c)) _openCats.add(c);
+                }),
+              ),
+          ],
+        ),
+        const SizedBox(height: 6),
+        if (_openCats.isEmpty && _sel.isEmpty)
+          const Text(
+            'Tap a group above to see its genres (house, techno, garage, breaks, dub, drum and bass, acid…).',
+            style: TextStyle(fontSize: 11, color: SideDeckTheme.muted),
+          ),
+        Wrap(
+          spacing: 6,
           runSpacing: 2,
           children: [
-            for (final g in _sorted())
+            for (final g in _sorted().where(_visible))
               Tooltip(
                 message: genreGlossary[g.name] ?? g.name,
                 triggerMode: TooltipTriggerMode.longPress,

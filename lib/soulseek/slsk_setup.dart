@@ -171,6 +171,7 @@ class SlskSetup {
       if (!(af.pinned && af.genres.isNotEmpty)) return null;
       return (af.bpmMin, af.bpmMax);
     };
+    dj?.yearOf = lib.yearOf;
     dj?.genreOf = (path) {
       final g = lib.genreOf(path);
       return g.isNotEmpty ? g : AutoFetch.instance.hintFor(path);

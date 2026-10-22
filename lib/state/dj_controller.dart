@@ -683,7 +683,16 @@ class DjController extends ChangeNotifier {
     return (r >= 0.92 && r <= 1.08) ? r : null;
   }
 
+  /// The decades picked in the start panel, as years (from, to), or null.
+  (int, int)? decadeRange;
+  int Function(String path)? yearOf;
+
   bool _inWindow(String path) {
+    final dr = decadeRange;
+    if (dr != null) {
+      final y = yearOf?.call(path) ?? 0;
+      if (y > 0 && (y < dr.$1 || y > dr.$2)) return false; // unknown years pass
+    }
     final c = _flowOf(path);
     if (c == null || c.bpm <= 1) return true; // unknown: checked once it is loaded
     return _winFit(c.bpm) != null;
@@ -1337,7 +1346,7 @@ class DjController extends ChangeNotifier {
       for (final p in paths)
         if (File(p).existsSync() && !_wasPlayed(p) && seen.add(_trackKey(p))) p,
     ];
-    if (tempoWindow?.call() != null) {
+    if (tempoWindow?.call() != null || decadeRange != null) {
       // Your tempo range: only tracks that can sit inside it start the set.
       for (final q in _automixQueue) {
         await _flowLearn(q);

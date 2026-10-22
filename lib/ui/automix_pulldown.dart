@@ -63,6 +63,8 @@ class _AutomixPullDownState extends State<AutomixPullDown> {
   FlowArc _arc = FlowArc.journey;
   TransitionStyle _style = TransitionStyle.auto;
   double _len = 60;
+  bool _decOn = false;
+  RangeValues _dec = const RangeValues(1990, 2020);
 
   @override
   void initState() {
@@ -80,9 +82,40 @@ class _AutomixPullDownState extends State<AutomixPullDown> {
         _offset = p.getDouble('automix_offset') ?? _offset;
         _arc = FlowArc.values[(p.getInt('automix_arc') ?? FlowArc.journey.index).clamp(0, FlowArc.values.length - 1)];
         _len = p.getDouble('automix_len') ?? _len;
+        _decOn = p.getBool('automix_dec_on') ?? false;
+        _dec = RangeValues(
+          (p.getInt('automix_dec_from') ?? 1990).toDouble(),
+          (p.getInt('automix_dec_to') ?? 2020).toDouble(),
+        );
+        _applyDecades(save: false);
         _style = TransitionStyle.values[(p.getInt('automix_style') ?? 0).clamp(0, TransitionStyle.values.length - 1)];
       });
     }).catchError((_) {});
+  }
+
+  /// Decades chosen in the start panel: library picks and fetched tracks stay inside them.
+  void _applyDecades({bool save = true}) {
+    final from = _dec.start.round(), to = _dec.end.round() + 9;
+    widget.dj.decadeRange = _decOn ? (from, to) : null;
+    final af = AutoFetch.instance;
+    af.useYearRange = _decOn;
+    if (_decOn) {
+      af.yearFrom = from;
+      af.yearTo = to;
+    }
+    if (save) {
+      af.save();
+      SharedPreferences.getInstance().then((p) {
+        p.setBool('automix_dec_on', _decOn);
+        p.setInt('automix_dec_from', from);
+        p.setInt('automix_dec_to', _dec.end.round());
+      }).catchError((_) {});
+    }
+  }
+
+  String get _decLabel {
+    String d(double v) => "${v.round() % 100 == 0 ? v.round() : v.round()}s";
+    return _dec.start == _dec.end ? d(_dec.start) : '${d(_dec.start)} to ${d(_dec.end)}';
   }
 
   void _saveTimes() {
@@ -451,6 +484,37 @@ class _AutomixPullDownState extends State<AutomixPullDown> {
                 ],
               ),
             ),
+              _step(
+                '3b',
+                'Decades',
+                'Only play and fetch music from the decades you pick (by release year; tracks with no year are let through).',
+                Column(
+                  children: [
+                    SwitchListTile(
+                      contentPadding: EdgeInsets.zero,
+                      dense: true,
+                      title: Text(_decOn ? _decLabel : 'Any decade'),
+                      value: _decOn,
+                      onChanged: (v) => setState(() {
+                        _decOn = v;
+                        _applyDecades();
+                      }),
+                    ),
+                    if (_decOn)
+                      RangeSlider(
+                        values: _dec,
+                        min: 1950,
+                        max: 2020,
+                        divisions: 7,
+                        labels: RangeLabels("${_dec.start.round()}s", "${_dec.end.round()}s"),
+                        onChanged: (v) => setState(() {
+                          _dec = v;
+                          _applyDecades();
+                        }),
+                      ),
+                  ],
+                ),
+              ),
               _step(
                 '4',
                 'Pick a genre and shop',

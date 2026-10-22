@@ -121,7 +121,16 @@ class LibraryController extends ChangeNotifier {
   }
 
   void _emit() {
+    _yearMap = null;
     if (!_disposed) notifyListeners();
+  }
+
+  Map<String, int>? _yearMap;
+
+  /// The release year from a file's tags (0 when unknown).
+  int yearOf(String path) {
+    _yearMap ??= {for (final t in tracks) if (t.year > 0) t.path: t.year};
+    return _yearMap![path] ?? 0;
   }
 
   @override
